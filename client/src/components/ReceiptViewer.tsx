@@ -314,17 +314,36 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
             {imageUrl ? (
               <div className="p-4 flex justify-center items-center min-h-full">
                 {isPDF ? (
-                  <div className="w-full h-full">
-                    <iframe
-                      src={imageUrl}
-                      title={receipt.originalFileName}
-                      className="w-full h-full min-h-[500px] border-0 shadow-lg rounded"
-                      style={{
-                        transform: `scale(${zoom})`,
-                        transformOrigin: 'center top',
-                        transition: 'transform 0.2s ease-in-out'
-                      }}
-                    />
+                  <div className="w-full h-full flex flex-col items-center justify-center p-8">
+                    <div className="bg-white rounded-lg shadow-lg p-6 max-w-md text-center">
+                      <FileText className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+                      <h3 className="text-lg font-semibold mb-2">PDF Receipt</h3>
+                      <p className="text-gray-600 mb-4">{receipt.originalFileName}</p>
+                      <div className="flex gap-2 justify-center">
+                        <Button 
+                          onClick={() => window.open(imageUrl, '_blank')}
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          Open PDF
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = imageUrl;
+                            link.download = receipt.originalFileName || 'receipt.pdf';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ) : isCropping ? (
                   <ReactCrop
@@ -379,8 +398,8 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
               </div>
             )}
 
-            {/* File Controls */}
-            {imageUrl && (
+            {/* File Controls - Only show for images, not PDFs */}
+            {imageUrl && !isPDF && (
               <div 
                 className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-2 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-20'}`}
                 onMouseEnter={handleActivity}
@@ -392,30 +411,26 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
                 <Button variant="outline" size="sm" onClick={handleZoomIn}>
                   <ZoomIn className="h-4 w-4" />
                 </Button>
-                {!isPDF && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={handleRotate}>
-                      <RotateCw className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => {
-                        setIsCropping(!isCropping);
-                        if (isCropping) {
-                          setCrop(undefined);
-                          setCompletedCrop(undefined);
-                        }
-                      }}
-                    >
-                      <Crop className="h-4 w-4" />
-                    </Button>
-                    {isCropping && completedCrop && (
-                      <Button variant="outline" size="sm" onClick={applyCrop}>
-                        <Check className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </>
+                <Button variant="outline" size="sm" onClick={handleRotate}>
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    setIsCropping(!isCropping);
+                    if (isCropping) {
+                      setCrop(undefined);
+                      setCompletedCrop(undefined);
+                    }
+                  }}
+                >
+                  <Crop className="h-4 w-4" />
+                </Button>
+                {isCropping && completedCrop && (
+                  <Button variant="outline" size="sm" onClick={applyCrop}>
+                    <Check className="h-4 w-4" />
+                  </Button>
                 )}
                 <Button variant="outline" size="sm" onClick={() => window.open(imageUrl, '_blank')}>
                   <Download className="h-4 w-4" />
