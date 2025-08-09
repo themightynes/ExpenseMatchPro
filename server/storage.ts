@@ -190,14 +190,44 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateReceipt(id: string, updates: Partial<Receipt>): Promise<Receipt | undefined> {
-    // Handle date conversion for string dates
-    const processedUpdates = { ...updates };
-    if (processedUpdates.date && typeof processedUpdates.date === 'string') {
-      processedUpdates.date = new Date(processedUpdates.date);
+    // Handle date conversion and empty string cleanup
+    const processedUpdates: any = { ...updates };
+    
+    // Convert date field - handle empty strings and null values
+    if ('date' in processedUpdates) {
+      if (typeof processedUpdates.date === 'string') {
+        if (processedUpdates.date.trim() === '') {
+          processedUpdates.date = null;
+        } else {
+          processedUpdates.date = new Date(processedUpdates.date);
+        }
+      }
     }
     
+    // Convert amount field - handle empty strings
+    if ('amount' in processedUpdates && typeof processedUpdates.amount === 'string') {
+      if (processedUpdates.amount.trim() === '') {
+        processedUpdates.amount = null;
+      }
+    }
+    
+    // Convert merchant field - handle empty strings
+    if ('merchant' in processedUpdates && typeof processedUpdates.merchant === 'string') {
+      if (processedUpdates.merchant.trim() === '') {
+        processedUpdates.merchant = null;
+      }
+    }
+    
+    // Convert category field - handle empty strings
+    if ('category' in processedUpdates && typeof processedUpdates.category === 'string') {
+      if (processedUpdates.category.trim() === '') {
+        processedUpdates.category = null;
+      }
+    }
+    
+    // Don't manually set updatedAt as it should be handled by database default
     const [updated] = await db.update(receipts)
-      .set({ ...processedUpdates, updatedAt: new Date() })
+      .set(processedUpdates)
       .where(eq(receipts.id, id))
       .returning();
     return updated || undefined;
