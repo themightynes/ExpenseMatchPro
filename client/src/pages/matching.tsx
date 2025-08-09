@@ -3,11 +3,14 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import MatchingInterface from "@/components/MatchingInterface";
+import DragMatchingInterface from "@/components/DragMatchingInterface";
 import type { AmexStatement } from "@shared/schema";
 
 export default function Matching() {
   const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null);
+  const [matchingMode, setMatchingMode] = useState<"tinder" | "drag">("tinder");
 
   const { data: statements = [], isLoading: statementsLoading } = useQuery<AmexStatement[]>({
     queryKey: ["/api/statements"],
@@ -85,10 +88,50 @@ export default function Matching() {
             </CardContent>
           </Card>
         ) : (
-          <MatchingInterface 
-            statementId={selectedStatementId || activeStatement?.id!} 
-            onBack={() => setSelectedStatementId(null)}
-          />
+          <div>
+            {/* Mode Selection */}
+            <div className="max-w-4xl mx-auto mb-6">
+              <div className="flex items-center justify-center gap-4 bg-white rounded-lg p-4 shadow-sm">
+                <span className="text-sm font-medium text-gray-700">Matching Mode:</span>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <Button
+                    variant={matchingMode === "tinder" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setMatchingMode("tinder")}
+                    className="flex items-center gap-2"
+                  >
+                    <i className="fas fa-heart text-sm"></i>
+                    Tinder Style
+                  </Button>
+                  <Button
+                    variant={matchingMode === "drag" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setMatchingMode("drag")}
+                    className="flex items-center gap-2"
+                  >
+                    <i className="fas fa-arrows-alt text-sm"></i>
+                    Drag & Drop
+                  </Button>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {matchingMode === "tinder" ? "Swipe through matches one by one" : "Drag receipts to charges directly"}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Render appropriate interface */}
+            {matchingMode === "tinder" ? (
+              <MatchingInterface 
+                statementId={selectedStatementId || activeStatement?.id!} 
+                onBack={() => setSelectedStatementId(null)}
+              />
+            ) : (
+              <DragMatchingInterface 
+                statementId={selectedStatementId || activeStatement?.id!} 
+                onBack={() => setSelectedStatementId(null)}
+              />
+            )}
+          </div>
         )}
       </div>
     </div>
