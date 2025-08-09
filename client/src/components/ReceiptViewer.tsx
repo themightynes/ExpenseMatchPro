@@ -16,7 +16,9 @@ import {
   RotateCw,
   ZoomIn,
   ZoomOut,
-  Trash2
+  Trash2,
+  Eye,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -44,6 +46,40 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     amount: '',
     date: '',
     category: '',
+  });
+
+  // OCR trigger mutation
+  const triggerOcrMutation = useMutation({
+    mutationFn: async (receiptId: string) => {
+      const response = await fetch(`/api/receipts/${receiptId}/ocr`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `OCR failed with status ${response.status}`);
+      }
+      
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      toast({
+        title: "OCR started",
+        description: "Processing receipt text - results will appear shortly",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "OCR failed to start",
+        description: error.message || "Could not start OCR processing",
+        variant: "destructive",
+      });
+    },
   });
 
   // Delete receipt mutation
@@ -446,6 +482,38 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                         {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
                       </Badge>
                       {receipt.isMatched && <Badge variant="default">Matched to AMEX</Badge>}
+                      
+                      {/* OCR Status and Control */}
+                      {receipt.processingStatus === 'processing' ? (
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Processing OCR
+                        </Badge>
+                      ) : receipt.ocrText === 'Manual entry required' || receipt.ocrText === 'OCR failed - manual entry required' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => triggerOcrMutation.mutate(receipt.id)}
+                          disabled={triggerOcrMutation.isPending}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                        >
+                          {triggerOcrMutation.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              Starting...
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-4 h-4 mr-1" />
+                              Extract Text
+                            </>
+                          )}
+                        </Button>
+                      ) : receipt.ocrText && receipt.ocrText !== 'Processing...' && receipt.ocrText.length > 50 ? (
+                        <Badge variant="default" className="text-green-700 bg-green-100">
+                          OCR Complete
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>

@@ -10,6 +10,7 @@ import {
   EXPENSE_CATEGORIES 
 } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ocrService } from "./ocrService";
 
 // Helper function to create statement folder structure
 async function createStatementFolder(statementId: string | null) {
@@ -312,6 +313,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Trigger OCR for existing receipt
+  app.post("/api/receipts/:id/ocr", async (req, res) => {
+    try {
+      const receiptId = req.params.id;
+      const receipt = await storage.getReceipt(receiptId);
+      
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+
+      // Update status to processing
+      await storage.updateReceipt(receiptId, {
+        processingStatus: 'processing',
+        ocrText: 'Processing...'
+      });
+
+      // Start OCR processing asynchronously
+      ocrService.processReceipt(receipt.fileUrl, receipt.originalFileName)
+        .then(async ({ ocrText, extractedData }) => {
+          console.log(`Manual OCR completed for receipt ${receiptId}`);
+          
+          const updates: any = {
+            ocrText,
+            extractedData,
+            processingStatus: 'completed'
+          };
+
+          // If we extracted useful data, populate the fields (but don't overwrite existing data)
+          if (extractedData.merchant && !receipt.merchant) updates.merchant = extractedData.merchant;
+          if (extractedData.amount && !receipt.amount) updates.amount = extractedData.amount;
+          if (extractedData.date && !receipt.date) updates.date = extractedData.date;
+          if (extractedData.category && !receipt.category) updates.category = extractedData.category;
+
+          await storage.updateReceipt(receiptId, updates);
+          
+          // Try auto-assignment and matching after OCR
+          try {
+            const updatedReceipt = await storage.autoAssignReceiptToStatement(receiptId);
+            if (updatedReceipt?.statementId) {
+              await fileOrganizer.attemptAutoMatch(receiptId);
+            }
+          } catch (error) {
+            console.error('Error in post-OCR processing:', error);
+          }
+        })
+        .catch(async (error) => {
+          console.error(`Manual OCR failed for receipt ${receiptId}:`, error);
+          await storage.updateReceipt(receiptId, {
+            ocrText: 'OCR failed - manual entry required',
+            processingStatus: 'completed',
+            extractedData: null
+          });
+        });
+
+      res.json({ message: "OCR processing started", receiptId });
+    } catch (error) {
+      console.error("Error starting OCR:", error);
+      res.status(500).json({ error: "Failed to start OCR processing" });
+    }
+  });
+
   // Process uploaded receipt file
   app.post("/api/receipts/process", async (req, res) => {
     try {
@@ -321,15 +383,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const objectPath = objectStorageService.normalizeObjectEntityPath(req.body.fileUrl);
       
-      // Create receipt record - set to 'completed' immediately for manual processing
-      // OCR is disabled due to performance issues (was taking 30+ mins per receipt)
+      // Create receipt record and start OCR processing
       const receipt = await storage.createReceipt({
         fileName: req.body.fileName || 'uploaded-receipt',
         originalFileName: req.body.originalFileName || req.body.fileName || 'uploaded-receipt',
         fileUrl: objectPath,
-        processingStatus: 'completed', // Changed from 'processing' to skip OCR
-        ocrText: 'Manual entry required', // Indicate manual processing needed
+        processingStatus: 'processing', // Start with processing status
+        ocrText: 'Processing...', // Indicate OCR is in progress
       });
+
+      // Start OCR processing asynchronously
+      ocrService.processReceipt(objectPath, req.body.originalFileName || req.body.fileName)
+        .then(async ({ ocrText, extractedData }) => {
+          console.log(`OCR completed for receipt ${receipt.id}`);
+          
+          // Update receipt with OCR results
+          const updates: any = {
+            ocrText,
+            extractedData,
+            processingStatus: 'completed'
+          };
+
+          // If we extracted useful data, populate the fields
+          if (extractedData.merchant) updates.merchant = extractedData.merchant;
+          if (extractedData.amount) updates.amount = extractedData.amount;
+          if (extractedData.date) updates.date = extractedData.date;
+          if (extractedData.category) updates.category = extractedData.category;
+
+          await storage.updateReceipt(receipt.id, updates);
+          
+          // Try auto-assignment and matching after OCR
+          try {
+            const updatedReceipt = await storage.autoAssignReceiptToStatement(receipt.id);
+            if (updatedReceipt?.statementId) {
+              await fileOrganizer.attemptAutoMatch(receipt.id);
+            }
+          } catch (error) {
+            console.error('Error in post-OCR processing:', error);
+          }
+        })
+        .catch(async (error) => {
+          console.error(`OCR failed for receipt ${receipt.id}:`, error);
+          
+          // Update receipt with failed status but allow manual entry
+          await storage.updateReceipt(receipt.id, {
+            ocrText: 'OCR failed - manual entry required',
+            processingStatus: 'completed', // Still mark as completed for manual entry
+            extractedData: null
+          });
+        });
 
       // Set ACL policy for the uploaded receipt
       try {
