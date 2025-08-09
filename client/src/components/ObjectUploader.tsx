@@ -9,7 +9,7 @@ import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
 
 interface ObjectUploaderProps {
-  maxNumberOfFiles?: number;
+  maxNumberOfFiles?: number | null;
   maxFileSize?: number;
   onGetUploadParameters: () => Promise<{
     method: "PUT";
@@ -62,7 +62,7 @@ export function ObjectUploader({
   const [uppy] = useState(() =>
     new Uppy({
       restrictions: {
-        maxNumberOfFiles,
+        maxNumberOfFiles: maxNumberOfFiles || undefined,
         maxFileSize,
       },
       autoProceed: false,

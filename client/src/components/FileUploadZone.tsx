@@ -89,7 +89,7 @@ export default function FileUploadZone() {
         {/* Modern File Upload Zone */}
         <div className="space-y-4">
           <ObjectUploader
-            maxNumberOfFiles={10}
+            maxNumberOfFiles={null}
             maxFileSize={10485760}
             onGetUploadParameters={handleGetUploadParameters}
             onComplete={handleUploadComplete}
