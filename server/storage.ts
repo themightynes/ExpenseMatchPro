@@ -39,6 +39,8 @@ export interface IStorage {
   getAllAmexStatements(): Promise<AmexStatement[]>;
   updateAmexStatement(id: string, updates: Partial<AmexStatement>): Promise<AmexStatement | undefined>;
   deleteAmexStatement(id: string): Promise<boolean>;
+  deleteChargesByStatement(statementId: string): Promise<boolean>;
+  deleteStatement(statementId: string): Promise<boolean>;
   deleteAmexChargesByStatement(statementId: string): Promise<boolean>;
   getActiveStatement(): Promise<AmexStatement | undefined>;
 
@@ -341,6 +343,32 @@ export class DatabaseStorage implements IStorage {
       return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
     } catch (error) {
       console.error("Error in deleteAmexStatement:", error);
+      return false;
+    }
+  }
+
+  async deleteChargesByStatement(statementId: string): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(amexCharges)
+        .where(eq(amexCharges.statementId, statementId));
+        
+      return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
+    } catch (error) {
+      console.error("Error in deleteChargesByStatement:", error);
+      return false;
+    }
+  }
+
+  async deleteStatement(statementId: string): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(amexStatements)
+        .where(eq(amexStatements.id, statementId));
+      
+      return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
+    } catch (error) {
+      console.error("Error in deleteStatement:", error);
       return false;
     }
   }
