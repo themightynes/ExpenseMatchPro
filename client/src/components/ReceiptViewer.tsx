@@ -49,23 +49,36 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   // Delete receipt mutation
   const deleteReceiptMutation = useMutation({
     mutationFn: async (receiptId: string) => {
-      return await apiRequest(`/api/receipts/${receiptId}`, {
+      const response = await fetch(`/api/receipts/${receiptId}`, {
         method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Delete failed with status ${response.status}`);
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/financial-stats'] });
       toast({
         title: "Receipt deleted",
         description: "Receipt has been permanently deleted",
       });
       onClose(); // Close the viewer
     },
-    onError: (error) => {
+    onError: (error: Error) => {
+      console.error('Delete error:', error);
       toast({
         title: "Delete failed",
-        description: "Failed to delete receipt. Please try again.",
+        description: error.message || "Failed to delete receipt. Please try again.",
         variant: "destructive",
       });
     },
