@@ -550,12 +550,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const statementId = req.params.statementId;
       
-      // Get unmatched receipts for the statement
-      const receipts = await storage.getReceiptsByStatement(statementId);
-      const unmatchedReceipts = receipts.filter(r => !r.isMatched && r.processingStatus === 'completed');
+      // Get unmatched receipts ASSIGNED to the statement (not just by date range)
+      const allReceipts = await storage.getAllReceipts();
+      const unmatchedReceipts = allReceipts.filter(r => 
+        r.statementId === statementId && 
+        !r.isMatched && 
+        r.processingStatus === 'completed' &&
+        r.amount && // Only include receipts with amount data
+        parseFloat(r.amount) > 0 // Exclude zero or negative amounts
+      );
       
       // Get unmatched charges for the statement
       const unmatchedCharges = await storage.getUnmatchedCharges(statementId);
+
+      console.log("Matching candidates:", { 
+        statementId, 
+        totalReceipts: allReceipts.length,
+        unmatchedReceipts: unmatchedReceipts.length, 
+        unmatchedCharges: unmatchedCharges.length,
+        sampleReceipt: allReceipts.length > 0 ? {
+          id: allReceipts[0].id,
+          statementId: allReceipts[0].statementId,
+          isMatched: allReceipts[0].isMatched,
+          processingStatus: allReceipts[0].processingStatus,
+          amount: allReceipts[0].amount
+        } : null
+      });
 
       res.json({
         receipts: unmatchedReceipts,
