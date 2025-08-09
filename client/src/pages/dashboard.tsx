@@ -36,10 +36,12 @@ export default function Dashboard() {
     totalMatchedAmount: number;
     totalUnmatchedReceiptAmount: number;
     totalMissingReceiptAmount: number;
+    personalExpensesAmount: number;
     matchedCount: number;
     unmatchedReceiptCount: number;
     missingReceiptCount: number;
     totalCharges: number;
+    personalExpensesCount: number;
     matchingPercentage: number;
   }>({
     queryKey: ["/api/dashboard/financial-stats"],
@@ -71,7 +73,7 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Financial Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <StatsCard
             icon="fas fa-credit-card"
             iconColor="text-blue-600"
@@ -103,6 +105,14 @@ export default function Dashboard() {
             title="Missing Receipts"
             value={financialStatsLoading ? "..." : `$${financialStats?.totalMissingReceiptAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
             subtitle={`${financialStats?.missingReceiptCount || 0} charges without receipts`}
+          />
+          <StatsCard
+            icon="fas fa-user"
+            iconColor="text-purple-600"
+            iconBg="bg-purple-50"
+            title="Personal Expenses"
+            value={financialStatsLoading ? "..." : `$${financialStats?.personalExpensesAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
+            subtitle={`${financialStats?.personalExpensesCount || 0} charges flagged`}
           />
         </div>
 

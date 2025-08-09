@@ -311,6 +311,30 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async toggleChargePersonalExpense(id: string): Promise<AmexCharge | undefined> {
+    const charge = await this.getAmexCharge(id);
+    if (!charge) return undefined;
+    
+    const [updated] = await db.update(amexCharges)
+      .set({ isPersonalExpense: !charge.isPersonalExpense })
+      .where(eq(amexCharges.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async toggleChargePersonalExpense(id: string): Promise<AmexCharge | undefined> {
+    // Get current status
+    const [charge] = await db.select().from(amexCharges).where(eq(amexCharges.id, id));
+    if (!charge) return undefined;
+    
+    // Toggle the personal expense flag
+    const [updated] = await db.update(amexCharges)
+      .set({ isPersonalExpense: !charge.isPersonalExpense })
+      .where(eq(amexCharges.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
   async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {
     return await db.select().from(amexCharges)
       .where(and(
@@ -378,18 +402,28 @@ export class DatabaseStorage implements IStorage {
     totalMatchedAmount: number;
     totalUnmatchedReceiptAmount: number;
     totalMissingReceiptAmount: number;
+    personalExpensesAmount: number;
     matchedCount: number;
     unmatchedReceiptCount: number;
     missingReceiptCount: number;
     totalCharges: number;
+    personalExpensesCount: number;
     matchingPercentage: number;
   }> {
     // Get all charges and receipts
     const allCharges = await db.select().from(amexCharges);
     const allReceipts = await db.select().from(receipts);
 
-    // Calculate total statement amount
-    const totalStatementAmount = allCharges.reduce((sum, charge) => 
+    // Separate work and personal expenses
+    const workCharges = allCharges.filter(charge => !charge.isPersonalExpense);
+    const personalCharges = allCharges.filter(charge => charge.isPersonalExpense);
+
+    // Calculate total statement amount (work charges only)
+    const totalStatementAmount = workCharges.reduce((sum, charge) => 
+      sum + parseFloat(charge.amount || '0'), 0);
+
+    // Calculate personal expenses amount
+    const personalExpensesAmount = personalCharges.reduce((sum, charge) => 
       sum + parseFloat(charge.amount || '0'), 0);
 
     // Calculate matched amounts
@@ -407,18 +441,18 @@ export class DatabaseStorage implements IStorage {
     const totalUnmatchedReceiptAmount = unmatchedReceipts.reduce((sum, receipt) => 
       sum + parseFloat(receipt.amount || '0'), 0);
 
-    // Calculate missing receipt amount (charges without matching receipts)
+    // Calculate missing receipt amount (work charges without matching receipts)
     const matchedChargeIds = matchedReceipts
       .map(r => r.matchedChargeId)
       .filter(id => id !== null);
     
-    const missingReceiptCharges = allCharges.filter(charge => 
+    const missingReceiptCharges = workCharges.filter(charge => 
       !matchedChargeIds.includes(charge.id));
     
     const totalMissingReceiptAmount = missingReceiptCharges.reduce((sum, charge) => 
       sum + parseFloat(charge.amount || '0'), 0);
 
-    // Calculate matching percentage
+    // Calculate matching percentage (based on work charges only)
     const matchingPercentage = totalStatementAmount > 0 
       ? (totalMatchedAmount / totalStatementAmount) * 100 
       : 0;
@@ -428,10 +462,12 @@ export class DatabaseStorage implements IStorage {
       totalMatchedAmount,
       totalUnmatchedReceiptAmount,
       totalMissingReceiptAmount,
+      personalExpensesAmount,
       matchedCount: matchedReceipts.length,
       unmatchedReceiptCount: unmatchedReceipts.length,
       missingReceiptCount: missingReceiptCharges.length,
-      totalCharges: allCharges.length,
+      totalCharges: workCharges.length,
+      personalExpensesCount: personalCharges.length,
       matchingPercentage,
     };
   }

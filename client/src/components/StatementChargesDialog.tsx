@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, XCircle, AlertTriangle, Receipt as ReceiptIcon, Eye } from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Receipt as ReceiptIcon, Eye, User, Briefcase } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
 
 interface StatementChargesDialogProps {
@@ -14,6 +16,8 @@ interface StatementChargesDialogProps {
 }
 
 export default function StatementChargesDialog({ statement, open, onOpenChange }: StatementChargesDialogProps) {
+  const { toast } = useToast();
+  
   const { data: charges = [] } = useQuery<AmexCharge[]>({
     queryKey: ["/api/charges", statement.id],
     queryFn: () => fetch(`/api/statements/${statement.id}/charges`).then(res => res.json()),
@@ -24,6 +28,34 @@ export default function StatementChargesDialog({ statement, open, onOpenChange }
     queryKey: ["/api/receipts", statement.id],
     queryFn: () => fetch(`/api/statements/${statement.id}/receipts`).then(res => res.json()),
     enabled: open,
+  });
+
+  const togglePersonalExpenseMutation = useMutation({
+    mutationFn: async (chargeId: string) => {
+      const response = await fetch(`/api/charges/${chargeId}/toggle-personal`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to toggle personal expense');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      // Invalidate and refetch charges
+      queryClient.invalidateQueries({ queryKey: ["/api/charges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/financial-stats"] });
+      
+      toast({
+        title: "Personal Expense Updated",
+        description: data.message,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update personal expense status",
+        variant: "destructive",
+      });
+    },
   });
 
   // Get receipts in this period that don't match any charges
@@ -59,7 +91,7 @@ export default function StatementChargesDialog({ statement, open, onOpenChange }
 
         <div className="space-y-6">
           {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -99,6 +131,20 @@ export default function StatementChargesDialog({ statement, open, onOpenChange }
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Personal Expenses</p>
+                    <p className="text-2xl font-bold text-purple-600">
+                      {charges.filter(c => c.isPersonalExpense).length}
+                    </p>
+                  </div>
+                  <User className="h-8 w-8 text-purple-500" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* AMEX Charges Table */}
@@ -119,6 +165,7 @@ export default function StatementChargesDialog({ statement, open, onOpenChange }
                       <TableHead>Amount</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Expense Type</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -154,6 +201,30 @@ export default function StatementChargesDialog({ statement, open, onOpenChange }
                               Unmatched
                             </Badge>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant={charge.isPersonalExpense ? "secondary" : "outline"}
+                            size="sm"
+                            onClick={() => togglePersonalExpenseMutation.mutate(charge.id)}
+                            disabled={togglePersonalExpenseMutation.isPending}
+                            className={charge.isPersonalExpense ? 
+                              "bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200" : 
+                              "hover:bg-blue-50 border-blue-200 text-blue-800"
+                            }
+                          >
+                            {charge.isPersonalExpense ? (
+                              <>
+                                <User className="h-3 w-3 mr-1" />
+                                Personal
+                              </>
+                            ) : (
+                              <>
+                                <Briefcase className="h-3 w-3 mr-1" />
+                                Work
+                              </>
+                            )}
+                          </Button>
                         </TableCell>
                         <TableCell>
                           <Button variant="outline" size="sm">

@@ -639,6 +639,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Toggle personal expense flag for a charge
+  app.put("/api/charges/:id/toggle-personal", async (req, res) => {
+    try {
+      const chargeId = req.params.id;
+      const updatedCharge = await storage.toggleChargePersonalExpense(chargeId);
+      
+      if (!updatedCharge) {
+        return res.status(404).json({ error: "Charge not found" });
+      }
+
+      res.json({ 
+        charge: updatedCharge, 
+        message: updatedCharge.isPersonalExpense 
+          ? "Charge marked as personal expense" 
+          : "Charge marked as work expense" 
+      });
+    } catch (error) {
+      console.error("Error toggling personal expense:", error);
+      res.status(500).json({ error: "Failed to toggle personal expense status" });
+    }
+  });
+
   // Export endpoints
   app.post("/api/export/oracle", async (req, res) => {
     try {

@@ -56,6 +56,7 @@ export const amexCharges = pgTable("amex_charges", {
   category: text("category"),
   isMatched: boolean("is_matched").default(false),
   receiptId: varchar("receipt_id"),
+  isPersonalExpense: boolean("is_personal_expense").default(false),
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 
