@@ -189,8 +189,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateReceipt(id: string, updates: Partial<Receipt>): Promise<Receipt | undefined> {
+    // Handle date conversion for string dates
+    const processedUpdates = { ...updates };
+    if (processedUpdates.date && typeof processedUpdates.date === 'string') {
+      processedUpdates.date = new Date(processedUpdates.date);
+    }
+    
     const [updated] = await db.update(receipts)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...processedUpdates, updatedAt: new Date() })
       .where(eq(receipts.id, id))
       .returning();
     return updated || undefined;
@@ -362,19 +368,20 @@ export class DatabaseStorage implements IStorage {
   // File organization
   getOrganizedPath(receipt: Receipt): string {
     if (!receipt.statementId || !receipt.date || !receipt.merchant || !receipt.amount) {
-      return `/Inbox_New/${receipt.fileName}`;
+      return `/objects/Inbox_New/${receipt.fileName}`;
     }
 
+    // Get statement period name for folder structure
     const statement = receipt.statementId;
     const dateStr = receipt.date.toISOString().split('T')[0]; // YYYY-MM-DD
     const merchant = receipt.merchant.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
-    const amount = receipt.amount.replace('.', '_');
+    const amount = receipt.amount.replace(/\./g, '_');
     const ext = receipt.fileName.split('.').pop();
     
     const newFileName = `${dateStr}_${merchant}_$${amount}.${ext}`;
     const folder = receipt.isMatched ? 'matched' : 'unmatched';
     
-    return `/objects/${statement}/${folder}/${newFileName}`;
+    return `/objects/statements/${statement}/${folder}/${newFileName}`;
   }
 
   async updateReceiptPath(receiptId: string, organizedPath: string): Promise<Receipt | undefined> {

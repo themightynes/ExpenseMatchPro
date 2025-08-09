@@ -10,6 +10,23 @@ import {
   EXPENSE_CATEGORIES 
 } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+
+// Helper function to create statement folder structure
+async function createStatementFolder(statementId: string | null) {
+  if (!statementId) return;
+  
+  try {
+    const statement = await storage.getAmexStatement(statementId);
+    if (!statement) return;
+    
+    // Create folder structure: /statements/{periodName}/unmatched/ and /statements/{periodName}/matched/
+    console.log(`Creating folder structure for statement: ${statement.periodName}`);
+    // Note: In a full implementation, you would create actual folders in object storage
+    // For now, we're using the logical folder structure in receipt paths
+  } catch (error) {
+    console.error("Error creating statement folder:", error);
+  }
+}
 import { fileOrganizer } from "./fileOrganizer";
 import multer from "multer";
 
@@ -22,25 +39,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Serve uploaded files
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {
+      console.log("Serving object path:", req.path);
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
-      objectStorageService.downloadObject(objectFile, res);
+      await objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error serving object:", error);
       if (error instanceof ObjectNotFoundError) {
-        return res.sendStatus(404);
+        console.log("Object not found:", req.path);
+        return res.status(404).json({ error: "Object not found" });
       }
-      return res.sendStatus(500);
+      return res.status(500).json({ error: "Internal server error" });
     }
   });
 
   // Get upload URL for object storage
   app.post("/api/objects/upload", async (req, res) => {
     try {
+      console.log("Getting upload URL...");
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      console.log("Generated upload URL:", uploadURL);
       res.json({ uploadURL });
     } catch (error) {
       console.error("Error getting upload URL:", error);
-      res.status(500).json({ error: "Failed to get upload URL" });
+      
+      // Check if object storage is properly configured
+      try {
+        const privateDir = process.env.PRIVATE_OBJECT_DIR;
+        console.log("PRIVATE_OBJECT_DIR:", privateDir);
+        if (!privateDir) {
+          return res.status(500).json({ 
+            error: "Object storage not configured. Please set PRIVATE_OBJECT_DIR environment variable." 
+          });
+        }
+      } catch (envError) {
+        console.error("Environment check error:", envError);
+      }
+      
+      res.status(500).json({ error: "Failed to get upload URL. Object storage may not be configured." });
     }
   });
 
@@ -132,6 +167,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileUrl: objectPath,
         processingStatus: 'processing',
       });
+
+      // Set ACL policy for the uploaded receipt
+      try {
+        await objectStorageService.trySetObjectEntityAclPolicy(req.body.fileUrl, {
+          owner: "system", // Or use authenticated user ID when auth is implemented
+          visibility: "private",
+        });
+      } catch (aclError) {
+        console.error("Error setting ACL policy:", aclError);
+        // Continue even if ACL fails
+      }
+
+      // Try to auto-assign to statement and organize
+      try {
+        const organizedReceipt = await storage.autoAssignReceiptToStatement(receipt.id);
+        if (organizedReceipt && organizedReceipt.statementId) {
+          // Create organized folder structure when receipt gets assigned
+          await createStatementFolder(organizedReceipt.statementId);
+          
+          // Update receipt with organized path
+          const organizedPath = storage.getOrganizedPath(organizedReceipt);
+          await storage.updateReceiptPath(receipt.id, organizedPath);
+        }
+      } catch (orgError) {
+        console.error("Error organizing receipt:", orgError);
+        // Continue even if organization fails
+      }
 
       res.status(201).json(receipt);
     } catch (error) {
@@ -292,6 +354,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Create folder structure for new statement
+      await createStatementFolder(statement.id);
+      
+      // Try to auto-assign unmatched receipts to this new statement
+      const unmatchedReceipts = await storage.getReceiptsByStatus('completed');
+      for (const receipt of unmatchedReceipts) {
+        if (!receipt.statementId && receipt.date) {
+          const receiptDate = new Date(receipt.date);
+          if (receiptDate >= statement.startDate && receiptDate <= statement.endDate) {
+            try {
+              await storage.updateReceipt(receipt.id, { statementId: statement.id });
+              const organizedPath = storage.getOrganizedPath({ ...receipt, statementId: statement.id });
+              await storage.updateReceiptPath(receipt.id, organizedPath);
+            } catch (error) {
+              console.error(`Error auto-assigning receipt ${receipt.id}:`, error);
+            }
+          }
+        }
+      }
+
       res.json({ 
         message: `Import completed. ${imported} charges imported, ${errors} errors.`,
         imported,
@@ -346,6 +428,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isMatched: true,
         receiptId: receiptId 
       });
+
+      // Move receipt to matched folder when it gets matched
+      if (receipt && receipt.statementId) {
+        try {
+          const organizedPath = storage.getOrganizedPath(receipt);
+          await storage.updateReceiptPath(receiptId, organizedPath);
+          
+          // Create statement folder if it doesn't exist
+          await createStatementFolder(receipt.statementId);
+        } catch (orgError) {
+          console.error("Error organizing matched receipt:", orgError);
+        }
+      }
 
       if (!receipt || !charge) {
         return res.status(404).json({ error: "Receipt or charge not found" });
