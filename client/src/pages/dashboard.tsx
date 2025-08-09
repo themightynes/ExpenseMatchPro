@@ -310,15 +310,22 @@ export default function Dashboard() {
                         <span className="font-medium">Match Receipts</span>
                       </div>
                       <Badge variant="secondary" className="bg-warning-100 text-warning-800">
-                        {stats?.pendingCount || 0} pending
+                        {financialStats?.unmatchedReceiptCount || 0} unmatched
                       </Badge>
                     </Button>
                   </Link>
 
-                  <Button variant="outline" className="w-full justify-start">
-                    <i className="fas fa-download mr-3"></i>
-                    <span className="font-medium">Export to Oracle</span>
-                  </Button>
+                  <Link href="/templates">
+                    <Button variant="outline" className="w-full justify-between">
+                      <div className="flex items-center">
+                        <i className="fas fa-download mr-3"></i>
+                        <span className="font-medium">Export to Oracle</span>
+                      </div>
+                      <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        {financialStats?.matchedCount || 0} ready
+                      </Badge>
+                    </Button>
+                  </Link>
 
                   <Link href="/statements" className="w-full">
                     <Button variant="outline" className="w-full justify-start">
