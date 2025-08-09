@@ -197,7 +197,7 @@ export default function ReceiptsPage() {
             variant="ghost"
             size="sm"
             onClick={() => setShowUpload(!showUpload)}
-            className="p-1 h-8 w-8"
+            className="p-1 h-8 w-8 min-h-[44px] min-w-[44px]"
           >
             <Plus className="w-4 h-4" />
           </Button>
@@ -222,6 +222,7 @@ export default function ReceiptsPage() {
         )}
 
         {/* Search */}
+        {/* MOBILE: Improved search with larger touch target */}
         <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -229,7 +230,8 @@ export default function ReceiptsPage() {
               placeholder="Search receipts..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 text-base min-h-[44px]"
+              style={{ fontSize: '16px' }}
             />
           </div>
         </div>

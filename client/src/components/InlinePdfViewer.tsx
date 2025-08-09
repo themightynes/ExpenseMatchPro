@@ -118,23 +118,25 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full flex flex-col max-w-full overflow-hidden">
       {/* PDF Controls - Sticky toolbar */}
+      {/* MOBILE: Improved touch targets and responsive controls */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           {/* Page Navigation */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handlePrevPage}
               disabled={currentPage <= 1}
               aria-label="Previous page"
+              className="min-h-[44px] min-w-[44px] p-2"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-medium min-w-[80px] text-center">
-              Page {currentPage} of {totalPages}
+            <span className="text-xs sm:text-sm font-medium min-w-[60px] sm:min-w-[80px] text-center">
+              {currentPage}/{totalPages}
             </span>
             <Button
               variant="outline"
@@ -142,23 +144,25 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
               onClick={handleNextPage}
               disabled={currentPage >= totalPages}
               aria-label="Next page"
+              className="min-h-[44px] min-w-[44px] p-2"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Zoom Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleZoomOut}
               disabled={zoom <= 0.5}
               aria-label="Zoom out"
+              className="min-h-[44px] min-w-[44px] p-2"
             >
               <ZoomOut className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-mono min-w-[50px] text-center">
+            <span className="text-xs sm:text-sm font-mono min-w-[40px] sm:min-w-[50px] text-center hidden sm:inline">
               {Math.round(zoom * 100)}%
             </span>
             <Button
@@ -167,18 +171,20 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
               onClick={handleZoomIn}
               disabled={zoom >= 3}
               aria-label="Zoom in"
+              className="min-h-[44px] min-w-[44px] p-2"
             >
               <ZoomIn className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleOpenInNewTab}
               aria-label="Open in new tab"
+              className="min-h-[44px] min-w-[44px] p-2"
             >
               <ExternalLink className="h-4 w-4" />
             </Button>
@@ -187,6 +193,7 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
               size="sm"
               onClick={handleDownload}
               aria-label="Download PDF"
+              className="min-h-[44px] min-w-[44px] p-2"
             >
               <Download className="h-4 w-4" />
             </Button>

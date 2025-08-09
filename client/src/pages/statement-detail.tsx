@@ -328,26 +328,29 @@ export default function StatementDetailPage() {
   };
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="container mx-auto p-4 space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      {/* MOBILE: Improved responsive header layout */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <Link href="/statements">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="w-fit">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Statements
+              <span className="hidden sm:inline">Back to Statements</span>
+              <span className="sm:hidden">Back</span>
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold">{statement.periodName}</h1>
-            <p className="text-gray-600">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{statement.periodName}</h1>
+            <p className="text-sm sm:text-base text-gray-600">
               {formatDate(statement.startDate)} - {formatDate(statement.endDate)}
             </p>
           </div>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2 w-full sm:w-auto">
           <Download className="h-4 w-4" />
-          Export to Oracle
+          <span className="hidden sm:inline">Export to Oracle</span>
+          <span className="sm:hidden">Export</span>
         </Button>
       </div>
 
@@ -409,24 +412,27 @@ export default function StatementDetailPage() {
       {/* Filters and Controls */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            <div className="flex-1 relative">
+          {/* MOBILE: Improved responsive filters layout */}
+          <div className="flex flex-col gap-4">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search by description, amount, or category..."
+                placeholder="Search by description, amount..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 text-base"
+                style={{ fontSize: '16px' }}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 justify-center sm:justify-start">
               <Button
                 variant={showPersonalExpenses ? "default" : "outline"}
                 onClick={() => setShowPersonalExpenses(!showPersonalExpenses)}
-                className="gap-2"
+                className="gap-2 min-h-[44px]"
               >
                 {showPersonalExpenses ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                {showPersonalExpenses ? "Show Business" : "Show Personal"}
+                <span className="hidden sm:inline">{showPersonalExpenses ? "Show Business" : "Show Personal"}</span>
+                <span className="sm:hidden">{showPersonalExpenses ? "Business" : "Personal"}</span>
               </Button>
             </div>
           </div>
@@ -511,7 +517,7 @@ export default function StatementDetailPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-6 px-1 sm:px-2 text-xs"
+                            className="h-6 px-1 sm:px-2 text-xs min-h-[36px] min-w-[36px] sm:min-h-[24px] sm:min-w-[auto]"
                             onClick={() => document.getElementById(`upload-${charge.id}`)?.click()}
                             disabled={uploadingCharges[charge.id]}
                           >
@@ -533,7 +539,7 @@ export default function StatementDetailPage() {
                       variant={charge.isPersonalExpense ? "default" : "outline"}
                       size="sm"
                       onClick={() => handleTogglePersonalExpense(charge.id)}
-                      className="h-6 px-1 sm:px-2 text-xs"
+                      className="h-6 px-1 sm:px-2 text-xs min-h-[36px] min-w-[36px] sm:min-h-[24px] sm:min-w-[auto]"
                     >
                       {charge.isPersonalExpense ? "Personal" : "Business"}
                     </Button>
@@ -548,7 +554,7 @@ export default function StatementDetailPage() {
                           [charge.id]: !prev[charge.id] 
                         }));
                       }}
-                      className="h-6 px-1 sm:px-2 text-xs"
+                      className="h-6 px-1 sm:px-2 text-xs min-h-[36px] min-w-[36px] sm:min-h-[24px] sm:min-w-[auto]"
                     >
                       <Edit3 className="h-3 w-3 sm:mr-1" />
                       <span className="hidden sm:inline">{selectedChargeNotes[charge.id] ? "Hide" : "Notes"}</span>

@@ -1,0 +1,70 @@
+Perfect—here’s a safe, stack‑agnostic prompt you can drop into the Replit Agent. It focuses only on mobile UI polish, doesn’t assume libraries, and avoids risky changes.
+
+⸻
+
+Final Pre‑Deploy Task — Mobile UI Audit & Fixes (No Breaking Changes)
+
+Objective: Review the entire site in mobile view and fix clunky UI or layout issues.
+Scope: Front‑end visuals/layout only. Do not alter data models, routes, auth, APIs, or OCR. Keep changes minimal and reversible.
+
+Guardrails (do not break things)
+	•	No library upgrades, no new dependencies unless absolutely required for a visual bug fix.
+	•	Do not rename/move files or routes.
+	•	Keep changes localized (component‑level styles/utility classes).
+	•	Preserve current color/typography tokens and component APIs.
+	•	If a fix is risky, feature‑flag it (e.g., MOBILE_UI_TWEAKS) and default to ON only in preview.
+
+Audit Pass — What to Inspect (mobile viewport ~390×844 and 360×640)
+
+Check every top‑level screen: Home, Receipts list/detail, Email, Statements, Matching, and any modals/sheets.
+
+Fix or note issues in these categories:
+	1.	Horizontal scroll/overflow
+	•	Eliminate unintended side‑scroll. Ensure max-width: 100% on images/iframes/PDF panes and apply overflow-x: hidden only at the smallest necessary wrapper (not html, body unless essential).
+	2.	Responsive containers
+	•	Replace fixed widths with fluid max‑widths. Ensure cards and grids wrap nicely at <375px.
+	3.	Tap targets & spacing
+	•	All interactive controls ≥44×44px; ensure adequate spacing between adjacent CTAs.
+	4.	Sticky bars & safe areas
+	•	If using a bottom nav or action bar, add iOS safe‑area insets (padding-bottom: env(safe-area-inset-bottom)) and avoid double scroll. Ensure sticky headers/footers don’t overlap content.
+	5.	Form usability
+	•	Inputs readable at 16px; clear labels; consistent error states; autocapitalize/number keypad for amount/date fields; prevent zoom‑on‑focus issues.
+	6.	PDF viewer + form (mobile)
+	•	Ensure PDF pane resizes correctly, supports vertical scroll and zoom buttons, and the form is reachable immediately below. No modal required to edit. Keep page/zoom toolbar thumb‑reachable.
+	7.	Empty states & loading
+	•	Replace vague text with clear calls to action. Use skeletons/spinners that don’t shift layout.
+	8.	Color contrast & focus
+	•	Meet contrast guidelines; keep visible focus outlines for a11y.
+	9.	Z‑index & overlays
+	•	Toolbars, sheets, and toasts shouldn’t obscure save/extract buttons.
+	10.	Performance hints
+
+	•	Lazy‑load heavy images/PDFs below the fold if simple to do without new deps.
+
+Implementation Approach (stack‑neutral)
+	•	Use the existing styling system (utilities/CSS modules/inline styles—whatever the project already uses).
+	•	Prefer CSS/layout tweaks over structural refactors.
+	•	For each file touched, add a brief comment // MOBILE: <why> above the change.
+
+Acceptance Criteria
+	•	No unintended horizontal scrolling on any mobile screen.
+	•	All primary CTAs and nav items are easy to tap one‑handed.
+	•	Bottom nav/action bars respect safe‑area; no content is hidden under them.
+	•	Receipt PDF and form are usable on the same screen with smooth scroll and visible edit/save/extract actions.
+	•	No modals are required to edit receipt details while viewing the PDF.
+	•	No visual regressions on desktop/tablet.
+
+Deliverables
+	1.	Commit/PR with only the necessary style/layout changes.
+	2.	Before/after screenshots (mobile) for each page adjusted.
+	3.	A short CHANGELOG in the PR body listing:
+	•	Page / component
+	•	Issue found
+	•	Minimal fix applied
+	•	Any flag added (if used)
+
+Nice‑to‑have (only if trivial)
+	•	Reduce vertical whitespace where it forces excessive scrolling (keep readability).
+	•	Keep status chips (e.g., “Needs Entry”) visible without pushing the PDF/form too far down.
+
+Start now: open the site in a mobile viewport, enumerate issues per page, and apply the smallest safe fix per the checklist above.

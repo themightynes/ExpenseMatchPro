@@ -578,6 +578,8 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       value={editedData.merchant}
                       onChange={(e) => setEditedData(prev => ({ ...prev, merchant: e.target.value }))}
                       placeholder="Enter merchant name"
+                      className="text-base"
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <div>
@@ -589,6 +591,9 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       placeholder="Enter amount"
                       type="number"
                       step="0.01"
+                      inputMode="decimal"
+                      className="text-base"
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <div>
@@ -598,6 +603,8 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       type="date"
                       value={editedData.date}
                       onChange={(e) => setEditedData(prev => ({ ...prev, date: e.target.value }))}
+                      className="text-base"
+                      style={{ fontSize: '16px' }}
                     />
                   </div>
                   <div>
@@ -615,12 +622,13 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* MOBILE: Improved button layout with better touch targets */}
                   <div className="flex gap-2 pt-2">
-                    <Button onClick={handleSave} className="flex-1">
+                    <Button onClick={handleSave} className="flex-1 min-h-[44px]">
                       <Save className="w-4 h-4 mr-2" />
                       Save Changes
                     </Button>
-                    <Button variant="outline" onClick={() => setIsEditing(false)} className="flex-1">
+                    <Button variant="outline" onClick={() => setIsEditing(false)} className="flex-1 min-h-[44px]">
                       Cancel
                     </Button>
                   </div>

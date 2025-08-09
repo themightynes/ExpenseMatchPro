@@ -24,15 +24,16 @@ export default function MobileNavigation() {
   return (
     <>
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-pb">
-        <div className="flex items-center justify-around h-16 px-2">
+      {/* MOBILE: Added iOS safe area support and improved tap targets */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="flex items-center justify-around h-16 px-2 min-h-[64px]">
           {navItems.map((item) => (
             <Link key={item.path} href={item.path}>
               <Button
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "flex flex-col items-center gap-1 h-12 px-3 rounded-xl transition-all duration-200",
+                  "flex flex-col items-center gap-1 h-12 px-3 rounded-xl transition-all duration-200 min-h-[44px] min-w-[44px]",
                   item.isMain
                     ? "bg-primary text-white hover:bg-primary/90 shadow-lg scale-110"
                     : location === item.path

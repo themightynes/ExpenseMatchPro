@@ -62,14 +62,15 @@ export default function Dashboard() {
             variant="ghost"
             size="sm"
             onClick={() => setShowCsvModal(true)}
-            className="p-1 h-8 w-8"
+            className="p-1 h-8 w-8 min-h-[44px] min-w-[44px]"
           >
             <Upload className="w-4 h-4" />
           </Button>
         }
       />
 
-      <div className="px-4 py-6 space-y-6">
+      {/* MOBILE: Improved container with overflow protection */}
+      <div className="px-4 py-6 space-y-6 max-w-full overflow-x-hidden">
         {/* Quick Balance Overview */}
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-3">Financial Overview</h2>
@@ -107,6 +108,7 @@ export default function Dashboard() {
         {/* Quick Actions */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
+          {/* MOBILE: Improved grid layout for small screens */}
           <div className="grid grid-cols-2 gap-3">
             <QuickAction
               icon={<PlusCircle className="w-5 h-5" />}
