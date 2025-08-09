@@ -103,9 +103,21 @@ export default function StatementsPage() {
 
   const getStatementStats = (statementId: string) => {
     const charges = allCharges.filter(charge => charge.statementId === statementId);
-    const matchedCharges = charges.filter(charge => charge.isMatched);
     const statementReceipts = receipts.filter(receipt => receipt.statementId === statementId);
-    const unmatchedReceipts = statementReceipts.filter(receipt => !receipt.isMatched && receipt.amount && parseFloat(receipt.amount) > 0);
+    
+    // Count matched receipts (receipts that have matchedChargeId set) - this is our source of truth
+    const matchedReceipts = statementReceipts.filter(receipt => receipt.isMatched && receipt.matchedChargeId);
+    
+    // Get the charges that are matched by finding charges that have IDs in the matchedChargeId array
+    const matchedChargeIds = matchedReceipts.map(receipt => receipt.matchedChargeId);
+    const matchedCharges = charges.filter(charge => matchedChargeIds.includes(charge.id));
+    
+    // Unmatched receipts are those with amount but no charge connection
+    const unmatchedReceipts = statementReceipts.filter(receipt => 
+      !receipt.isMatched && 
+      receipt.amount && 
+      parseFloat(receipt.amount) > 0
+    );
 
     const totalAmount = Math.abs(charges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
     const matchedAmount = Math.abs(matchedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
@@ -113,14 +125,14 @@ export default function StatementsPage() {
 
     return {
       totalCharges: charges.length,
-      matchedCharges: matchedCharges.length,
-      unmatchedCharges: charges.length - matchedCharges.length,
+      matchedCharges: matchedReceipts.length,
+      unmatchedCharges: charges.length - matchedReceipts.length,
       totalAmount,
       matchedAmount,
       unmatchedReceiptValue,
       unmatchedReceiptCount: unmatchedReceipts.length,
-      missingReceiptCount: charges.length - matchedCharges.length,
-      matchPercentage: charges.length > 0 ? (matchedCharges.length / charges.length) * 100 : 0
+      missingReceiptCount: charges.length - matchedReceipts.length,
+      matchPercentage: charges.length > 0 ? (matchedReceipts.length / charges.length) * 100 : 0
     };
   };
 
