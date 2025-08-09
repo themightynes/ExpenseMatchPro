@@ -176,6 +176,7 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
   if (!isOpen) return null;
 
   const imageUrl = receipt.fileUrl ? `/objects/${receipt.fileUrl.split('/objects/')[1]}` : null;
+  const isPDF = receipt.originalFileName?.toLowerCase().endsWith('.pdf') || false;
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
   const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
@@ -229,7 +230,20 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
           <div className="flex-1 bg-gray-100 relative overflow-auto" style={{ maxHeight: '70vh' }}>
             {imageUrl ? (
               <div className="p-4 flex justify-center items-center min-h-full">
-                {isCropping ? (
+                {isPDF ? (
+                  <div className="w-full h-full">
+                    <iframe
+                      src={imageUrl}
+                      title={receipt.originalFileName}
+                      className="w-full h-full min-h-[500px] border-0 shadow-lg rounded"
+                      style={{
+                        transform: `scale(${zoom})`,
+                        transformOrigin: 'center top',
+                        transition: 'transform 0.2s ease-in-out'
+                      }}
+                    />
+                  </div>
+                ) : isCropping ? (
                   <ReactCrop
                     crop={crop}
                     onChange={(_, percentCrop) => setCrop(percentCrop)}
@@ -282,7 +296,7 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
               </div>
             )}
 
-            {/* Image Controls */}
+            {/* File Controls */}
             {imageUrl && (
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleZoomOut}>
@@ -292,26 +306,30 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
                 <Button variant="outline" size="sm" onClick={handleZoomIn}>
                   <ZoomIn className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleRotate}>
-                  <RotateCw className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => {
-                    setIsCropping(!isCropping);
-                    if (isCropping) {
-                      setCrop(undefined);
-                      setCompletedCrop(undefined);
-                    }
-                  }}
-                >
-                  <Crop className="h-4 w-4" />
-                </Button>
-                {isCropping && completedCrop && (
-                  <Button variant="outline" size="sm" onClick={applyCrop}>
-                    <Check className="h-4 w-4" />
-                  </Button>
+                {!isPDF && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleRotate}>
+                      <RotateCw className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        setIsCropping(!isCropping);
+                        if (isCropping) {
+                          setCrop(undefined);
+                          setCompletedCrop(undefined);
+                        }
+                      }}
+                    >
+                      <Crop className="h-4 w-4" />
+                    </Button>
+                    {isCropping && completedCrop && (
+                      <Button variant="outline" size="sm" onClick={applyCrop}>
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </>
                 )}
                 <Button variant="outline" size="sm" onClick={() => window.open(imageUrl, '_blank')}>
                   <Download className="h-4 w-4" />
