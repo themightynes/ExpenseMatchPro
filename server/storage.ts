@@ -43,6 +43,7 @@ export interface IStorage {
   // AMEX Charge methods
   createAmexCharge(charge: InsertAmexCharge): Promise<AmexCharge>;
   getAmexCharge(id: string): Promise<AmexCharge | undefined>;
+  getAllCharges(): Promise<AmexCharge[]>;
   getChargesByStatement(statementId: string): Promise<AmexCharge[]>;
   updateAmexCharge(id: string, updates: Partial<AmexCharge>): Promise<AmexCharge | undefined>;
   getUnmatchedCharges(statementId: string): Promise<AmexCharge[]>;
@@ -289,6 +290,11 @@ export class DatabaseStorage implements IStorage {
   async getAmexCharge(id: string): Promise<AmexCharge | undefined> {
     const [charge] = await db.select().from(amexCharges).where(eq(amexCharges.id, id));
     return charge || undefined;
+  }
+
+  async getAllCharges(): Promise<AmexCharge[]> {
+    return await db.select().from(amexCharges)
+      .orderBy(desc(amexCharges.date));
   }
 
   async getChargesByStatement(statementId: string): Promise<AmexCharge[]> {

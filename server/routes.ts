@@ -570,8 +570,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parseFloat(r.amount) > 0 // Exclude zero or negative amounts
       );
       
-      // Get unmatched charges for the specific statement being worked on
-      const unmatchedCharges = await storage.getUnmatchedCharges(statementId);
+      // Get ALL unmatched charges across ALL statements - not just the current one
+      const allCharges = await storage.getAllCharges();
+      const unmatchedCharges = allCharges.filter(c => !c.isMatched);
 
       // Create intelligent receipt-charge pairs
       const pairs = [];
@@ -615,7 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         statementId, 
         totalReceipts: allReceipts.length,
         unmatchedReceipts: unmatchedReceipts.length, 
-        unmatchedCharges: unmatchedCharges.length,
+        unmatchedChargesAllStatements: unmatchedCharges.length,
         pairsGenerated: sortedPairs.length,
         bestMatch: sortedPairs.length > 0 ? {
           receiptAmount: sortedPairs[0].receipt.amount,
