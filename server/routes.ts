@@ -508,6 +508,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Matching endpoints
+  // Utility endpoint to reorganize ALL receipts (for fixing existing data)
+  app.post("/api/receipts/reorganize-all", async (req, res) => {
+    try {
+      const allReceipts = await storage.getAllReceipts();
+      let reorganized = 0;
+      let errors = 0;
+
+      for (const receipt of allReceipts) {
+        try {
+          await fileOrganizer.organizeReceipt(receipt);
+          reorganized++;
+        } catch (error) {
+          console.error(`Error reorganizing receipt ${receipt.id}:`, error);
+          errors++;
+        }
+      }
+
+      res.json({ 
+        message: `Reorganized ${reorganized} receipts`, 
+        reorganized, 
+        errors,
+        total: allReceipts.length 
+      });
+    } catch (error) {
+      console.error("Error reorganizing all receipts:", error);
+      res.status(500).json({ error: "Failed to reorganize receipts" });
+    }
+  });
+
+  // Utility endpoint to reorganize already matched receipts
+  app.post("/api/receipts/reorganize-matched", async (req, res) => {
+    try {
+      const matchedReceipts = await storage.getMatchedReceipts();
+      let reorganized = 0;
+      let errors = 0;
+
+      for (const receipt of matchedReceipts) {
+        try {
+          if (receipt.matchedChargeId) {
+            const charge = await storage.getAmexCharge(receipt.matchedChargeId);
+            if (charge && charge.statementId !== receipt.statementId) {
+              // Update receipt's statement ID to match the charge
+              await storage.updateReceipt(receipt.id, {
+                statementId: charge.statementId
+              });
+              
+              // Reorganize the file
+              await fileOrganizer.organizeReceipt({ ...receipt, statementId: charge.statementId });
+              reorganized++;
+            }
+          }
+        } catch (error) {
+          console.error(`Error reorganizing receipt ${receipt.id}:`, error);
+          errors++;
+        }
+      }
+
+      res.json({ 
+        message: `Reorganized ${reorganized} receipts`, 
+        reorganized, 
+        errors,
+        total: matchedReceipts.length 
+      });
+    } catch (error) {
+      console.error("Error reorganizing matched receipts:", error);
+      res.status(500).json({ error: "Failed to reorganize receipts" });
+    }
+  });
+
   app.post("/api/matching/match", async (req, res) => {
     try {
       const { receiptId, chargeId } = req.body;
@@ -516,13 +585,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "receiptId and chargeId are required" });
       }
 
-      // Update receipt as matched
+      // Get the charge first to determine the statement ID
+      const charge = await storage.getAmexCharge(chargeId);
+      if (!charge) {
+        return res.status(404).json({ error: "Charge not found" });
+      }
+
+      // Update receipt as matched AND associate it with the statement
       const receipt = await storage.updateReceipt(receiptId, { 
-        isMatched: true 
+        isMatched: true,
+        matchedChargeId: chargeId,
+        statementId: charge.statementId  // This is the key fix!
       });
 
       // Update charge as matched
-      const charge = await storage.updateAmexCharge(chargeId, { 
+      const updatedCharge = await storage.updateAmexCharge(chargeId, { 
         isMatched: true,
         receiptId: receiptId 
       });
@@ -540,16 +617,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      if (!receipt || !charge) {
+      if (!receipt || !updatedCharge) {
         return res.status(404).json({ error: "Receipt or charge not found" });
       }
 
-      // Reorganize file after matching
+      // Reorganize file after matching (receipt now has correct statementId)
       if (receipt) {
         await fileOrganizer.organizeReceipt(receipt);
       }
 
-      res.json({ receipt, charge });
+      res.json({ receipt, charge: updatedCharge });
     } catch (error) {
       console.error("Error matching receipt to charge:", error);
       res.status(500).json({ error: "Failed to match receipt to charge" });

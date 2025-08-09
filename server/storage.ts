@@ -214,6 +214,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(receipts.createdAt));
   }
 
+  async getMatchedReceipts(): Promise<Receipt[]> {
+    return await db.select().from(receipts)
+      .where(eq(receipts.isMatched, true))
+      .orderBy(desc(receipts.createdAt));
+  }
+
   async getReceiptsByStatement(statementId: string): Promise<Receipt[]> {
     // Get statement date range
     const [statement] = await db.select().from(amexStatements).where(eq(amexStatements.id, statementId));
