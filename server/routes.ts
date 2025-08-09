@@ -715,6 +715,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AMEX Charge endpoints
+  // Get all charges (global endpoint)
+  app.get("/api/charges", async (req, res) => {
+    try {
+      const charges = await storage.getAllCharges();
+      res.json(charges);
+    } catch (error) {
+      console.error("Error getting all charges:", error);
+      res.status(500).json({ error: "Failed to get charges" });
+    }
+  });
+
   app.post("/api/charges", async (req, res) => {
     try {
       const validatedData = insertAmexChargeSchema.parse(req.body);
