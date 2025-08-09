@@ -87,7 +87,7 @@ export default function ReceiptCard({ receipt, receipts = [] }: ReceiptCardProps
       </div>
       <div className="ml-4 flex-1">
         <p className="font-medium text-gray-900 truncate">
-          {receipt.originalFileName || receipt.fileName}
+          {receipt.organizedPath ? receipt.organizedPath.split('/').pop() : (receipt.originalFileName || receipt.fileName)}
         </p>
         <div className="flex items-center mt-1">
           {getStatusBadge(receipt.processingStatus, receipt.isMatched || false)}

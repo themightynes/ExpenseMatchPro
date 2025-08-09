@@ -537,6 +537,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fix matched receipts missing charge connections and reorganize with Oracle naming
+  app.post("/api/receipts/fix-and-reorganize", async (req, res) => {
+    try {
+      const matchedReceipts = await storage.getMatchedReceipts();
+      const allCharges = await storage.getAllCharges();
+      let fixed = 0;
+      let reorganized = 0;
+      let errors = 0;
+      let statusMessages: string[] = [];
+
+      for (const receipt of matchedReceipts) {
+        try {
+          let needsUpdate = false;
+          let updateData: any = {};
+
+          // If receipt is marked as matched but has no matchedChargeId, try to find the charge
+          if (!receipt.matchedChargeId && receipt.amount) {
+            const matchingCharge = allCharges.find(charge => 
+              Math.abs(parseFloat(charge.amount) - parseFloat(receipt.amount)) < 0.01 &&
+              Math.abs(new Date(charge.date).getTime() - new Date(receipt.date || new Date()).getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
+            );
+            
+            if (matchingCharge) {
+              updateData.matchedChargeId = matchingCharge.id;
+              updateData.statementId = matchingCharge.statementId;
+              updateData.merchant = matchingCharge.description;
+              updateData.date = matchingCharge.date;
+              receipt.matchedChargeId = matchingCharge.id;
+              receipt.statementId = matchingCharge.statementId;
+              receipt.merchant = matchingCharge.description;
+              receipt.date = matchingCharge.date;
+              needsUpdate = true;
+              fixed++;
+              statusMessages.push(`Fixed ${receipt.fileName} - linked to charge ${matchingCharge.description} $${matchingCharge.amount}`);
+            }
+          }
+
+          // For receipts that already have matchedChargeId, ensure data completeness
+          if (receipt.matchedChargeId) {
+            const charge = await storage.getAmexCharge(receipt.matchedChargeId);
+            if (charge) {
+              if (charge.statementId !== receipt.statementId) {
+                updateData.statementId = charge.statementId;
+                receipt.statementId = charge.statementId;
+                needsUpdate = true;
+              }
+              
+              if (!receipt.merchant && charge.merchant) {
+                updateData.merchant = charge.merchant;
+                receipt.merchant = charge.merchant;
+                needsUpdate = true;
+              }
+              
+              if (!receipt.amount && charge.amount) {
+                updateData.amount = charge.amount;
+                receipt.amount = charge.amount;
+                needsUpdate = true;
+              }
+              
+              if (!receipt.date && charge.date) {
+                updateData.date = charge.date;
+                receipt.date = charge.date;
+                needsUpdate = true;
+              }
+            }
+          }
+
+          // Apply updates if needed
+          if (needsUpdate) {
+            await storage.updateReceipt(receipt.id, updateData);
+          }
+          
+          // Now reorganize if receipt has required data for Oracle naming
+          if (receipt.date && receipt.merchant && receipt.amount && receipt.statementId) {
+            await fileOrganizer.organizeReceipt(receipt);
+            reorganized++;
+            statusMessages.push(`Reorganized ${receipt.fileName} → Oracle naming`);
+          } else {
+            statusMessages.push(`${receipt.fileName} - missing: ${!receipt.date ? 'date ' : ''}${!receipt.merchant ? 'merchant ' : ''}${!receipt.amount ? 'amount ' : ''}${!receipt.statementId ? 'statement' : ''}`);
+          }
+          
+        } catch (error) {
+          console.error(`Error processing receipt ${receipt.id}:`, error);
+          errors++;
+          statusMessages.push(`Error: ${receipt.fileName} - ${error.message}`);
+        }
+      }
+
+      res.json({ 
+        message: `Fixed ${fixed} receipt connections, reorganized ${reorganized} with Oracle naming`, 
+        fixed,
+        reorganized, 
+        errors,
+        total: matchedReceipts.length,
+        details: statusMessages.slice(0, 20)
+      });
+    } catch (error) {
+      console.error("Error fixing and reorganizing receipts:", error);
+      res.status(500).json({ error: "Failed to fix and reorganize receipts" });
+    }
+  });
+
   // Utility endpoint to reorganize already matched receipts with proper Oracle naming
   app.post("/api/receipts/reorganize-matched", async (req, res) => {
     try {
@@ -544,29 +646,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let reorganized = 0;
       let errors = 0;
       let statusMessages: string[] = [];
+      let updated = 0;
 
       for (const receipt of matchedReceipts) {
         try {
+          let needsUpdate = false;
+          let updateData: any = {};
+
           // First ensure the receipt has the correct statementId from its matched charge
           if (receipt.matchedChargeId) {
             const charge = await storage.getAmexCharge(receipt.matchedChargeId);
-            if (charge && charge.statementId !== receipt.statementId) {
-              // Update receipt's statement ID to match the charge
-              await storage.updateReceipt(receipt.id, {
-                statementId: charge.statementId
-              });
-              receipt.statementId = charge.statementId; // Update local copy
-              statusMessages.push(`Updated statement ID for ${receipt.fileName}`);
+            if (charge) {
+              // Update statement ID if different
+              if (charge.statementId !== receipt.statementId) {
+                updateData.statementId = charge.statementId;
+                receipt.statementId = charge.statementId; // Update local copy
+                needsUpdate = true;
+                statusMessages.push(`Updated statement ID for ${receipt.fileName}`);
+              }
+              
+              // Fill in missing merchant data from charge
+              if (!receipt.merchant && charge.description) {
+                updateData.merchant = charge.description;
+                receipt.merchant = charge.description; // Update local copy
+                needsUpdate = true;
+                statusMessages.push(`Added merchant "${charge.description}" to ${receipt.fileName}`);
+              }
+              
+              // Fill in missing amount data from charge  
+              if (!receipt.amount && charge.amount) {
+                updateData.amount = charge.amount;
+                receipt.amount = charge.amount; // Update local copy
+                needsUpdate = true;
+                statusMessages.push(`Added amount $${charge.amount} to ${receipt.fileName}`);
+              }
+              
+              // Fill in missing date from charge
+              if (!receipt.date && charge.date) {
+                updateData.date = charge.date;
+                receipt.date = charge.date; // Update local copy
+                needsUpdate = true;
+                statusMessages.push(`Added date ${charge.date.toISOString().split('T')[0]} to ${receipt.fileName}`);
+              }
             }
           }
+
+          // Apply updates if needed
+          if (needsUpdate) {
+            await storage.updateReceipt(receipt.id, updateData);
+            updated++;
+          }
           
-          // Only reorganize if receipt has required data for Oracle naming
+          // Now reorganize if receipt has required data for Oracle naming
           if (receipt.date && receipt.merchant && receipt.amount && receipt.statementId) {
             await fileOrganizer.organizeReceipt(receipt);
             reorganized++;
             statusMessages.push(`Reorganized ${receipt.fileName} with Oracle naming`);
           } else {
-            statusMessages.push(`Skipped ${receipt.fileName} - missing required data (date: ${!!receipt.date}, merchant: ${!!receipt.merchant}, amount: ${!!receipt.amount}, statementId: ${!!receipt.statementId})`);
+            statusMessages.push(`Skipped ${receipt.fileName} - still missing required data (date: ${!!receipt.date}, merchant: ${!!receipt.merchant}, amount: ${!!receipt.amount}, statementId: ${!!receipt.statementId})`);
           }
           
         } catch (error) {
@@ -579,9 +716,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ 
         message: `Reorganized ${reorganized} matched receipts with Oracle naming convention`, 
         reorganized, 
+        updated,
         errors,
         total: matchedReceipts.length,
-        details: statusMessages.slice(0, 10) // Show first 10 status messages
+        details: statusMessages.slice(0, 15) // Show first 15 status messages
       });
     } catch (error) {
       console.error("Error reorganizing matched receipts:", error);

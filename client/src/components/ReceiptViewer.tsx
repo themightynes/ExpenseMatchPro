@@ -152,7 +152,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
           </Button>
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-gray-900 truncate text-base">
-              {receipt.originalFileName}
+              {receipt.organizedPath ? receipt.organizedPath.split('/').pop() : receipt.originalFileName}
             </h1>
             <div className="flex items-center gap-2 mt-1">
               {currentIndex >= 0 && receipts.length > 1 && (

@@ -160,7 +160,7 @@ export default function ReceiptsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 truncate">
-                    {receipt.originalFileName}
+                    {receipt.organizedPath ? receipt.organizedPath.split('/').pop() : receipt.originalFileName}
                   </p>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     {getReceiptStatusBadge(receipt)}
