@@ -84,6 +84,11 @@ Preferred communication style: Simple, everyday language.
 - **Visual Status Indicators**: Color-coded badges for matched/unmatched charges, personal expenses, and charges with notes
 - **Comprehensive Statistics**: Statement overview with total charges, matched amounts, unmatched counts, and personal expense tracking
 - **Mobile-Responsive Design**: Optimized table layout for various screen sizes with horizontal scrolling support
+- **Vertical Card Layout**: Replaced horizontal scrolling table with vertical expense cards for better readability and user experience
+- **Three-Row Information Display**: Structured expense cards with date/description, amount/category/card member, and notes/personal/match status
+- **Direct Receipt Links**: Added "View Receipt" buttons for matched expenses with improved visual hierarchy
+- **React Performance Optimization**: Fixed infinite update loops through proper React hooks dependency management
+- **Enhanced Notes System**: Improved expandable notes sections with better UX and error handling
 - **Fixed CSV Import**: Resolved date parsing errors for AMEX statement imports (MM/DD/YYYY format now working)
 - **Enhanced OCR Processing**: Implemented comprehensive OCR system using Tesseract.js for image processing
 - **Manual OCR Trigger**: Added "Extract Text" button for manual OCR processing of existing receipts

@@ -21,14 +21,24 @@ The Receipt Manager application features a modern, financial app-inspired interf
 ## Component Design Standards
 
 ### Statement Detail Pages
-**Layout**: Full-width container with responsive grid system
+**Layout**: Full-width container with responsive vertical card system
 - Header section with navigation and export actions
 - Statistics cards with color-coded metrics
 - Filter and search controls
-- Comprehensive data table with sortable columns
+- Vertical expense cards with structured information display
 - Expandable sections for detailed information
 
-**Table Design**:
+**Vertical Card Design**:
+- Three-row information structure for optimal readability
+- Row 1: Date and description with extended details
+- Row 2: Amount, category, and card member information
+- Row 3: Match status, personal/business toggle, and notes functionality
+- Hover effects for enhanced interactivity
+- Expandable notes sections with smooth transitions
+- Direct receipt links for matched expenses
+- Mobile-optimized layout without horizontal scrolling
+
+**Legacy Table Design** (replaced with cards):
 - Sticky header for long lists
 - Alternating row colors for readability
 - Hover states for interactive elements
@@ -42,6 +52,14 @@ The Receipt Manager application features a modern, financial app-inspired interf
 - Rounded corners (8px) for modern appearance
 - Consistent padding (16px standard, 12px compact)
 - Border accents for categorization (left border color coding)
+
+**Expense Cards**:
+- Structured 3-row layout for expense information
+- Hover effects with subtle shadow transitions
+- Border-based visual hierarchy (gray border with hover enhancement)
+- Expandable sections with smooth animations
+- Integrated action buttons with consistent spacing
+- Visual status indicators through badges and color coding
 
 ### Interactive Elements
 **Buttons**:

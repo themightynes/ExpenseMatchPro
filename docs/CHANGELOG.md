@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced UI with modern table design inspired by financial applications
 - Improved navigation flow from statement list to detailed charge view
 - Statement viewing experience optimized for comprehensive data analysis
+- Replaced horizontal scrolling table with vertical card layout for better readability
+- Restructured expense display with clear 3-row information hierarchy
+- Enhanced notes functionality with expandable sections and improved UX
+- Optimized charge management interface for mobile and desktop viewing
 
 ### Technical
 - Added `/statements/:id` route for individual statement pages
@@ -32,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated routing in statements list to use Link components instead of modal triggers
 - Created comprehensive UI design documentation with modern financial app patterns
 - Fixed React hooks issues and infinite render loops in statement detail component
+- Resolved React hooks infinite update loop with proper dependency array management
+- Implemented vertical card layout replacing horizontal scrolling table for improved UX
+- Enhanced expense display with structured 3-row information format
+- Integrated direct receipt links for matched expenses with improved visual hierarchy
+- Optimized notes system with expandable sections and better error handling
 
 ### Documentation Updates
 - Updated project architecture documentation with new statement detail features

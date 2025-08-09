@@ -148,11 +148,19 @@ This document provides detailed information about all features available in the 
 - **Status Tracking**: Import progress and completion status
 
 ### Individual Statement Detail Pages
-**Purpose**: Comprehensive view of statement data with modern financial app interface design.
+**Purpose**: Comprehensive view of statement data with modern financial app interface design and optimized vertical card layout.
 
-**Advanced Data Display**:
-- **Interactive Tables**: Sortable columns showing complete CSV data (merchant, amount, category, card member, location)
-- **Visual Statistics Dashboard**: Color-coded metrics for total charges, matched amounts, unmatched counts, and personal expenses
+**Vertical Card Layout** (Current):
+- **Three-Row Structure**: Optimized information hierarchy for improved readability
+  - Row 1: Date and description with extended details
+  - Row 2: Amount, category, and card member information  
+  - Row 3: Match status, personal/business toggle, and notes functionality
+- **Direct Receipt Links**: "View Receipt" buttons for matched expenses
+- **Expandable Notes**: Smooth transitions for charge-specific annotations
+- **Mobile Optimization**: Eliminates horizontal scrolling for better mobile experience
+- **Enhanced Interactivity**: Hover effects and visual feedback
+
+**Visual Statistics Dashboard**: Color-coded metrics for total charges, matched amounts, unmatched counts, and personal expenses
 - **Real-Time Search**: Filter across descriptions, amounts, and categories with instant results
 - **Business/Personal Filtering**: Toggle between expense types with dedicated view modes
 
