@@ -167,9 +167,11 @@ export default function Dashboard() {
                     ))
                   )}
                 </div>
-                <Button variant="outline" className="w-full mt-4">
-                  View All Periods
-                </Button>
+                <Link to="/statements">
+                  <Button variant="outline" className="w-full mt-4">
+                    View All Periods
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
 
