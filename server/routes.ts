@@ -1158,6 +1158,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update charge (including notes)
+  app.put("/api/charges/:id", async (req, res) => {
+    try {
+      const chargeId = req.params.id;
+      const updates = req.body;
+
+      const updatedCharge = await storage.updateAmexCharge(chargeId, updates);
+      if (!updatedCharge) {
+        return res.status(404).json({ error: "Charge not found" });
+      }
+
+      res.json(updatedCharge);
+    } catch (error) {
+      console.error("Error updating charge:", error);
+      res.status(500).json({ error: "Failed to update charge" });
+    }
+  });
+
   // Export endpoints
   app.post("/api/export/oracle", async (req, res) => {
     try {

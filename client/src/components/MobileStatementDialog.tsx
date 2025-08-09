@@ -17,7 +17,9 @@ import {
   Calendar,
   StickyNote,
   Eye,
-  EyeOff
+  EyeOff,
+  MessageSquare,
+  Edit3
 } from "lucide-react";
 import { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +29,148 @@ interface MobileStatementDialogProps {
   statement: AmexStatement;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+// Individual Charge Card Component
+interface ChargeCardProps {
+  charge: AmexCharge;
+  formatCurrency: (amount: string) => string;
+  formatDate: (date: Date | string) => string;
+  onTogglePersonalExpense: (chargeId: string) => void;
+}
+
+function ChargeCard({ charge, formatCurrency, formatDate, onTogglePersonalExpense }: ChargeCardProps) {
+  const [showNotes, setShowNotes] = useState(false);
+  const [notes, setNotes] = useState(charge.userNotes || "");
+  const { toast } = useToast();
+
+  const updateChargeNotesMutation = useMutation({
+    mutationFn: async (newNotes: string) => {
+      const response = await fetch(`/api/charges/${charge.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userNotes: newNotes }),
+      });
+      if (!response.ok) throw new Error('Failed to update charge notes');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/charges"] });
+      toast({
+        title: "Notes Updated",
+        description: "Charge notes have been saved successfully.",
+      });
+      setShowNotes(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update notes. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveNotes = () => {
+    updateChargeNotesMutation.mutate(notes);
+  };
+
+  return (
+    <Card className="border">
+      <CardContent className="p-3">
+        <div className="space-y-2">
+          <div className="flex justify-between items-start">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-tight">{charge.description}</p>
+              <p className="text-xs text-gray-500">{formatDate(charge.date)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold">{formatCurrency(charge.amount)}</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
+                {charge.isMatched ? "Matched" : "Unmatched"}
+              </Badge>
+              {charge.isPersonalExpense && (
+                <Badge variant="outline" className="text-xs">Personal</Badge>
+              )}
+              {charge.userNotes && (
+                <Badge variant="outline" className="text-xs">
+                  <MessageSquare className="h-3 w-3 mr-1" />
+                  Notes
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowNotes(!showNotes)}
+                className="h-6 px-2 text-xs"
+              >
+                <Edit3 className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onTogglePersonalExpense(charge.id)}
+                className="h-6 px-2 text-xs"
+              >
+                {charge.isPersonalExpense ? "Business" : "Personal"}
+              </Button>
+            </div>
+          </div>
+
+          {charge.category && (
+            <p className="text-xs text-gray-600">Category: {charge.category}</p>
+          )}
+
+          {/* Notes Section */}
+          {showNotes && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-2">
+              <Label className="text-xs font-medium">Charge Notes:</Label>
+              <Textarea
+                placeholder="Add notes about this specific charge..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="min-h-[80px] text-xs resize-none"
+              />
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleSaveNotes}
+                  disabled={updateChargeNotesMutation.isPending}
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                >
+                  {updateChargeNotesMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowNotes(false)}
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Show existing notes when not editing */}
+          {!showNotes && charge.userNotes && (
+            <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
+              <p className="font-medium text-blue-800 mb-1">Notes:</p>
+              <p className="text-blue-700 whitespace-pre-wrap">{charge.userNotes}</p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function MobileStatementDialog({ statement, open, onOpenChange }: MobileStatementDialogProps) {
@@ -135,7 +279,7 @@ export default function MobileStatementDialog({ statement, open, onOpenChange }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-md h-[95vh] max-h-[95vh] p-0 gap-0">
+      <DialogContent className="w-[95vw] max-w-md h-[90vh] max-h-[90vh] p-0 gap-0 m-4">
         <DialogHeader className="p-4 pb-2 space-y-2">
           <DialogTitle className="text-lg font-semibold leading-tight">
             {statement.periodName}
@@ -284,45 +428,13 @@ export default function MobileStatementDialog({ statement, open, onOpenChange }:
                   </Card>
                 ) : (
                   filteredCharges.map((charge) => (
-                    <Card key={charge.id} className="border">
-                      <CardContent className="p-3">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium leading-tight">{charge.description}</p>
-                              <p className="text-xs text-gray-500">{formatDate(charge.date)}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-bold">{formatCurrency(charge.amount)}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <div className="flex gap-2">
-                              <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
-                                {charge.isMatched ? "Matched" : "Unmatched"}
-                              </Badge>
-                              {charge.isPersonalExpense && (
-                                <Badge variant="outline" className="text-xs">Personal</Badge>
-                              )}
-                            </div>
-                            
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => togglePersonalExpenseMutation.mutate(charge.id)}
-                              className="h-6 px-2 text-xs"
-                            >
-                              {charge.isPersonalExpense ? "Mark Business" : "Mark Personal"}
-                            </Button>
-                          </div>
-
-                          {charge.category && (
-                            <p className="text-xs text-gray-600">Category: {charge.category}</p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <ChargeCard 
+                      key={charge.id} 
+                      charge={charge} 
+                      formatCurrency={formatCurrency}
+                      formatDate={formatDate}
+                      onTogglePersonalExpense={togglePersonalExpenseMutation.mutate}
+                    />
                   ))
                 )}
               </div>
