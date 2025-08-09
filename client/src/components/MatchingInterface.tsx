@@ -69,7 +69,43 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
   const receipts: Receipt[] = (candidates as any)?.receipts || [];
   const charges: AmexCharge[] = (candidates as any)?.charges || [];
 
-  if (receipts.length === 0 || charges.length === 0) {
+  console.log("Matching candidates:", { receipts, charges });
+
+  if (receipts.length === 0) {
+    return (
+      <Card className="max-w-2xl mx-auto">
+        <CardContent className="pt-6 text-center">
+          <i className="fas fa-check-circle text-4xl text-green-500 mb-4"></i>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">No Unmatched Receipts</h2>
+          <p className="text-gray-600 mb-4">
+            All receipts have been processed and matched. Upload more receipts to continue matching.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={onBack} variant="outline">Back to Dashboard</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (charges.length === 0) {
+    return (
+      <Card className="max-w-2xl mx-auto">
+        <CardContent className="pt-6 text-center">
+          <i className="fas fa-exclamation-triangle text-4xl text-yellow-500 mb-4"></i>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">No AMEX Charges</h2>
+          <p className="text-gray-600 mb-4">
+            This statement has no unmatched AMEX charges. Import a CSV file or add charges to start matching.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={onBack} variant="outline">Back to Dashboard</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (currentIndex >= receipts.length) {
     return (
       <Card className="max-w-2xl mx-auto">
         <CardContent className="pt-6 text-center">

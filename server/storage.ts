@@ -263,9 +263,9 @@ export class MemStorage implements IStorage {
   }
 
   async getReceiptsByStatement(statementId: string): Promise<Receipt[]> {
-    return Array.from(this.receipts.values()).filter(
-      receipt => receipt.amexStatementId === statementId
-    );
+    // For now, return all receipts since we don't have statement assignment logic yet
+    // In a real implementation, receipts would be assigned to statements based on date ranges
+    return Array.from(this.receipts.values());
   }
 
   // AMEX Statement methods
@@ -345,6 +345,12 @@ export class MemStorage implements IStorage {
     const updatedCharge = { ...charge, ...updates };
     this.amexCharges.set(id, updatedCharge);
     return updatedCharge;
+  }
+
+  async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {
+    return Array.from(this.amexCharges.values()).filter(
+      charge => charge.statementId === statementId && !charge.isMatched
+    );
   }
 
   async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {

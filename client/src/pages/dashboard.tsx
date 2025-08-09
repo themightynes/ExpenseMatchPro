@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { queryClient } from "@/lib/queryClient";
 import StatsCard from "@/components/StatsCard";
 import FileUploadZone from "@/components/FileUploadZone";
 import ReceiptCard from "@/components/ReceiptCard";
+import CsvUploadModal from "@/components/CsvUploadModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +12,8 @@ import { Link } from "wouter";
 import type { Receipt, AmexStatement } from "@shared/schema";
 
 export default function Dashboard() {
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  
   const { data: stats, isLoading: statsLoading } = useQuery<{
     processedCount: number;
     pendingCount: number;
@@ -198,7 +202,11 @@ export default function Dashboard() {
                     <span className="font-medium">Find Missing Receipts</span>
                   </Button>
 
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    onClick={() => setShowCsvModal(true)}
+                  >
                     <i className="fas fa-upload mr-3"></i>
                     <span className="font-medium">Import AMEX CSV</span>
                   </Button>
@@ -208,6 +216,13 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* CSV Upload Modal */}
+      <CsvUploadModal
+        isOpen={showCsvModal}
+        onClose={() => setShowCsvModal(false)}
+        statements={statements}
+      />
     </div>
   );
 }
