@@ -73,9 +73,10 @@ export class FileOrganizer {
 
       const bestMatch = suggestions.suggestions[0];
       
-      // Auto-match if confidence is very high (85% or higher)
-      if (bestMatch.confidence >= 85) {
-        console.log(`Auto-matching receipt ${receiptId} to charge ${bestMatch.charge.id} with ${bestMatch.confidence}% confidence: ${bestMatch.reason}`);
+      // Progressive matching: lower threshold for early matching, but require higher confidence for fewer fields
+      const requiredConfidence = this.calculateRequiredConfidence(receipt);
+      if (bestMatch.confidence >= requiredConfidence) {
+        console.log(`Auto-matching receipt ${receiptId} to charge ${bestMatch.charge.id} with ${bestMatch.confidence}% confidence (required: ${requiredConfidence}%): ${bestMatch.reason}`);
         
         // Update receipt as matched
         await storage.updateReceipt(receiptId, { 
@@ -111,6 +112,25 @@ export class FileOrganizer {
   }
 
   /**
+   * Calculate required confidence threshold based on available data
+   * More data = lower threshold, less data = higher threshold
+   */
+  private calculateRequiredConfidence(receipt: any): number {
+    const hasAmount = Boolean(receipt.amount);
+    const hasDate = Boolean(receipt.date);
+    const hasMerchant = Boolean(receipt.merchant);
+    
+    const fieldCount = [hasAmount, hasDate, hasMerchant].filter(Boolean).length;
+    
+    switch (fieldCount) {
+      case 3: return 75; // All fields: lower threshold
+      case 2: return 85; // Two fields: moderate threshold
+      case 1: return 95; // One field: high threshold (exact match needed)
+      default: return 100; // No fields: impossible to match
+    }
+  }
+
+  /**
    * Suggests a matching charge based on amount, date, and merchant
    */
   async suggestMatching(receiptId: string): Promise<{
@@ -140,13 +160,13 @@ export class FileOrganizer {
           const amountDiff = Math.abs(receiptAmount - chargeAmount);
           
           if (amountDiff < 0.01) {
-            confidence += 60;
+            confidence += 70;
             reasons.push("Exact amount match");
           } else if (amountDiff < 1.0) {
-            confidence += 40;
+            confidence += 50;
             reasons.push("Close amount match");
           } else if (amountDiff < 5.0) {
-            confidence += 20;
+            confidence += 25;
             reasons.push("Similar amount");
           }
         }
@@ -157,7 +177,7 @@ export class FileOrganizer {
           const chargeDate = new Date(charge.date).toDateString();
           
           if (receiptDate === chargeDate) {
-            confidence += 30;
+            confidence += 35;
             reasons.push("Same date");
           } else {
             // Check within 3 days
@@ -167,10 +187,10 @@ export class FileOrganizer {
             );
             
             if (daysDiff <= 1) {
-              confidence += 20;
+              confidence += 25;
               reasons.push("Within 1 day");
             } else if (daysDiff <= 3) {
-              confidence += 10;
+              confidence += 15;
               reasons.push("Within 3 days");
             }
           }
@@ -198,7 +218,7 @@ export class FileOrganizer {
           }
         }
 
-        if (confidence > 30) { // Only include high-confidence matches
+        if (confidence > 25) { // Include moderate-confidence matches for progressive matching
           suggestions.push({
             charge,
             confidence,

@@ -152,11 +152,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Receipt updated successfully:`, updatedReceipt);
       
-      // Check if receipt is now "ready" (has all required data) and attempt auto-matching
-      const isReady = updatedReceipt.merchant && updatedReceipt.amount && updatedReceipt.date;
+      // Progressive matching: try to match as soon as we have some useful data
+      const hasUsefulData = updatedReceipt.merchant || updatedReceipt.amount || updatedReceipt.date;
       let autoMatchResult = null;
       
-      if (isReady && !updatedReceipt.isMatched) {
+      if (hasUsefulData && !updatedReceipt.isMatched) {
         // If receipt doesn't have a statement assigned, try to assign it to the active statement
         if (!updatedReceipt.statementId) {
           const statements = await storage.getAmexStatements();
@@ -169,7 +169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         if (updatedReceipt.statementId) {
-          console.log(`Receipt ${receiptId} is ready, attempting auto-match...`);
+          console.log(`Receipt ${receiptId} has useful data, attempting progressive auto-match...`);
           autoMatchResult = await fileOrganizer.attemptAutoMatch(receiptId);
           
           if (autoMatchResult.matched) {
