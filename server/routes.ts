@@ -271,14 +271,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let autoMatchResult = null;
       
       if (hasUsefulData && !updatedReceipt.isMatched) {
-        // If receipt doesn't have a statement assigned, try to assign it to the active statement
-        if (!updatedReceipt.statementId) {
-          const statements = await storage.getAllAmexStatements();
-          const activeStatement = statements.find(s => s.isActive);
-          if (activeStatement) {
-            console.log(`Assigning receipt ${receiptId} to active statement ${activeStatement.periodName}`);
-            await storage.updateReceipt(receiptId, { statementId: activeStatement.id });
-            updatedReceipt.statementId = activeStatement.id;
+        // Auto-assign to correct statement based on date (even if already assigned to wrong one)
+        if (updatedReceipt.date) {
+          console.log(`Auto-assigning receipt ${receiptId} to correct statement based on date`);
+          const reassignedReceipt = await storage.autoAssignReceiptToStatement(receiptId);
+          if (reassignedReceipt?.statementId && reassignedReceipt.statementId !== updatedReceipt.statementId) {
+            updatedReceipt.statementId = reassignedReceipt.statementId;
+            console.log(`Receipt ${receiptId} reassigned to correct statement ${reassignedReceipt.statementId}`);
           }
         }
         

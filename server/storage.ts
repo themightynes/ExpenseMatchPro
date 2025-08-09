@@ -282,17 +282,26 @@ export class DatabaseStorage implements IStorage {
     const receipt = await this.getReceipt(receiptId);
     if (!receipt || !receipt.date) return receipt;
 
-    // Find statement that contains this date
-    const statements = await db.select().from(amexStatements)
-      .where(and(
-        lte(amexStatements.startDate, receipt.date),
-        gte(amexStatements.endDate, receipt.date)
-      ));
+    // Find statement that contains this date (receipt date should be between start and end)
+    const allStatements = await db.select().from(amexStatements);
+    console.log(`All statements:`, allStatements.map(s => ({ 
+      id: s.id, 
+      name: s.periodName, 
+      start: s.startDate, 
+      end: s.endDate 
+    })));
+    
+    const statements = allStatements.filter(s => 
+      receipt.date && s.startDate <= receipt.date && receipt.date <= s.endDate
+    );
 
     if (statements.length > 0) {
+      console.log(`Found matching statement for receipt date ${receipt.date}: ${statements[0].periodName}`);
       return await this.updateReceipt(receiptId, { 
         statementId: statements[0].id 
       });
+    } else {
+      console.log(`No matching statement found for receipt date ${receipt.date}`);
     }
 
     return receipt;
