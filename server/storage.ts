@@ -458,19 +458,24 @@ export class DatabaseStorage implements IStorage {
 
   // File organization
   getOrganizedPath(receipt: Receipt): string {
-    if (!receipt.statementId || !receipt.date || !receipt.merchant || !receipt.amount) {
+    // For unassigned receipts, keep in inbox
+    if (!receipt.statementId) {
       return `/objects/Inbox_New/${receipt.fileName}`;
     }
 
-    // Oracle iExpense-friendly naming convention
-    const dateStr = receipt.date.toISOString().split('T')[0]; // YYYY-MM-DD
-    const merchant = receipt.merchant
-      .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .toUpperCase()
-      .substring(0, 25); // Limit length for Oracle compatibility
+    // Use available data with intelligent fallbacks
+    const dateStr = receipt.date ? receipt.date.toISOString().split('T')[0] : 'UNKNOWN_DATE';
     
-    const amount = receipt.amount.replace(/\./g, 'DOT'); // Replace decimal point
+    let merchant = 'UNKNOWN_MERCHANT';
+    if (receipt.merchant) {
+      merchant = receipt.merchant
+        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+        .replace(/\s+/g, '_') // Replace spaces with underscores
+        .toUpperCase()
+        .substring(0, 25); // Limit length for Oracle compatibility
+    }
+    
+    const amount = receipt.amount ? receipt.amount.replace(/\./g, 'DOT') : 'UNKNOWN_AMOUNT';
     const ext = receipt.fileName.split('.').pop();
     
     // Oracle-friendly format: DATE_MERCHANT_$AMOUNT_RECEIPT.ext
@@ -479,7 +484,6 @@ export class DatabaseStorage implements IStorage {
     // Determine folder based on matching status
     const folder = receipt.isMatched ? 'Matched' : 'Unmatched';
     
-    // Get statement name for folder - need to fetch from database
     return `/objects/statements/${receipt.statementId}/${folder}/${newFileName}`;
   }
 

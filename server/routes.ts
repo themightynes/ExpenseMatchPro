@@ -609,13 +609,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateReceipt(receipt.id, updateData);
           }
           
-          // Now reorganize if receipt has required data for Oracle naming
-          if (receipt.date && receipt.merchant && receipt.amount && receipt.statementId) {
+          // Always reorganize if receipt has statement assignment - use intelligent fallbacks
+          if (receipt.statementId) {
             await fileOrganizer.organizeReceipt(receipt);
             reorganized++;
-            statusMessages.push(`Reorganized ${receipt.fileName} → Oracle naming`);
+            const missingData = [
+              !receipt.date ? 'date' : null,
+              !receipt.merchant ? 'merchant' : null,
+              !receipt.amount ? 'amount' : null
+            ].filter(Boolean);
+            
+            if (missingData.length > 0) {
+              statusMessages.push(`Reorganized ${receipt.fileName} → Oracle naming (used fallbacks for: ${missingData.join(', ')})`);
+            } else {
+              statusMessages.push(`Reorganized ${receipt.fileName} → Oracle naming (complete data)`);
+            }
           } else {
-            statusMessages.push(`${receipt.fileName} - missing: ${!receipt.date ? 'date ' : ''}${!receipt.merchant ? 'merchant ' : ''}${!receipt.amount ? 'amount ' : ''}${!receipt.statementId ? 'statement' : ''}`);
+            statusMessages.push(`${receipt.fileName} - no statement assignment, staying in Inbox`);
           }
           
         } catch (error) {
@@ -665,7 +675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 statusMessages.push(`Updated statement ID for ${receipt.fileName}`);
               }
               
-              // Fill in missing merchant data from charge
+              // Fill in missing merchant data from charge  
               if (!receipt.merchant && charge.description) {
                 updateData.merchant = charge.description;
                 receipt.merchant = charge.description; // Update local copy
@@ -741,12 +751,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Charge not found" });
       }
 
-      // Update receipt as matched AND associate it with the statement
-      const receipt = await storage.updateReceipt(receiptId, { 
+      // Get current receipt to check for missing data
+      const currentReceipt = await storage.getReceipt(receiptId);
+      if (!currentReceipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+
+      // Auto-populate missing data from charge
+      const updateData: any = {
         isMatched: true,
         matchedChargeId: chargeId,
-        statementId: charge.statementId  // This is the key fix!
-      });
+        statementId: charge.statementId
+      };
+      
+      // Fill missing fields with charge data
+      if (!currentReceipt.merchant && charge.description) {
+        updateData.merchant = charge.description;
+      }
+      if (!currentReceipt.amount && charge.amount) {
+        updateData.amount = charge.amount;
+      }
+      if (!currentReceipt.date && charge.date) {
+        updateData.date = charge.date;
+      }
+
+      // Update receipt with all data
+      const receipt = await storage.updateReceipt(receiptId, updateData);
 
       // Update charge as matched
       const updatedCharge = await storage.updateAmexCharge(chargeId, { 

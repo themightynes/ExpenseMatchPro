@@ -83,3 +83,8 @@ Preferred communication style: Simple, everyday language.
 - **Cross-Statement Matching**: Receipts can now be matched to AMEX charges across all statement periods, not restricted by date ranges
 - **Improved PDF Viewing**: Compact PDF preview interface with clear "Open in New Tab" functionality
 - **Fixed Matching Logic**: Receipts with amount data now properly appear in matching interface regardless of statement assignment
+- **Oracle iExpense Naming**: Implemented Oracle-friendly naming convention (DATE_MERCHANT_$AMOUNT_RECEIPT.ext)
+- **Intelligent Auto-Organization**: System automatically fills missing receipt data from matched AMEX charges during organization
+- **Smart Fallback Logic**: Receipts are renamed with available data using "UNKNOWN_*" fallbacks for missing fields
+- **Automatic Data Completion**: Matching interface now auto-populates missing merchant, amount, and date from charge data
+- **Fixed Receipt-Charge Linking**: Uses correct AMEX 'description' field instead of non-existent 'merchant' field
