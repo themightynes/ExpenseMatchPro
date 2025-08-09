@@ -159,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (hasUsefulData && !updatedReceipt.isMatched) {
         // If receipt doesn't have a statement assigned, try to assign it to the active statement
         if (!updatedReceipt.statementId) {
-          const statements = await storage.getAmexStatements();
+          const statements = await storage.getAllAmexStatements();
           const activeStatement = statements.find(s => s.isActive);
           if (activeStatement) {
             console.log(`Assigning receipt ${receiptId} to active statement ${activeStatement.periodName}`);

@@ -314,20 +314,24 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
             {imageUrl ? (
               <div className="p-4 flex justify-center items-center min-h-full">
                 {isPDF ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center p-8">
-                    <div className="bg-white rounded-lg shadow-lg p-6 max-w-md text-center">
-                      <FileText className="h-16 w-16 mx-auto mb-4 text-blue-500" />
-                      <h3 className="text-lg font-semibold mb-2">PDF Receipt</h3>
-                      <p className="text-gray-600 mb-4">{receipt.originalFileName}</p>
+                  <div className="w-full h-full flex items-center justify-center p-4">
+                    <div className="bg-white rounded-lg shadow-md p-4 max-w-sm text-center">
+                      <FileText className="h-12 w-12 mx-auto mb-3 text-blue-500" />
+                      <h3 className="text-base font-medium mb-2">PDF Receipt</h3>
+                      <p className="text-sm text-gray-600 mb-3 truncate" title={receipt.originalFileName}>
+                        {receipt.originalFileName}
+                      </p>
                       <div className="flex gap-2 justify-center">
                         <Button 
+                          size="sm"
                           onClick={() => window.open(imageUrl, '_blank')}
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-1"
                         >
-                          <Download className="h-4 w-4" />
-                          Open PDF
+                          <FileText className="h-3 w-3" />
+                          View
                         </Button>
                         <Button 
+                          size="sm"
                           variant="outline"
                           onClick={() => {
                             const link = document.createElement('a');
@@ -337,10 +341,10 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
                             link.click();
                             document.body.removeChild(link);
                           }}
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-1"
                         >
-                          <Download className="h-4 w-4" />
-                          Download
+                          <Download className="h-3 w-3" />
+                          Save
                         </Button>
                       </div>
                     </div>
