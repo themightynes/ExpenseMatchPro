@@ -1,8 +1,8 @@
 # Overview
 
-This is a Receipt Manager application that integrates with AMEX statements and Oracle iExpense to automate expense management workflows. The system processes receipt images using OCR technology, matches them to AMEX charges, and generates Oracle iExpense templates for seamless expense reporting.
+This is a Receipt Manager application that integrates with AMEX statements and Oracle iExpense to automate expense management workflows. The system allows instant receipt uploads with manual data entry, matches them to AMEX charges, and generates Oracle iExpense templates for seamless expense reporting.
 
-The application features a modern web interface built with React and TypeScript, backed by a Node.js/Express API server with PostgreSQL database storage. It includes file upload capabilities with object storage integration and automated receipt processing with intelligent matching algorithms.
+The application features a modern web interface built with React and TypeScript, backed by a Node.js/Express API server with PostgreSQL database storage. It includes multi-file upload capabilities with object storage integration and a streamlined manual receipt processing workflow.
 
 # User Preferences
 
@@ -39,8 +39,9 @@ Preferred communication style: Simple, everyday language.
 - **Expense Templates**: Oracle iExpense-compatible export data
 
 ## Processing Pipeline
-- **OCR Integration**: Tesseract.js for client-side text extraction from receipt images
-- **Smart Parsing**: Custom receipt parser for extracting merchant, amount, date, and category
+- **Manual Entry System**: Instant receipt upload with manual data entry (OCR disabled due to 30+ minute processing times)
+- **Multi-File Upload**: Support for uploading up to 10 receipts simultaneously with progress tracking
+- **Smart Organization**: Automatic folder creation and receipt organization by AMEX statement periods
 - **Automated Matching**: Algorithm to match receipts to AMEX charges based on amount, date, and merchant similarity
 - **Template Generation**: Oracle iExpense CSV/XML template creation for seamless integration
 
@@ -70,5 +71,12 @@ Preferred communication style: Simple, everyday language.
 - **ESBuild**: Fast JavaScript bundler for production builds
 
 ## Payment Integration
-- **AMEX Integration**: Processes AMEX statement data for automated charge matching
+- **AMEX Integration**: Processes AMEX statement CSV files with automatic date range detection and folder organization
 - **Oracle iExpense**: Generates compatible templates for enterprise expense reporting
+
+## Recent Changes (August 9, 2025)
+- **Fixed CSV Import**: Resolved date parsing errors for AMEX statement imports (MM/DD/YYYY format now working)
+- **Disabled OCR Processing**: Removed slow OCR (30+ minutes per receipt) in favor of instant manual entry
+- **Multi-File Upload**: Added support for uploading multiple receipts simultaneously with progress tracking
+- **Enhanced UI Feedback**: Clear status indicators for receipts requiring manual data entry
+- **Automatic Organization**: Statement folders created automatically when CSV files are imported

@@ -12,6 +12,7 @@ import type { UploadResult } from "@uppy/core";
 export default function FileUploadZone() {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
   const processReceiptMutation = useMutation({
     mutationFn: async (data: { fileUrl: string; fileName: string; originalFileName: string }) => {
@@ -21,20 +22,12 @@ export default function FileUploadZone() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      setIsProcessing(false);
-      toast({
-        title: "Receipt uploaded successfully",
-        description: "Receipt uploaded. Click on it to manually enter the details.",
-      });
+      // Don't show individual toasts when uploading multiple files
+      // The summary toast will be shown in handleUploadComplete
     },
     onError: (error) => {
-      setIsProcessing(false);
       console.error("Error processing receipt:", error);
-      toast({
-        title: "Upload failed",
-        description: "There was an error processing your receipt. Please try again.",
-        variant: "destructive",
-      });
+      // Individual errors are handled in handleUploadComplete
     },
   });
 
@@ -51,12 +44,38 @@ export default function FileUploadZone() {
     setIsProcessing(true);
     
     if (result.successful && result.successful.length > 0) {
-      const file = result.successful[0];
+      const totalFiles = result.successful.length;
+      setUploadProgress({ current: 0, total: totalFiles });
       
-      await processReceiptMutation.mutateAsync({
-        fileUrl: file.uploadURL || '',
-        fileName: file.name || 'unknown',
-        originalFileName: file.name || 'unknown',
+      let successCount = 0;
+      let failCount = 0;
+      
+      // Process all uploaded files
+      for (let i = 0; i < result.successful.length; i++) {
+        const file = result.successful[i];
+        setUploadProgress({ current: i + 1, total: totalFiles });
+        
+        try {
+          await processReceiptMutation.mutateAsync({
+            fileUrl: file.uploadURL || '',
+            fileName: file.name || 'unknown',
+            originalFileName: file.name || 'unknown',
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to process ${file.name}:`, error);
+          failCount++;
+        }
+      }
+      
+      // Reset progress
+      setUploadProgress({ current: 0, total: 0 });
+      setIsProcessing(false);
+      
+      // Show summary toast
+      toast({
+        title: `Upload Complete`,
+        description: `${successCount} receipt${successCount !== 1 ? 's' : ''} uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ''}. Click on them to add details.`,
       });
     }
   };
@@ -89,7 +108,11 @@ export default function FileUploadZone() {
               {isProcessing && (
                 <div className="flex items-center justify-center gap-2 mt-3">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
-                  <span className="text-sm text-blue-600">Processing...</span>
+                  <span className="text-sm text-blue-600">
+                    {uploadProgress.total > 1 
+                      ? `Processing ${uploadProgress.current} of ${uploadProgress.total} receipts...`
+                      : "Processing..."}
+                  </span>
                 </div>
               )}
             </div>
