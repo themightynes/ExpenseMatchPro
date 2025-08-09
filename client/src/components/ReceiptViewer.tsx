@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, ZoomIn, ZoomOut, RotateCw, Save, Edit, Lock, Download, FileText } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCw, Save, Edit, Lock, Download, FileText, Crop, Check } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import ReactCrop, { Crop as CropType, PixelCrop, centerCrop, makeAspectCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
 import type { Receipt } from "@shared/schema";
 
 interface ReceiptViewerProps {
@@ -35,6 +37,11 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+  const [isCropping, setIsCropping] = useState(false);
+  const [crop, setCrop] = useState<CropType>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const imgRef = useRef<HTMLImageElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [editedData, setEditedData] = useState({
     merchant: receipt.merchant || "",
     amount: receipt.amount || "",
@@ -42,6 +49,87 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
     category: receipt.category || "",
   });
   const { toast } = useToast();
+
+  // Crop utility functions
+  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+    setCrop(centerCrop(
+      makeAspectCrop(
+        {
+          unit: '%',
+          width: 90,
+        },
+        16 / 9,
+        width,
+        height,
+      ),
+      width,
+      height,
+    ));
+  }, []);
+
+  const canvasPreview = useCallback((
+    image: HTMLImageElement,
+    canvas: HTMLCanvasElement,
+    crop: PixelCrop,
+  ) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    const pixelRatio = window.devicePixelRatio;
+
+    canvas.width = crop.width * pixelRatio * scaleX;
+    canvas.height = crop.height * pixelRatio * scaleY;
+
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    ctx.imageSmoothingQuality = 'high';
+
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width * scaleX,
+      crop.height * scaleY,
+    );
+  }, []);
+
+  const applyCrop = useCallback(async () => {
+    if (!completedCrop || !previewCanvasRef.current || !imgRef.current) return;
+
+    const canvas = previewCanvasRef.current;
+    canvasPreview(imgRef.current, canvas, completedCrop);
+
+    // Convert canvas to blob and update the image
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      
+      const url = URL.createObjectURL(blob);
+      
+      // Create a new image element to replace the current one
+      const newImg = new Image();
+      newImg.onload = () => {
+        if (imgRef.current) {
+          imgRef.current.src = url;
+        }
+        URL.revokeObjectURL(url);
+        setIsCropping(false);
+        setCrop(undefined);
+        setCompletedCrop(undefined);
+        
+        toast({
+          title: "Image cropped successfully",
+          description: "The receipt image has been cropped.",
+        });
+      };
+      newImg.src = url;
+    }, 'image/jpeg', 0.95);
+  }, [completedCrop, canvasPreview, toast]);
 
   const updateMutation = useMutation({
     mutationFn: async (updates: any) => {
@@ -129,20 +217,49 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
           <div className="flex-1 bg-gray-100 relative overflow-auto" style={{ maxHeight: '70vh' }}>
             {imageUrl ? (
               <div className="p-4 flex justify-center items-center min-h-full">
-                <img
-                  src={imageUrl}
-                  alt={receipt.originalFileName}
-                  className="max-w-full h-auto shadow-lg"
-                  style={{
-                    transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                    transformOrigin: 'center',
-                    transition: 'transform 0.2s ease-in-out'
-                  }}
-                  onError={(e) => {
-                    console.error("Failed to load image:", imageUrl);
-                    e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=';
-                  }}
-                />
+                {isCropping ? (
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(_, percentCrop) => setCrop(percentCrop)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    aspect={undefined}
+                    minWidth={50}
+                    minHeight={50}
+                  >
+                    <img
+                      ref={imgRef}
+                      src={imageUrl}
+                      alt={receipt.originalFileName}
+                      onLoad={onImageLoad}
+                      className="max-w-full h-auto shadow-lg"
+                      style={{
+                        transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                        transformOrigin: 'center',
+                        transition: 'transform 0.2s ease-in-out'
+                      }}
+                      onError={(e) => {
+                        console.error("Failed to load image:", imageUrl);
+                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=';
+                      }}
+                    />
+                  </ReactCrop>
+                ) : (
+                  <img
+                    ref={imgRef}
+                    src={imageUrl}
+                    alt={receipt.originalFileName}
+                    className="max-w-full h-auto shadow-lg"
+                    style={{
+                      transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                      transformOrigin: 'center',
+                      transition: 'transform 0.2s ease-in-out'
+                    }}
+                    onError={(e) => {
+                      console.error("Failed to load image:", imageUrl);
+                      e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=';
+                    }}
+                  />
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center h-64 text-gray-500">
@@ -166,6 +283,24 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
                 <Button variant="outline" size="sm" onClick={handleRotate}>
                   <RotateCw className="h-4 w-4" />
                 </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    setIsCropping(!isCropping);
+                    if (isCropping) {
+                      setCrop(undefined);
+                      setCompletedCrop(undefined);
+                    }
+                  }}
+                >
+                  <Crop className="h-4 w-4" />
+                </Button>
+                {isCropping && completedCrop && (
+                  <Button variant="outline" size="sm" onClick={applyCrop}>
+                    <Check className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={() => window.open(imageUrl, '_blank')}>
                   <Download className="h-4 w-4" />
                 </Button>
@@ -352,6 +487,16 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
           </div>
         </div>
       </div>
+
+      {/* Hidden canvas for crop processing */}
+      <canvas
+        ref={previewCanvasRef}
+        style={{
+          position: 'absolute',
+          top: '-9999px',
+          left: '-9999px',
+        }}
+      />
     </div>
   );
 }
