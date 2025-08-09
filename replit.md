@@ -117,3 +117,6 @@ Preferred communication style: Simple, everyday language.
 - **PDF Controls**: Added zoom, page navigation, and external link buttons for enhanced PDF interaction
 - **Progressive Enhancement**: Feature flag system allows fallback to "Open in New Tab" if inline rendering fails
 - **Responsive Receipt Viewer**: Enhanced ReceiptViewer with proper desktop/mobile layouts for simultaneous PDF viewing and form editing
+- **Advanced PDF Text Extraction**: Implemented PDF-to-image conversion with OCR for comprehensive text extraction from PDF receipts
+- **Enhanced User Experience**: Improved progress indicators, processing time feedback, and real-time status updates for text extraction
+- **Smart Receipt Processing**: PDF receipts now automatically extract merchant, amount, date, and category information for seamless AMEX matching

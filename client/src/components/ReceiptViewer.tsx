@@ -672,11 +672,11 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       </Badge>
                       {receipt.isMatched && <Badge variant="default">Matched to AMEX</Badge>}
                       
-                      {/* OCR Status and Control */}
+                      {/* Text Extraction Status and Control */}
                       {receipt.processingStatus === 'processing' ? (
                         <Badge variant="secondary" className="flex items-center gap-1">
                           <Loader2 className="w-3 h-3 animate-spin" />
-                          Processing OCR
+                          {isPDF ? 'Extracting PDF Text...' : 'Processing Image...'}
                         </Badge>
                       ) : receipt.ocrText === 'Manual entry required' || receipt.ocrText === 'OCR failed - manual entry required' || (receipt.ocrText && (receipt.ocrText.includes('PDF receipt detected') || receipt.ocrText.includes('manual entry') || receipt.ocrText.includes('text extraction failed'))) ? (
                         <Button
@@ -700,7 +700,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                         </Button>
                       ) : receipt.ocrText && receipt.ocrText !== 'Processing...' && receipt.ocrText.length > 50 ? (
                         <Badge variant="default" className="text-green-700 bg-green-100">
-                          OCR Complete
+                          {isPDF ? 'PDF Text Extracted' : 'Text Extracted'}
                         </Badge>
                       ) : null}
                     </div>

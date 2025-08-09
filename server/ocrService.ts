@@ -34,27 +34,40 @@ export class OCRService {
   }
 
   /**
-   * Extract text from PDF using pdf-parse library
+   * Extract text from PDF by converting to images and using OCR
    */
   private async extractPdfText(buffer: Buffer): Promise<string> {
     try {
-      console.log('PDF processing: Starting text extraction with pdf-parse...');
+      console.log('PDF processing: Converting PDF to images for text extraction...');
       
       // Dynamic import to avoid module loading issues
-      const pdfParse = (await import('pdf-parse')).default;
-      const data = await pdfParse(buffer);
-      const extractedText = data.text;
+      const { fromBuffer } = await import('pdf2pic');
       
-      if (!extractedText || extractedText.trim().length < 10) {
-        console.log('PDF text extraction failed or returned minimal content');
-        return "PDF text extraction completed but found minimal readable text. This might be a scanned PDF requiring OCR. Please enter the receipt details manually. Key information needed: merchant name, amount, date, and category.";
+      // Convert PDF to images (first page only for performance)
+      const convert = fromBuffer(buffer, {
+        density: 200,           // DPI - higher for better text quality
+        saveFilename: "receipt",
+        savePath: "/tmp",
+        format: "png",
+        width: 2000,           // High resolution for better OCR
+        height: 2000
+      });
+      
+      console.log('Converting PDF page 1 to image...');
+      const result = await convert(1, { responseType: "buffer" });
+      
+      if (!result || !result.buffer) {
+        console.log('PDF to image conversion failed');
+        return "PDF processing: Unable to convert PDF to image for text extraction. This might be a complex or password-protected PDF. Please enter the receipt details manually.";
       }
       
-      console.log('PDF text extraction successful, extracted', extractedText.length, 'characters');
-      return extractedText;
+      console.log('PDF converted to image, starting text extraction...');
+      // Use existing image OCR processing
+      return await this.extractImageText(result.buffer);
+      
     } catch (error) {
-      console.error('Error extracting text from PDF:', error);
-      return "PDF text extraction failed. This might be a password-protected, corrupted, or scanned PDF. Please enter the receipt details manually. Key information needed: merchant name, amount, date, and category.";
+      console.error('Error processing PDF:', error);
+      return "PDF processing failed. This might be a password-protected, corrupted, or complex PDF. Please enter the receipt details manually to enable automatic matching with AMEX charges.";
     }
   }
 
@@ -221,7 +234,7 @@ export class OCRService {
       console.log(`Processing file: ${fileName} with extension: ${fileExtension}`);
 
       if (fileExtension === 'pdf') {
-        console.log('Processing PDF file...');
+        console.log('Processing PDF file - converting to image then extracting text...');
         ocrText = await this.extractPdfText(buffer);
       } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff'].includes(fileExtension || '')) {
         console.log('Processing image file...');
@@ -230,7 +243,7 @@ export class OCRService {
         throw new Error(`Unsupported file type: ${fileExtension}`);
       }
 
-      console.log(`OCR completed. Extracted ${ocrText.length} characters`);
+      console.log(`Text extraction completed. Extracted ${ocrText.length} characters`);
 
       // Parse the extracted text
       const extractedData = this.parseReceiptData(ocrText);
@@ -243,7 +256,7 @@ export class OCRService {
       };
 
     } catch (error) {
-      console.error('OCR processing failed:', error);
+      console.error('Text extraction failed:', error);
       throw error;
     }
   }
