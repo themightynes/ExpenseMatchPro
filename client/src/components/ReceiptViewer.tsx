@@ -145,11 +145,34 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
 
   const handleSave = async () => {
     try {
-      await apiRequest('/api/receipts/' + receipt.id, {
+      // Validate at least one field is provided
+      if (!editedData.merchant?.trim() && !editedData.amount?.trim() && !editedData.date?.trim() && !editedData.category?.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Please provide at least one piece of information (merchant, amount, date, or category).",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('Saving receipt data:', editedData);
+      
+      const response = await fetch(`/api/receipts/${receipt.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json' 
+        },
         body: JSON.stringify(editedData),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Update failed with status ${response.status}`);
+      }
+
+      const updatedReceipt = await response.json();
+      console.log('Receipt updated successfully:', updatedReceipt);
 
       toast({
         title: "Receipt updated",
@@ -158,11 +181,13 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
 
       setIsEditing(false);
       queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/financial-stats'] });
     } catch (error) {
       console.error('Failed to save receipt:', error);
       toast({
         title: "Error",
-        description: "Failed to save receipt information.",
+        description: error instanceof Error ? error.message : "Failed to save receipt information.",
         variant: "destructive",
       });
     }
