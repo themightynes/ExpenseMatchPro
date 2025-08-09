@@ -80,3 +80,6 @@ Preferred communication style: Simple, everyday language.
 - **Multi-File Upload**: Added support for uploading multiple receipts simultaneously with progress tracking
 - **Enhanced UI Feedback**: Clear status indicators for receipts requiring manual data entry
 - **Automatic Organization**: Statement folders created automatically when CSV files are imported
+- **Cross-Statement Matching**: Receipts can now be matched to AMEX charges across all statement periods, not restricted by date ranges
+- **Improved PDF Viewing**: Compact PDF preview interface with clear "Open in New Tab" functionality
+- **Fixed Matching Logic**: Receipts with amount data now properly appear in matching interface regardless of statement assignment

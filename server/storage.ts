@@ -350,17 +350,19 @@ export class DatabaseStorage implements IStorage {
       .from(receipts)
       .where(eq(receipts.processingStatus, "processing"));
 
-    const [readyResult] = await db.select({ count: count() })
-      .from(receipts)
-      .where(and(
-        eq(receipts.processingStatus, "completed"),
-        eq(receipts.isMatched, false)
-      ));
+    // Count receipts ready for matching (have amount and not matched)
+    const allReceipts = await db.select().from(receipts);
+    const readyCount = allReceipts.filter(r => 
+      r.processingStatus === 'completed' && 
+      r.amount && 
+      parseFloat(r.amount) > 0 &&
+      !r.isMatched
+    ).length;
 
     return {
       processedCount: processedResult.count,
       pendingCount: pendingResult.count,
-      readyCount: readyResult.count,
+      readyCount: readyCount,
       processingCount: processingResult.count,
     };
   }

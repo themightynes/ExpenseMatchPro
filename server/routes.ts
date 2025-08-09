@@ -550,30 +550,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const statementId = req.params.statementId;
       
-      // Get unmatched receipts ASSIGNED to the statement (not just by date range)
+      // Get ALL unmatched receipts (not restricted to statement) - let users match across all periods
       const allReceipts = await storage.getAllReceipts();
       const unmatchedReceipts = allReceipts.filter(r => 
-        r.statementId === statementId && 
         !r.isMatched && 
         r.processingStatus === 'completed' &&
         r.amount && // Only include receipts with amount data
         parseFloat(r.amount) > 0 // Exclude zero or negative amounts
       );
       
-      // Get unmatched charges for the statement
+      // Get unmatched charges for the specific statement being worked on
       const unmatchedCharges = await storage.getUnmatchedCharges(statementId);
 
-      console.log("Matching candidates:", { 
+      console.log("Matching candidates (cross-statement):", { 
         statementId, 
         totalReceipts: allReceipts.length,
         unmatchedReceipts: unmatchedReceipts.length, 
         unmatchedCharges: unmatchedCharges.length,
-        sampleReceipt: allReceipts.length > 0 ? {
-          id: allReceipts[0].id,
-          statementId: allReceipts[0].statementId,
-          isMatched: allReceipts[0].isMatched,
-          processingStatus: allReceipts[0].processingStatus,
-          amount: allReceipts[0].amount
+        sampleReceipt: unmatchedReceipts.length > 0 ? {
+          id: unmatchedReceipts[0].id,
+          statementId: unmatchedReceipts[0].statementId,
+          isMatched: unmatchedReceipts[0].isMatched,
+          processingStatus: unmatchedReceipts[0].processingStatus,
+          amount: unmatchedReceipts[0].amount,
+          date: unmatchedReceipts[0].date
         } : null
       });
 
