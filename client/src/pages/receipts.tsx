@@ -215,8 +215,6 @@ export default function ReceiptsPage() {
               <FileUploadZone 
                 onUploadComplete={() => {
                   setShowUpload(false);
-                  // Refresh receipts data
-                  window.location.reload();
                 }}
               />
             </CardContent>

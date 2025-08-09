@@ -9,7 +9,11 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, Mail, FileText, Image, Check, Zap } from "lucide-react";
 import type { UploadResult } from "@uppy/core";
 
-export default function FileUploadZone() {
+interface FileUploadZoneProps {
+  onUploadComplete?: () => void;
+}
+
+export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps = {}) {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
@@ -77,6 +81,9 @@ export default function FileUploadZone() {
         title: `Upload Complete`,
         description: `${successCount} receipt${successCount !== 1 ? 's' : ''} uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ''}. Click on them to add details.`,
       });
+      
+      // Call the completion callback if provided
+      onUploadComplete?.();
     }
   };
 
