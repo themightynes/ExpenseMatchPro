@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import CsvUploadModal from "@/components/CsvUploadModal";
+import StatementChargesDialog from "@/components/StatementChargesDialog";
 import type { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
-import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign } from "lucide-react";
+import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List } from "lucide-react";
 
 export default function StatementsPage() {
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [selectedStatement, setSelectedStatement] = useState<AmexStatement | null>(null);
 
   const { data: statements = [], isLoading: statementsLoading } = useQuery<AmexStatement[]>({
     queryKey: ["/api/statements"],
@@ -197,6 +199,14 @@ export default function StatementsPage() {
 
                         {/* Action Buttons */}
                         <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            className="flex-1"
+                            onClick={() => setSelectedStatement(statement)}
+                          >
+                            <List className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
                           <Link href={`/matching?statementId=${statement.id}`} className="flex-1">
                             <Button variant="outline" className="w-full">
                               <Eye className="h-4 w-4 mr-2" />
@@ -230,6 +240,15 @@ export default function StatementsPage() {
         onClose={() => setShowCsvModal(false)}
         statements={statements}
       />
+
+      {/* Statement Details Dialog */}
+      {selectedStatement && (
+        <StatementChargesDialog
+          statement={selectedStatement}
+          open={!!selectedStatement}
+          onOpenChange={(open) => !open && setSelectedStatement(null)}
+        />
+      )}
     </div>
   );
 }

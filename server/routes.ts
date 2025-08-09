@@ -415,6 +415,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get charges for a specific statement
+  app.get("/api/statements/:id/charges", async (req, res) => {
+    try {
+      const charges = await storage.getChargesByStatement(req.params.id);
+      res.json(charges);
+    } catch (error) {
+      console.error("Error getting statement charges:", error);
+      res.status(500).json({ error: "Failed to get statement charges" });
+    }
+  });
+
+  // Get receipts for a specific statement
+  app.get("/api/statements/:id/receipts", async (req, res) => {
+    try {
+      const receipts = await storage.getReceiptsByStatement(req.params.id);
+      res.json(receipts);
+    } catch (error) {
+      console.error("Error getting statement receipts:", error);
+      res.status(500).json({ error: "Failed to get statement receipts" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
