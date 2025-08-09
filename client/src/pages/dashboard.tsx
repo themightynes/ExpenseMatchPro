@@ -197,10 +197,12 @@ export default function Dashboard() {
                     <span className="font-medium">Export to Oracle</span>
                   </Button>
 
-                  <Button variant="outline" className="w-full justify-start">
-                    <i className="fas fa-search mr-3"></i>
-                    <span className="font-medium">Find Missing Receipts</span>
-                  </Button>
+                  <Link href="/statements" className="w-full">
+                    <Button variant="outline" className="w-full justify-start">
+                      <i className="fas fa-chart-line mr-3"></i>
+                      <span className="font-medium">View Statements</span>
+                    </Button>
+                  </Link>
 
                   <Button 
                     variant="outline" 

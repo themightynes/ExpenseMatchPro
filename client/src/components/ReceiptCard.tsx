@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import ReceiptViewer from "@/components/ReceiptViewer";
 import type { Receipt } from "@shared/schema";
+import { Eye } from "lucide-react";
 
 interface ReceiptCardProps {
   receipt: Receipt;
 }
 
 export default function ReceiptCard({ receipt }: ReceiptCardProps) {
+  const [showViewer, setShowViewer] = useState(false);
   const getStatusBadge = (status: string, isMatched: boolean) => {
     if (status === "completed" && isMatched) {
       return (
@@ -95,9 +99,20 @@ export default function ReceiptCard({ receipt }: ReceiptCardProps) {
           <p className="text-sm text-gray-600 mt-1">{receipt.merchant}</p>
         )}
       </div>
-      <Button variant="ghost" size="sm" className="p-2 text-gray-400 hover:text-gray-600">
-        <i className="fas fa-ellipsis-v"></i>
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        className="p-2 text-gray-400 hover:text-gray-600"
+        onClick={() => setShowViewer(true)}
+      >
+        <Eye className="h-4 w-4" />
       </Button>
+      
+      <ReceiptViewer 
+        receipt={receipt} 
+        isOpen={showViewer} 
+        onClose={() => setShowViewer(false)} 
+      />
     </div>
   );
 }
