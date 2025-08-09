@@ -39,9 +39,17 @@ export const amexStatements = pgTable("amex_statements", {
 export const amexCharges = pgTable("amex_charges", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   statementId: varchar("statement_id").notNull(),
-  merchant: text("merchant").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   date: timestamp("date").notNull(),
+  description: text("description").notNull(), // AMEX Description field
+  cardMember: text("card_member").notNull(),
+  accountNumber: text("account_number").notNull(),
+  amount: text("amount").notNull(), // Keep as text to preserve negative values and formatting
+  extendedDetails: text("extended_details"),
+  statementAs: text("statement_as"), // "Appears On Your Statement As"
+  address: text("address"),
+  cityState: text("city_state"),
+  zipCode: text("zip_code"),
+  country: text("country"),
   reference: text("reference"),
   category: text("category"),
   isMatched: boolean("is_matched").default(false),
@@ -71,6 +79,23 @@ export const insertAmexStatementSchema = createInsertSchema(amexStatements).omit
 export const insertAmexChargeSchema = createInsertSchema(amexCharges).omit({
   id: true,
   createdAt: true,
+});
+
+// CSV import schema for AMEX charges
+export const amexCsvRowSchema = z.object({
+  Date: z.string(),
+  Description: z.string(),
+  "Card Member": z.string(),
+  "Account #": z.string(),
+  Amount: z.string(),
+  "Extended Details": z.string().optional(),
+  "Appears On Your Statement As": z.string().optional(),
+  Address: z.string().optional(),
+  "City/State": z.string().optional(),
+  "Zip Code": z.string().optional(),
+  Country: z.string().optional(),
+  Reference: z.string(),
+  Category: z.string(),
 });
 
 export const insertExpenseTemplateSchema = createInsertSchema(expenseTemplates).omit({

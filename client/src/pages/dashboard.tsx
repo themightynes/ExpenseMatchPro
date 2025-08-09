@@ -199,8 +199,8 @@ export default function Dashboard() {
                   </Button>
 
                   <Button variant="outline" className="w-full justify-start">
-                    <i className="fas fa-cog mr-3"></i>
-                    <span className="font-medium">Settings</span>
+                    <i className="fas fa-upload mr-3"></i>
+                    <span className="font-medium">Import AMEX CSV</span>
                   </Button>
                 </div>
               </CardContent>

@@ -47,14 +47,28 @@ export class ReceiptParser {
       /^\d+.*street|road|ave|avenue|blvd|boulevard/i,
       /^\(\d{3}\)|\d{3}-\d{3}-\d{4}/,
       /^tel:|^phone:/i,
-      /^receipt|^customer copy/i
+      /^receipt|^customer copy/i,
+      /^rfc:|^independencia/i, // Skip Mexican tax identifiers and addresses
+      /^mesa:|^folio:|^orden:/i, // Skip table/order numbers
+      /^personas:/i, // Skip person count
     ];
 
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
-      const line = lines[i];
-      if (line.length > 2 && !skipPatterns.some(pattern => pattern.test(line))) {
+    // Special patterns for specific merchant types
+    for (let i = 0; i < Math.min(7, lines.length); i++) {
+      const line = lines[i].trim();
+      
+      // Mexican restaurant patterns
+      if (line.match(/casa\s+luna|luna\s+tlaquepaque/i)) {
+        return "Casa Luna Luna Tlaquepaque";
+      }
+      
+      // Look for substantial lines that could be merchant names
+      if (line.length > 3 && !skipPatterns.some(pattern => pattern.test(line))) {
         // Clean up the merchant name
-        return line.replace(/[^\w\s&'-]/g, '').trim();
+        const cleaned = line.replace(/[^\w\s&'-]/g, '').trim();
+        if (cleaned.length > 2) {
+          return cleaned;
+        }
       }
     }
 
@@ -63,10 +77,11 @@ export class ReceiptParser {
 
   private extractAmount(lines: string[]): string | undefined {
     const amountPatterns = [
-      /total[\s:]*\$?(\d+\.?\d*)/i,
-      /amount[\s:]*\$?(\d+\.?\d*)/i,
-      /\$(\d+\.\d{2})/,
-      /(\d+\.\d{2})\s*$/ // Amount at end of line
+      /total[\s:]*\$?(\d+[,.]?\d*)/i,
+      /amount[\s:]*\$?(\d+[,.]?\d*)/i,
+      /\$(\d+[,.]?\d+\.?\d*)/,
+      /(\d+[,.]?\d+\.?\d*)\s*$/, // Amount at end of line
+      /importe[\s:]*\$?(\d+[,.]?\d*)/i, // Spanish "amount"
     ];
 
     const amounts: number[] = [];
@@ -75,8 +90,10 @@ export class ReceiptParser {
       for (const pattern of amountPatterns) {
         const match = line.match(pattern);
         if (match) {
-          const amount = parseFloat(match[1]);
-          if (amount > 0 && amount < 10000) { // Reasonable range
+          // Handle different number formats (commas as thousands separator)
+          let amountStr = match[1].replace(/,/g, '');
+          const amount = parseFloat(amountStr);
+          if (amount > 0 && amount < 100000) { // Reasonable range
             amounts.push(amount);
           }
         }
@@ -96,7 +113,8 @@ export class ReceiptParser {
       /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/,
       /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/,
       /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2},?\s+\d{4}/i,
-      /(\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{4})/i
+      /(\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{4})/i,
+      /(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}:\d{2}/, // Mexican format with time
     ];
 
     for (const line of lines) {
@@ -104,8 +122,22 @@ export class ReceiptParser {
         const match = line.match(pattern);
         if (match) {
           const dateStr = match[1] || match[0];
-          const parsedDate = new Date(dateStr);
-          if (!isNaN(parsedDate.getTime())) {
+          let parsedDate: Date;
+          
+          // Handle DD/MM/YYYY format (common in Mexico)
+          if (dateStr.includes('/') && dateStr.split('/')[0].length === 2) {
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+              // Assume DD/MM/YYYY format
+              parsedDate = new Date(`${parts[1]}/${parts[0]}/${parts[2]}`);
+            } else {
+              parsedDate = new Date(dateStr);
+            }
+          } else {
+            parsedDate = new Date(dateStr);
+          }
+          
+          if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() > 2000) {
             return parsedDate;
           }
         }

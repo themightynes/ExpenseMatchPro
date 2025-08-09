@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
@@ -6,6 +6,7 @@ import {
   insertAmexStatementSchema, 
   insertAmexChargeSchema,
   insertExpenseTemplateSchema,
+  amexCsvRowSchema,
   EXPENSE_CATEGORIES 
 } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -172,6 +173,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting active statement:", error);
       res.status(500).json({ error: "Failed to get active statement" });
+    }
+  });
+
+  // AMEX CSV Import endpoint
+  app.post("/api/charges/import-csv", upload.single('csvFile'), async (req: Request & { file?: Express.Multer.File }, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No CSV file uploaded" });
+      }
+
+      const csvContent = req.file.buffer.toString('utf-8');
+      const lines = csvContent.split('\n');
+      const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
+      
+      const { statementId } = req.body;
+      if (!statementId) {
+        return res.status(400).json({ error: "Statement ID is required" });
+      }
+
+      let imported = 0;
+      let errors = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        try {
+          // Parse CSV line (handle quoted values)
+          const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+          const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
+          
+          const rowData: any = {};
+          headers.forEach((header: string, index: number) => {
+            rowData[header] = cleanValues[index] || '';
+          });
+
+          // Validate with schema
+          const validatedRow = amexCsvRowSchema.parse(rowData);
+
+          // Skip payments and credits (negative amounts or "AUTOPAY")
+          if (validatedRow.Description.includes('AUTOPAY') || validatedRow.Description.includes('PAYMENT')) {
+            continue;
+          }
+
+          // Convert to our charge format
+          const chargeData = {
+            statementId,
+            date: new Date(validatedRow.Date),
+            description: validatedRow.Description,
+            cardMember: validatedRow["Card Member"],
+            accountNumber: validatedRow["Account #"],
+            amount: validatedRow.Amount,
+            extendedDetails: validatedRow["Extended Details"],
+            statementAs: validatedRow["Appears On Your Statement As"],
+            address: validatedRow.Address,
+            cityState: validatedRow["City/State"],
+            zipCode: validatedRow["Zip Code"],
+            country: validatedRow.Country,
+            reference: validatedRow.Reference,
+            category: validatedRow.Category,
+            isMatched: false,
+            receiptId: null,
+          };
+
+          await storage.createAmexCharge(chargeData);
+          imported++;
+        } catch (error) {
+          console.error(`Error processing row ${i}:`, error);
+          errors++;
+        }
+      }
+
+      res.json({ 
+        message: `Import completed. ${imported} charges imported, ${errors} errors.`,
+        imported,
+        errors 
+      });
+    } catch (error) {
+      console.error("Error importing CSV:", error);
+      res.status(500).json({ error: "Failed to import CSV" });
     }
   });
 
