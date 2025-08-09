@@ -204,10 +204,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteReceipt(id: string): Promise<boolean> {
-    const result = await db
-      .delete(receipts)
-      .where(eq(receipts.id, id));
-    return result.rowCount !== undefined && result.rowCount > 0;
+    try {
+      const result = await db
+        .delete(receipts)
+        .where(eq(receipts.id, id));
+      
+      // Check if the deletion was successful
+      // Drizzle returns an array for delete operations, check the length
+      return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
+    } catch (error) {
+      console.error("Error in deleteReceipt:", error);
+      return false;
+    }
   }
 
   async getReceiptsByStatus(status: string): Promise<Receipt[]> {
