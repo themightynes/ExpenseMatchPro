@@ -21,11 +21,14 @@ export default function ReceiptCard({ receipt }: ReceiptCardProps) {
       );
     }
     
+    // Check if manual entry is needed (no merchant, amount, or date)
+    const needsManualEntry = !receipt.merchant && !receipt.amount && !receipt.date;
+    
     if (status === "completed" && !isMatched) {
       return (
         <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
           <i className="fas fa-exclamation-triangle mr-1"></i>
-          Needs Review
+          {needsManualEntry ? "Manual Entry Needed" : "Needs Review"}
         </Badge>
       );
     }

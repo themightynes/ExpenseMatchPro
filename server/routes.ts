@@ -160,12 +160,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const objectPath = objectStorageService.normalizeObjectEntityPath(req.body.fileUrl);
       
-      // Create receipt record
+      // Create receipt record - set to 'completed' immediately for manual processing
+      // OCR is disabled due to performance issues (was taking 30+ mins per receipt)
       const receipt = await storage.createReceipt({
         fileName: req.body.fileName || 'uploaded-receipt',
         originalFileName: req.body.originalFileName || req.body.fileName || 'uploaded-receipt',
         fileUrl: objectPath,
-        processingStatus: 'processing',
+        processingStatus: 'completed', // Changed from 'processing' to skip OCR
+        ocrText: 'Manual entry required', // Indicate manual processing needed
       });
 
       // Set ACL policy for the uploaded receipt

@@ -103,6 +103,7 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
 
   const isProcessing = receipt.processingStatus === 'processing';
   const canEdit = !receipt.isMatched; // Allow editing unless already matched
+  const needsManualEntry = !receipt.merchant && !receipt.amount && !receipt.date;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
@@ -113,7 +114,7 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
             <h2 className="text-lg font-semibold text-gray-900">{receipt.originalFileName}</h2>
             <div className="flex items-center gap-2 mt-1">
               <Badge variant={receipt.processingStatus === 'completed' ? 'default' : 'secondary'}>
-                {receipt.processingStatus}
+                {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
               </Badge>
               {receipt.isMatched && <Badge variant="default">Matched</Badge>}
             </div>

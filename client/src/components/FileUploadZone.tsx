@@ -24,7 +24,7 @@ export default function FileUploadZone() {
       setIsProcessing(false);
       toast({
         title: "Receipt uploaded successfully",
-        description: "Your receipt is being processed and will appear in the recent uploads.",
+        description: "Receipt uploaded. Click on it to manually enter the details.",
       });
     },
     onError: (error) => {
