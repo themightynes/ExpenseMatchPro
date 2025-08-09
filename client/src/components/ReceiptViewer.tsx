@@ -128,8 +128,12 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   
-  // Touch handling for pinch-to-zoom
+  // Touch handling for pinch-to-zoom and panning
   const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [lastPanPosition, setLastPanPosition] = useState({ x: 0, y: 0 });
 
   // Find current receipt index
   const currentIndex = receipts.findIndex(r => r.id === receipt.id);
@@ -179,14 +183,23 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
+      // Two-finger pinch for zoom
       e.preventDefault();
       const distance = getTouchDistance(e.touches);
       setLastTouchDistance(distance);
+      setIsDragging(false);
+    } else if (e.touches.length === 1 && zoom > 1) {
+      // Single finger drag for pan when zoomed
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({ x: touch.clientX, y: touch.clientY });
+      setLastPanPosition(panPosition);
     }
-  }, []);
+  }, [zoom, panPosition]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2 && lastTouchDistance) {
+      // Handle pinch zoom
       e.preventDefault();
       const currentDistance = getTouchDistance(e.touches);
       if (currentDistance) {
@@ -195,20 +208,72 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
         setZoom(newZoom);
         setLastTouchDistance(currentDistance);
       }
+    } else if (e.touches.length === 1 && isDragging && zoom > 1) {
+      // Handle pan
+      e.preventDefault();
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - dragStart.x;
+      const deltaY = touch.clientY - dragStart.y;
+      
+      setPanPosition({
+        x: lastPanPosition.x + deltaX,
+        y: lastPanPosition.y + deltaY
+      });
     }
-  }, [lastTouchDistance, zoom]);
+  }, [lastTouchDistance, zoom, isDragging, dragStart, lastPanPosition]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (e.touches.length < 2) {
       setLastTouchDistance(null);
     }
+    if (e.touches.length === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  // Mouse event handlers for desktop
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoom > 1) {
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setLastPanPosition(panPosition);
+    }
+  }, [zoom, panPosition]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isDragging && zoom > 1) {
+      e.preventDefault();
+      const deltaX = e.clientX - dragStart.x;
+      const deltaY = e.clientY - dragStart.y;
+      
+      setPanPosition({
+        x: lastPanPosition.x + deltaX,
+        y: lastPanPosition.y + deltaY
+      });
+    }
+  }, [isDragging, zoom, dragStart, lastPanPosition]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
   }, []);
 
   // Zoom control functions
   const zoomIn = () => setZoom(prev => Math.min(3, prev + 0.25));
   const zoomOut = () => setZoom(prev => Math.max(0.5, prev - 0.25));
-  const resetZoom = () => setZoom(1);
+  const resetZoom = () => {
+    setZoom(1);
+    setPanPosition({ x: 0, y: 0 });
+    setRotation(0);
+  };
   const rotate = () => setRotation(prev => (prev + 90) % 360);
+
+  // Reset pan when zoom changes to 1 or less
+  useEffect(() => {
+    if (zoom <= 1) {
+      setPanPosition({ x: 0, y: 0 });
+    }
+  }, [zoom]);
 
   const navigatePrevious = useCallback(() => {
     if (hasPrevious) {
@@ -353,10 +418,15 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
         <div className="flex-1 bg-gray-100 overflow-auto relative">
           <div 
             ref={imageContainerRef}
-            className="flex justify-center items-center min-h-full p-4"
+            className="flex justify-center items-center min-h-full p-4 overflow-hidden"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            style={{ cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
           >
             {imageUrl ? (
               isPDF ? (
@@ -404,11 +474,14 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                     src={imageUrl}
                     alt={receipt.originalFileName}
                     onLoad={onImageLoad}
-                    className="w-full h-auto rounded-lg shadow-lg touch-none"
+                    className="w-full h-auto rounded-lg shadow-lg touch-none select-none"
                     style={{
-                      transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                      transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoom}) rotate(${rotation}deg)`,
                       transformOrigin: 'center',
-                      transition: zoom === 1 && rotation === 0 ? 'transform 0.2s ease-in-out' : 'none'
+                      transition: !isDragging && zoom === 1 && rotation === 0 ? 'transform 0.2s ease-in-out' : 'none',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      MozUserSelect: 'none'
                     }}
                     onError={(e) => {
                       console.error("Failed to load image:", imageUrl);
