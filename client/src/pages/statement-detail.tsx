@@ -38,6 +38,8 @@ import { queryClient } from "@/lib/queryClient";
 export default function StatementDetailPage() {
   const [, params] = useRoute("/statements/:id");
   const statementId = params?.id;
+  const { toast } = useToast();
+  
   const [notes, setNotes] = useState("");
   const [showPersonalExpenses, setShowPersonalExpenses] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -45,7 +47,6 @@ export default function StatementDetailPage() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [selectedChargeNotes, setSelectedChargeNotes] = useState<{ [key: string]: boolean }>({});
   const [chargeNotes, setChargeNotes] = useState<{ [key: string]: string }>({});
-  const { toast } = useToast();
 
   const { data: statement } = useQuery<AmexStatement>({
     queryKey: ["/api/statements", statementId],
@@ -159,29 +160,25 @@ export default function StatementDetailPage() {
     setSelectedChargeNotes(prev => ({ ...prev, [chargeId]: false }));
   };
 
-  // Initialize notes state when statement loads
+  // Initialize notes when statement loads
   useEffect(() => {
-    if (statement && statement.userNotes && !notes) {
+    if (statement?.userNotes && notes === "") {
       setNotes(statement.userNotes);
     }
-  }, [statement, notes]);
+  }, [statement?.userNotes]);
 
-  // Initialize charge notes
+  // Initialize charge notes when charges load
   useEffect(() => {
-    const newChargeNotes: { [key: string]: string } = {};
-    let hasNewNotes = false;
-    
-    charges.forEach(charge => {
-      if (charge.userNotes && !chargeNotes[charge.id]) {
-        newChargeNotes[charge.id] = charge.userNotes;
-        hasNewNotes = true;
-      }
-    });
-    
-    if (hasNewNotes) {
-      setChargeNotes(prev => ({ ...prev, ...newChargeNotes }));
+    if (charges.length > 0) {
+      const newChargeNotes: { [key: string]: string } = {};
+      charges.forEach(charge => {
+        if (charge.userNotes) {
+          newChargeNotes[charge.id] = charge.userNotes;
+        }
+      });
+      setChargeNotes(newChargeNotes);
     }
-  }, [charges]);
+  }, [charges.length]);
 
   // Filter and sort charges
   const filteredCharges = charges
@@ -439,12 +436,6 @@ export default function StatementDetailPage() {
                                 ...prev, 
                                 [charge.id]: !prev[charge.id] 
                               }));
-                              if (!chargeNotes[charge.id]) {
-                                setChargeNotes(prev => ({ 
-                                  ...prev, 
-                                  [charge.id]: charge.userNotes || "" 
-                                }));
-                              }
                             }}
                             className="h-7 px-2 text-xs"
                           >
