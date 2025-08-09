@@ -8,14 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Email integration system with secure corporate email support
-- Copy-paste method for processing email receipt content
-- Alternative email forwarding setup options
-- Comprehensive documentation system
+- Individual statement detail pages with comprehensive CSV data display
+- Modern financial app-inspired dashboard design with color-coded metrics
+- Interactive sortable data tables showing complete charge information
+- Advanced search and filtering capabilities across all charge fields
+- Individual charge notes functionality with expandable edit sections
+- Personal expense toggling with dedicated filtering options
+- Visual status indicators for charge matching and personal expenses
+- Real-time statistics dashboard with financial summaries
+- Mobile-responsive table layout with horizontal scrolling support
+- Export to Oracle iExpense functionality from statement detail pages
 
 ### Changed
-- Email import adapted for corporate security constraints
-- Navigation updated to include email import functionality
+- Replaced popup dialogs with dedicated statement pages for better data visualization
+- Enhanced UI with modern table design inspired by financial applications
+- Improved navigation flow from statement list to detailed charge view
+- Statement viewing experience optimized for comprehensive data analysis
+
+### Technical
+- Added `/statements/:id` route for individual statement pages
+- Implemented new API endpoint for single statement retrieval
+- Enhanced React Query integration for statement detail data fetching
+- Updated routing in statements list to use Link components instead of modal triggers
+- Created comprehensive UI design documentation with modern financial app patterns
+- Fixed React hooks issues and infinite render loops in statement detail component
+
+### Documentation Updates
+- Updated project architecture documentation with new statement detail features
+- Added comprehensive UI design guide with component standards and accessibility guidelines
+- Enhanced feature documentation with detailed descriptions of new statement management capabilities
+- Documented modern financial app design patterns and responsive design principles
 
 ## [1.0.0] - 2025-08-09
 

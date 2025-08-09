@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -160,16 +160,28 @@ export default function StatementDetailPage() {
   };
 
   // Initialize notes state when statement loads
-  if (statement && notes === "") {
-    setNotes(statement.userNotes || "");
-  }
+  useEffect(() => {
+    if (statement && statement.userNotes && !notes) {
+      setNotes(statement.userNotes);
+    }
+  }, [statement, notes]);
 
   // Initialize charge notes
-  charges.forEach(charge => {
-    if (charge.userNotes && !chargeNotes[charge.id]) {
-      setChargeNotes(prev => ({ ...prev, [charge.id]: charge.userNotes || "" }));
+  useEffect(() => {
+    const newChargeNotes: { [key: string]: string } = {};
+    let hasNewNotes = false;
+    
+    charges.forEach(charge => {
+      if (charge.userNotes && !chargeNotes[charge.id]) {
+        newChargeNotes[charge.id] = charge.userNotes;
+        hasNewNotes = true;
+      }
+    });
+    
+    if (hasNewNotes) {
+      setChargeNotes(prev => ({ ...prev, ...newChargeNotes }));
     }
-  });
+  }, [charges]);
 
   // Filter and sort charges
   const filteredCharges = charges

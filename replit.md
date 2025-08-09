@@ -75,6 +75,15 @@ Preferred communication style: Simple, everyday language.
 - **Oracle iExpense**: Generates compatible templates for enterprise expense reporting
 
 ## Recent Changes (August 9, 2025)
+- **Individual Statement Pages**: Replaced popup dialogs with dedicated statement detail pages (/statements/:id) for comprehensive data viewing
+- **Financial Dashboard Design**: Implemented modern financial app-inspired UI with color-coded metrics and visual statistics
+- **Advanced Data Tables**: Interactive sortable tables displaying complete CSV data including merchant details, amounts, categories, card members, and locations
+- **Smart Search & Filtering**: Real-time search functionality across descriptions, amounts, and categories with business/personal expense filtering
+- **Enhanced Charge Management**: Individual charge notes functionality with expandable sections and edit-in-place capabilities
+- **Personal Expense Toggling**: Quick toggle between business and personal expenses with dedicated filtering options
+- **Visual Status Indicators**: Color-coded badges for matched/unmatched charges, personal expenses, and charges with notes
+- **Comprehensive Statistics**: Statement overview with total charges, matched amounts, unmatched counts, and personal expense tracking
+- **Mobile-Responsive Design**: Optimized table layout for various screen sizes with horizontal scrolling support
 - **Fixed CSV Import**: Resolved date parsing errors for AMEX statement imports (MM/DD/YYYY format now working)
 - **Enhanced OCR Processing**: Implemented comprehensive OCR system using Tesseract.js for image processing
 - **Manual OCR Trigger**: Added "Extract Text" button for manual OCR processing of existing receipts

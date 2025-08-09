@@ -147,6 +147,22 @@ This document provides detailed information about all features available in the 
 - **Folder Organization**: Automatic folder creation for each period
 - **Status Tracking**: Import progress and completion status
 
+### Individual Statement Detail Pages
+**Purpose**: Comprehensive view of statement data with modern financial app interface design.
+
+**Advanced Data Display**:
+- **Interactive Tables**: Sortable columns showing complete CSV data (merchant, amount, category, card member, location)
+- **Visual Statistics Dashboard**: Color-coded metrics for total charges, matched amounts, unmatched counts, and personal expenses
+- **Real-Time Search**: Filter across descriptions, amounts, and categories with instant results
+- **Business/Personal Filtering**: Toggle between expense types with dedicated view modes
+
+**Enhanced Management Features**:
+- **Individual Charge Notes**: Expandable sections for detailed charge annotations
+- **Personal Expense Tracking**: Quick toggle functionality with visual indicators
+- **Status Indicators**: Color-coded badges for matched/unmatched charges and charges with notes
+- **Mobile-Responsive Design**: Optimized table layout with horizontal scrolling support
+- **Export Integration**: Direct Oracle iExpense template generation from detail view
+
 **Statement Information**:
 - Period name (e.g., "March 2025", "Q1 2025")
 - Start and end dates
