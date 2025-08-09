@@ -31,6 +31,20 @@ export default function Dashboard() {
     queryKey: ["/api/statements"],
   });
 
+  const { data: financialStats, isLoading: financialStatsLoading } = useQuery<{
+    totalStatementAmount: number;
+    totalMatchedAmount: number;
+    totalUnmatchedReceiptAmount: number;
+    totalMissingReceiptAmount: number;
+    matchedCount: number;
+    unmatchedReceiptCount: number;
+    missingReceiptCount: number;
+    totalCharges: number;
+    matchingPercentage: number;
+  }>({
+    queryKey: ["/api/dashboard/financial-stats"],
+  });
+
   const recentReceipts = receipts.slice(0, 3);
 
   return (
@@ -56,35 +70,140 @@ export default function Dashboard() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Stats */}
+        {/* Financial Overview Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <StatsCard
+            icon="fas fa-credit-card"
+            iconColor="text-blue-600"
+            iconBg="bg-blue-50"
+            title="Total Statement Amount"
+            value={financialStatsLoading ? "..." : `$${financialStats?.totalStatementAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
+            subtitle={`${financialStats?.totalCharges || 0} charges`}
+          />
+          <StatsCard
+            icon="fas fa-check-circle"
+            iconColor="text-green-600"
+            iconBg="bg-green-50"
+            title="Matched Amount"
+            value={financialStatsLoading ? "..." : `$${financialStats?.totalMatchedAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
+            subtitle={`${financialStats?.matchedCount || 0} receipts matched`}
+          />
+          <StatsCard
+            icon="fas fa-receipt"
+            iconColor="text-orange-600"
+            iconBg="bg-orange-50"
+            title="Unmatched Receipts"
+            value={financialStatsLoading ? "..." : `$${financialStats?.totalUnmatchedReceiptAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
+            subtitle={`${financialStats?.unmatchedReceiptCount || 0} need matching`}
+          />
+          <StatsCard
+            icon="fas fa-exclamation-triangle"
+            iconColor="text-red-600"
+            iconBg="bg-red-50"
+            title="Missing Receipts"
+            value={financialStatsLoading ? "..." : `$${financialStats?.totalMissingReceiptAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
+            subtitle={`${financialStats?.missingReceiptCount || 0} charges without receipts`}
+          />
+        </div>
+
+        {/* Matching Progress */}
+        {!financialStatsLoading && financialStats && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Matching Progress</span>
+                <Badge variant={financialStats.matchingPercentage === 100 ? "default" : "secondary"} className="text-lg px-3 py-1">
+                  {financialStats.matchingPercentage.toFixed(1)}% Complete
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div 
+                    className="bg-gradient-to-r from-green-400 to-green-600 h-3 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${financialStats.matchingPercentage}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Matched: ${financialStats.totalMatchedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span>Remaining: ${(financialStats.totalStatementAmount - financialStats.totalMatchedAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                {financialStats.matchingPercentage < 100 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-orange-600">⚠️</span>
+                      <span>Complete your matching to get 100% expense tracking accuracy</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {financialStats.unmatchedReceiptCount > 0 && (
+                        <Link to="/matching">
+                          <Button size="sm" variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-50">
+                            Match {financialStats.unmatchedReceiptCount} Receipts
+                          </Button>
+                        </Link>
+                      )}
+                      {financialStats.missingReceiptCount > 0 && (
+                        <Link to="/receipts">
+                          <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+                            Upload {financialStats.missingReceiptCount} Missing Receipts
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {financialStats.matchingPercentage === 100 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-green-600">
+                      <span>✅</span>
+                      <span>Perfect! All expenses are matched and ready for reporting</span>
+                    </div>
+                    <Link to="/templates">
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                        Generate Expense Report
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Processing Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <StatsCard
             icon="fas fa-upload"
             iconColor="text-primary"
             iconBg="bg-primary/10"
-            title="Processed This Month"
+            title="Total Receipts"
             value={statsLoading ? "..." : stats?.processedCount.toString() || "0"}
-          />
-          <StatsCard
-            icon="fas fa-exclamation-triangle"
-            iconColor="text-warning-500"
-            iconBg="bg-warning-50"
-            title="Pending Match"
-            value={statsLoading ? "..." : stats?.pendingCount.toString() || "0"}
+            subtitle="uploaded this period"
           />
           <StatsCard
             icon="fas fa-check-circle"
-            iconColor="text-success-500"
-            iconBg="bg-success-50"
+            iconColor="text-green-500"
+            iconBg="bg-green-50"
             title="Ready for Oracle"
             value={statsLoading ? "..." : stats?.readyCount.toString() || "0"}
+            subtitle="with complete data"
           />
           <StatsCard
             icon="fas fa-clock"
-            iconColor="text-gray-500"
-            iconBg="bg-gray-100"
+            iconColor="text-yellow-500"
+            iconBg="bg-yellow-50"
             title="Processing"
             value={statsLoading ? "..." : stats?.processingCount.toString() || "0"}
+            subtitle="being processed"
+          />
+          <StatsCard
+            icon="fas fa-exclamation-triangle"
+            iconColor="text-orange-500"
+            iconBg="bg-orange-50"
+            title="Need Attention"
+            value={statsLoading ? "..." : stats?.pendingCount.toString() || "0"}
+            subtitle="require manual entry"
           />
         </div>
 

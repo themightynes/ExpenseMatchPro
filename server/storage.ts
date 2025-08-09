@@ -367,6 +367,69 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async getFinancialStats(): Promise<{
+    totalStatementAmount: number;
+    totalMatchedAmount: number;
+    totalUnmatchedReceiptAmount: number;
+    totalMissingReceiptAmount: number;
+    matchedCount: number;
+    unmatchedReceiptCount: number;
+    missingReceiptCount: number;
+    totalCharges: number;
+    matchingPercentage: number;
+  }> {
+    // Get all charges and receipts
+    const allCharges = await db.select().from(amexCharges);
+    const allReceipts = await db.select().from(receipts);
+
+    // Calculate total statement amount
+    const totalStatementAmount = allCharges.reduce((sum, charge) => 
+      sum + parseFloat(charge.amount || '0'), 0);
+
+    // Calculate matched amounts
+    const matchedReceipts = allReceipts.filter(r => r.isMatched && r.amount);
+    const totalMatchedAmount = matchedReceipts.reduce((sum, receipt) => 
+      sum + parseFloat(receipt.amount || '0'), 0);
+
+    // Calculate unmatched receipt amount (receipts that exist but aren't matched)
+    const unmatchedReceipts = allReceipts.filter(r => 
+      !r.isMatched && 
+      r.amount && 
+      parseFloat(r.amount) > 0 &&
+      r.processingStatus === 'completed'
+    );
+    const totalUnmatchedReceiptAmount = unmatchedReceipts.reduce((sum, receipt) => 
+      sum + parseFloat(receipt.amount || '0'), 0);
+
+    // Calculate missing receipt amount (charges without matching receipts)
+    const matchedChargeIds = matchedReceipts
+      .map(r => r.matchedChargeId)
+      .filter(id => id !== null);
+    
+    const missingReceiptCharges = allCharges.filter(charge => 
+      !matchedChargeIds.includes(charge.id));
+    
+    const totalMissingReceiptAmount = missingReceiptCharges.reduce((sum, charge) => 
+      sum + parseFloat(charge.amount || '0'), 0);
+
+    // Calculate matching percentage
+    const matchingPercentage = totalStatementAmount > 0 
+      ? (totalMatchedAmount / totalStatementAmount) * 100 
+      : 0;
+
+    return {
+      totalStatementAmount,
+      totalMatchedAmount,
+      totalUnmatchedReceiptAmount,
+      totalMissingReceiptAmount,
+      matchedCount: matchedReceipts.length,
+      unmatchedReceiptCount: unmatchedReceipts.length,
+      missingReceiptCount: missingReceiptCharges.length,
+      totalCharges: allCharges.length,
+      matchingPercentage,
+    };
+  }
+
   // File organization
   getOrganizedPath(receipt: Receipt): string {
     if (!receipt.statementId || !receipt.date || !receipt.merchant || !receipt.amount) {

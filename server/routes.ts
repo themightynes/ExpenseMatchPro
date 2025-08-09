@@ -90,6 +90,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get comprehensive financial stats
+  app.get("/api/dashboard/financial-stats", async (req, res) => {
+    try {
+      const financialStats = await storage.getFinancialStats();
+      res.json(financialStats);
+    } catch (error) {
+      console.error("Error getting financial stats:", error);
+      res.status(500).json({ error: "Failed to get financial stats" });
+    }
+  });
+
   // Receipt endpoints
   app.post("/api/receipts", async (req, res) => {
     try {
