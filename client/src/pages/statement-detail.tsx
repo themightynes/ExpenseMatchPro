@@ -39,7 +39,8 @@ export default function StatementDetailPage() {
   const [, params] = useRoute("/statements/:id");
   const statementId = params?.id;
   const { toast } = useToast();
-  
+
+  // All useState hooks at the top
   const [notes, setNotes] = useState("");
   const [showPersonalExpenses, setShowPersonalExpenses] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -48,6 +49,7 @@ export default function StatementDetailPage() {
   const [selectedChargeNotes, setSelectedChargeNotes] = useState<{ [key: string]: boolean }>({});
   const [chargeNotes, setChargeNotes] = useState<{ [key: string]: string }>({});
 
+  // All useQuery hooks together
   const { data: statement } = useQuery<AmexStatement>({
     queryKey: ["/api/statements", statementId],
     queryFn: () => fetch(`/api/statements/${statementId}`).then(res => res.json()),
@@ -66,6 +68,7 @@ export default function StatementDetailPage() {
     enabled: !!statementId,
   });
 
+  // All useMutation hooks together
   const updateNotesMutation = useMutation({
     mutationFn: async (newNotes: string) => {
       const response = await fetch(`/api/statements/${statementId}`, {
@@ -122,18 +125,24 @@ export default function StatementDetailPage() {
     },
   });
 
-  if (!statement) {
-    return (
-      <div className="container mx-auto p-4">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-600">Loading statement...</h2>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // All useEffect hooks together - MUST be after all other hooks  
+  useEffect(() => {
+    if (statement?.userNotes && notes === "") {
+      setNotes(statement.userNotes);
+    }
+  }, [statement?.userNotes, notes]);
 
+  useEffect(() => {
+    const newChargeNotes: { [key: string]: string } = {};
+    charges.forEach(charge => {
+      if (charge.userNotes) {
+        newChargeNotes[charge.id] = charge.userNotes;
+      }
+    });
+    setChargeNotes(prev => ({ ...prev, ...newChargeNotes }));
+  }, [charges]);
+
+  // Helper functions
   const formatCurrency = (amount: string) => {
     const num = parseFloat(amount);
     return new Intl.NumberFormat('en-US', {
@@ -150,6 +159,11 @@ export default function StatementDetailPage() {
     });
   };
 
+  // Handler functions
+  const handleTogglePersonalExpense = (chargeId: string) => {
+    togglePersonalExpenseMutation.mutate(chargeId);
+  };
+
   const handleSaveNotes = () => {
     updateNotesMutation.mutate(notes);
   };
@@ -160,25 +174,18 @@ export default function StatementDetailPage() {
     setSelectedChargeNotes(prev => ({ ...prev, [chargeId]: false }));
   };
 
-  // Initialize notes when statement loads
-  useEffect(() => {
-    if (statement?.userNotes && notes === "") {
-      setNotes(statement.userNotes);
-    }
-  }, [statement?.userNotes]);
-
-  // Initialize charge notes when charges load
-  useEffect(() => {
-    if (charges.length > 0) {
-      const newChargeNotes: { [key: string]: string } = {};
-      charges.forEach(charge => {
-        if (charge.userNotes) {
-          newChargeNotes[charge.id] = charge.userNotes;
-        }
-      });
-      setChargeNotes(newChargeNotes);
-    }
-  }, [charges.length]);
+  // Early return after all hooks are called
+  if (!statement || !statementId) {
+    return (
+      <div className="container mx-auto p-4">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-gray-600">Loading statement...</h2>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Filter and sort charges
   const filteredCharges = charges
