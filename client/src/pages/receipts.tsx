@@ -244,8 +244,10 @@ export default function ReceiptsPage() {
       {selectedReceipt && (
         <ReceiptViewer
           receipt={selectedReceipt}
+          receipts={receipts}
           isOpen={!!selectedReceipt}
           onClose={() => setSelectedReceipt(null)}
+          onNavigate={(receipt) => setSelectedReceipt(receipt)}
         />
       )}
     </div>

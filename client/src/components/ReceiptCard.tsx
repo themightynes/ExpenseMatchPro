@@ -7,10 +7,12 @@ import { Eye } from "lucide-react";
 
 interface ReceiptCardProps {
   receipt: Receipt;
+  receipts?: Receipt[];
 }
 
-export default function ReceiptCard({ receipt }: ReceiptCardProps) {
+export default function ReceiptCard({ receipt, receipts = [] }: ReceiptCardProps) {
   const [showViewer, setShowViewer] = useState(false);
+  const [currentReceipt, setCurrentReceipt] = useState(receipt);
   const getStatusBadge = (status: string, isMatched: boolean) => {
     if (status === "completed" && isMatched) {
       return (
@@ -112,9 +114,16 @@ export default function ReceiptCard({ receipt }: ReceiptCardProps) {
       </Button>
       
       <ReceiptViewer 
-        receipt={receipt} 
+        receipt={currentReceipt} 
+        receipts={receipts}
         isOpen={showViewer} 
-        onClose={() => setShowViewer(false)} 
+        onClose={() => {
+          setShowViewer(false);
+          setCurrentReceipt(receipt); // Reset to original receipt when closing
+        }}
+        onNavigate={(newReceipt) => {
+          setCurrentReceipt(newReceipt);
+        }}
       />
     </div>
   );

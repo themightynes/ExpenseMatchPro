@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, ZoomIn, ZoomOut, RotateCw, Save, Edit, Lock, Download, FileText, Crop, Check } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCw, Save, Edit, Lock, Download, FileText, Crop, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,8 +15,10 @@ import type { Receipt } from "@shared/schema";
 
 interface ReceiptViewerProps {
   receipt: Receipt;
+  receipts?: Receipt[];
   isOpen: boolean;
   onClose: () => void;
+  onNavigate?: (receipt: Receipt) => void;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -33,7 +35,7 @@ const EXPENSE_CATEGORIES = [
   "Other"
 ];
 
-export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewerProps) {
+export default function ReceiptViewer({ receipt, receipts = [], isOpen, onClose, onNavigate }: ReceiptViewerProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
@@ -50,7 +52,59 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
     date: receipt.date ? new Date(receipt.date).toISOString().split('T')[0] : "",
     category: receipt.category || "",
   });
+
+  // Update edited data when receipt changes
+  useEffect(() => {
+    setEditedData({
+      merchant: receipt.merchant || "",
+      amount: receipt.amount || "",
+      date: receipt.date ? new Date(receipt.date).toISOString().split('T')[0] : "",
+      category: receipt.category || "",
+    });
+    setIsEditing(false); // Exit editing mode when navigating
+    setIsCropping(false); // Exit cropping mode when navigating
+    setZoom(1); // Reset zoom
+    setRotation(0); // Reset rotation
+  }, [receipt.id]);
   const { toast } = useToast();
+  
+  // Navigation helpers
+  const currentIndex = receipts.findIndex(r => r.id === receipt.id);
+  const hasPrevious = currentIndex > 0;
+  const hasNext = currentIndex < receipts.length - 1;
+  
+  const navigatePrevious = () => {
+    if (hasPrevious && onNavigate) {
+      onNavigate(receipts[currentIndex - 1]);
+    }
+  };
+  
+  const navigateNext = () => {
+    if (hasNext && onNavigate) {
+      onNavigate(receipts[currentIndex + 1]);
+    }
+  };
+  
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      
+      if (e.key === 'ArrowLeft' && hasPrevious) {
+        e.preventDefault();
+        navigatePrevious();
+      } else if (e.key === 'ArrowRight' && hasNext) {
+        e.preventDefault();
+        navigateNext();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, hasPrevious, hasNext]);
 
   // Auto-hide controls after inactivity
   useEffect(() => {
@@ -289,15 +343,52 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
       <div className="bg-white rounded-lg max-w-6xl max-h-[90vh] w-full overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">{receipt.originalFileName}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={receipt.processingStatus === 'completed' ? 'default' : 'secondary'}>
-                {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
-              </Badge>
-              {receipt.isMatched && <Badge variant="default">Matched</Badge>}
+          <div className="flex items-center gap-4">
+            {/* Navigation buttons */}
+            {receipts.length > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={navigatePrevious}
+                  disabled={!hasPrevious}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-500 px-2">
+                  {currentIndex + 1} of {receipts.length}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={navigateNext}
+                  disabled={!hasNext}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{receipt.originalFileName}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant={receipt.processingStatus === 'completed' ? 'default' : 'secondary'}>
+                  {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
+                </Badge>
+                {receipt.isMatched && <Badge variant="default">Matched</Badge>}
+                {receipts.length > 1 && (
+                  <Badge variant="outline" className="text-xs">
+                    Use ← → arrow keys to navigate
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
+          
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>

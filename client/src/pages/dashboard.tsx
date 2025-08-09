@@ -116,7 +116,7 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     recentReceipts.map((receipt) => (
-                      <ReceiptCard key={receipt.id} receipt={receipt} />
+                      <ReceiptCard key={receipt.id} receipt={receipt} receipts={recentReceipts} />
                     ))
                   )}
                 </div>
