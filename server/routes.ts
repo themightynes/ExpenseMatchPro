@@ -1416,14 +1416,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         matchedChargeId: chargeId,
       };
 
-      // Upload file to object storage
-      const objectStorage = new ObjectStorageService();
-      const fileUrl = await objectStorage.uploadFile(file.buffer, file.originalname);
+      // Upload file to object storage using signed URL pattern
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      
+      // Extract the object path from the upload URL for our file reference
+      const urlParts = uploadURL.split('?')[0]; // Remove query parameters
+      const pathMatch = urlParts.match(/\/([^\/]+\/[^\/]+)$/);
+      if (!pathMatch) {
+        throw new Error('Could not extract path from upload URL');
+      }
+      const objectPath = `/objects/${pathMatch[1]}`;
+      
+      // Upload file directly to the signed URL
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file.buffer,
+        headers: {
+          'Content-Type': file.mimetype || 'application/octet-stream',
+        },
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
       
       // Create receipt record
       const receipt = await storage.createReceipt({
         ...receiptData,
-        fileUrl
+        fileUrl: objectPath
       });
 
       // Organize the receipt with Oracle naming
