@@ -99,9 +99,11 @@ export default function Dashboard() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Recent Uploads</CardTitle>
-                  <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
-                    View All
-                  </Button>
+                  <Link to="/receipts">
+                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                      View All
+                    </Button>
+                  </Link>
                 </div>
               </CardHeader>
               <CardContent>
