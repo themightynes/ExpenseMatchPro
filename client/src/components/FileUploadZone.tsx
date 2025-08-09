@@ -18,11 +18,20 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(true); // Start with mobile as default for better compatibility
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
+      // Prioritize user agent detection for mobile devices
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isMobileUserAgent = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+      
+      // For desktop, make sure it's actually a desktop with mouse capability
+      const isDesktop = /windows|macintosh|linux/i.test(userAgent) && !isMobileUserAgent;
+      const hasMouseInput = window.matchMedia('(pointer: fine)').matches;
+      
+      // Use mobile uploader if it's a mobile device OR if it's a small screen without fine pointer
+      setIsMobile(isMobileUserAgent || (!isDesktop || !hasMouseInput));
     };
     
     checkMobile();
@@ -109,7 +118,7 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
         <div className="space-y-4">
           {isMobile ? (
             <MobileFileUploader onUploadComplete={onUploadComplete}>
-              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center">
+              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center active:scale-95 transform duration-75">
                 <Upload className="h-6 w-6 text-gray-400 mx-auto mb-2" />
                 <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1 text-sm">
                   Tap to upload receipts

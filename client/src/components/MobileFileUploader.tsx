@@ -109,18 +109,19 @@ export function MobileFileUploader({ onUploadComplete, className, children }: Mo
         disabled={isProcessing}
       />
       
-      <Button
+      <div
         onClick={handleButtonClick}
-        disabled={isProcessing}
-        className="w-full touch-manipulation"
+        className="w-full cursor-pointer"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            handleButtonClick();
+          }
+        }}
       >
-        {children || (
-          <>
-            <Upload className="h-4 w-4 mr-2" />
-            {isProcessing ? "Processing..." : "Upload Receipts"}
-          </>
-        )}
-      </Button>
+        {children}
+      </div>
 
       {isProcessing && uploadProgress.total > 0 && (
         <div className="mt-3 text-center">
