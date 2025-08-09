@@ -138,7 +138,16 @@ export class OCRService {
    */
   private parseReceiptData(text: string): ExtractedReceiptData {
     // Handle fallback guidance messages - don't try to parse them
-    if (text.includes("manual entry") || text.includes("text extraction failed") || text.includes("minimal readable text")) {
+    if (text.includes("manual entry") || 
+        text.includes("text extraction failed") || 
+        text.includes("minimal readable text") ||
+        text.includes("PDF processing:") ||
+        text.includes("PDF text extraction failed") ||
+        text.includes("PDF processing failed") ||
+        text.includes("Unable to convert PDF") ||
+        text.includes("password-protected") ||
+        text.includes("corrupted") ||
+        text.length < 20) { // Very short text likely error messages
       return {
         items: []
         // Don't set merchant or other fields for guidance messages

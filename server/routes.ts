@@ -30,6 +30,7 @@ async function createStatementFolder(statementId: string | null) {
   }
 }
 import { fileOrganizer } from "./fileOrganizer";
+import { fixReceiptsWithBadMerchants } from "./fixReceiptData";
 import multer from "multer";
 
 // Configure multer for file uploads
@@ -1366,6 +1367,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting unmatched receipts for statement:", error);
       res.status(500).json({ error: "Failed to get unmatched receipts" });
+    }
+  });
+
+  // Fix receipts with bad merchant names (utility endpoint)
+  app.post("/api/receipts/fix-merchants", async (req, res) => {
+    try {
+      const fixedCount = await fixReceiptsWithBadMerchants();
+      res.json({ 
+        message: `Fixed ${fixedCount} receipts with invalid merchant names`,
+        fixedCount 
+      });
+    } catch (error) {
+      console.error("Error fixing receipt merchants:", error);
+      res.status(500).json({ error: "Failed to fix receipt merchants" });
     }
   });
 
