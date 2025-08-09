@@ -41,6 +41,7 @@ Preferred communication style: Simple, everyday language.
 ## Processing Pipeline
 - **Manual Entry System**: Instant receipt upload with manual data entry (OCR disabled due to 30+ minute processing times)
 - **Multi-File Upload**: Support for uploading up to 10 receipts simultaneously with progress tracking
+- **Direct Upload to Charges**: One-click receipt upload from statement line items with automatic charge linking
 - **Smart Organization**: Automatic folder creation and receipt organization by AMEX statement periods
 - **Automated Matching**: Algorithm to match receipts to AMEX charges based on amount, date, and merchant similarity
 - **Template Generation**: Oracle iExpense CSV/XML template creation for seamless integration
@@ -120,3 +121,6 @@ Preferred communication style: Simple, everyday language.
 - **Advanced PDF Text Extraction**: Implemented PDF-to-image conversion with OCR for comprehensive text extraction from PDF receipts
 - **Enhanced User Experience**: Improved progress indicators, processing time feedback, and real-time status updates for text extraction
 - **Smart Receipt Processing**: PDF receipts now automatically extract merchant, amount, date, and category information for seamless AMEX matching
+- **Direct Receipt Upload to Charges**: Implemented one-click receipt upload functionality directly from statement line items with automatic charge matching
+- **Mobile-Optimized Interface**: Compact responsive button layout with icon-only display on mobile devices and full text labels on desktop
+- **Streamlined Upload Workflow**: Upload button integration in statement detail view enables instant receipt-to-charge linking with pre-filled data
