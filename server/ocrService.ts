@@ -45,12 +45,12 @@ export class OCRService {
       
       // Convert PDF to images (first page only for performance)
       const convert = fromBuffer(buffer, {
-        density: 200,           // DPI - higher for better text quality
+        density: 150,           // Lower DPI for better compatibility
         saveFilename: "receipt",
         savePath: "/tmp",
-        format: "png",
-        width: 2000,           // High resolution for better OCR
-        height: 2000
+        format: "jpeg",         // Use JPEG instead of PNG for better compatibility
+        width: 1200,           // Reasonable resolution
+        height: 1600
       });
       
       console.log('Converting PDF page 1 to image...');
@@ -62,8 +62,20 @@ export class OCRService {
       }
       
       console.log('PDF converted to image, starting text extraction...');
-      // Use existing image OCR processing
-      return await this.extractImageText(result.buffer);
+      
+      // Validate the image buffer before processing
+      if (result.buffer.length < 1000) {
+        console.log('Converted image appears to be too small or corrupted');
+        return "PDF processing: Converted image appears corrupted. This might be a complex PDF format. Please enter the receipt details manually.";
+      }
+      
+      // Use existing image OCR processing with error handling
+      try {
+        return await this.extractImageText(result.buffer);
+      } catch (ocrError) {
+        console.error('OCR failed on converted PDF image:', ocrError);
+        return "PDF text extraction failed during OCR processing. This might be a scanned PDF with poor image quality. Please enter the receipt details manually for accurate matching.";
+      }
       
     } catch (error) {
       console.error('Error processing PDF:', error);
@@ -76,12 +88,26 @@ export class OCRService {
    */
   private async extractImageText(buffer: Buffer): Promise<string> {
     try {
+      // Validate buffer before processing
+      if (!buffer || buffer.length === 0) {
+        throw new Error('Invalid or empty image buffer');
+      }
+      
       const worker = await this.initTesseract();
-      const { data: { text } } = await worker.recognize(buffer);
-      return text;
+      
+      // Add timeout to prevent hanging
+      const extractionPromise = worker.recognize(buffer);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Text extraction timeout')), 120000) // 2 minute timeout
+      );
+      
+      const result = await Promise.race([extractionPromise, timeoutPromise]);
+      const { data: { text } } = result as any;
+      
+      return text || '';
     } catch (error) {
-      console.error('Error with OCR:', error);
-      throw new Error('Failed to extract text from image');
+      console.error('Error with text extraction:', error);
+      throw new Error(`Failed to extract text from image: ${error.message}`);
     }
   }
 
