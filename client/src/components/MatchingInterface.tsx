@@ -106,6 +106,12 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
+  // Use intelligent pairs if available, otherwise fall back to first charge
+  const totalItems = Math.max(pairs.length, receipts.length);
+  const currentPair = pairs[currentIndex];
+  const currentReceipt = currentPair?.receipt || receipts[currentIndex];
+  const currentCharge = currentPair?.charge || charges[0]; // Use suggested charge or first available
+
   if (currentIndex >= totalItems) {
     return (
       <Card className="max-w-2xl mx-auto">
@@ -120,12 +126,6 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
       </Card>
     );
   }
-
-  // Use intelligent pairs if available, otherwise fall back to first charge
-  const totalItems = Math.max(pairs.length, receipts.length);
-  const currentPair = pairs[currentIndex];
-  const currentReceipt = currentPair?.receipt || receipts[currentIndex];
-  const currentCharge = currentPair?.charge || charges[0]; // Use suggested charge or first available
 
   const calculateMatchScore = (receipt: Receipt, charge: AmexCharge) => {
     const scores = [];
