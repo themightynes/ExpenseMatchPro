@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,8 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
   const [isCropping, setIsCropping] = useState(false);
   const [crop, setCrop] = useState<CropType>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [lastActivity, setLastActivity] = useState(Date.now());
   const imgRef = useRef<HTMLImageElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const [editedData, setEditedData] = useState({
@@ -49,6 +51,23 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
     category: receipt.category || "",
   });
   const { toast } = useToast();
+
+  // Auto-hide controls after inactivity
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (Date.now() - lastActivity > 3000) { // 3 seconds of inactivity
+        setControlsVisible(false);
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [lastActivity]);
+
+  // Track user activity to show controls
+  const handleActivity = useCallback(() => {
+    setLastActivity(Date.now());
+    setControlsVisible(true);
+  }, []);
 
   // Crop utility functions
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -286,7 +305,12 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
 
         <div className="flex">
           {/* Image Panel */}
-          <div className="flex-1 bg-gray-100 relative overflow-auto" style={{ maxHeight: '70vh' }}>
+          <div 
+            className="flex-1 bg-gray-100 relative overflow-auto" 
+            style={{ maxHeight: '70vh' }}
+            onMouseMove={handleActivity}
+            onClick={handleActivity}
+          >
             {imageUrl ? (
               <div className="p-4 flex justify-center items-center min-h-full">
                 {isPDF ? (
@@ -357,7 +381,10 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
 
             {/* File Controls */}
             {imageUrl && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-2">
+              <div 
+                className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-2 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-20'}`}
+                onMouseEnter={handleActivity}
+              >
                 <Button variant="outline" size="sm" onClick={handleZoomOut}>
                   <ZoomOut className="h-4 w-4" />
                 </Button>
