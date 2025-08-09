@@ -34,17 +34,28 @@ export class OCRService {
   }
 
   /**
-   * Extract text from PDF by providing user guidance
+   * Extract text from PDF using pdf-parse library
    */
   private async extractPdfText(buffer: Buffer): Promise<string> {
-    // For PDF files, Tesseract.js cannot directly process them
-    // In a production environment, you would:
-    // 1. Convert PDF to images using pdf2pic or similar
-    // 2. Run OCR on each image
-    // 3. Combine the results
-    
-    console.log('PDF processing: Providing manual entry guidance');
-    return "PDF receipt detected. OCR text extraction from PDFs is complex - please enter the receipt details manually. Key information needed: merchant name, amount, date, and category.";
+    try {
+      console.log('PDF processing: Starting text extraction with pdf-parse...');
+      
+      // Dynamic import to avoid module loading issues
+      const pdfParse = (await import('pdf-parse')).default;
+      const data = await pdfParse(buffer);
+      const extractedText = data.text;
+      
+      if (!extractedText || extractedText.trim().length < 10) {
+        console.log('PDF text extraction failed or returned minimal content');
+        return "PDF text extraction completed but found minimal readable text. This might be a scanned PDF requiring OCR. Please enter the receipt details manually. Key information needed: merchant name, amount, date, and category.";
+      }
+      
+      console.log('PDF text extraction successful, extracted', extractedText.length, 'characters');
+      return extractedText;
+    } catch (error) {
+      console.error('Error extracting text from PDF:', error);
+      return "PDF text extraction failed. This might be a password-protected, corrupted, or scanned PDF. Please enter the receipt details manually. Key information needed: merchant name, amount, date, and category.";
+    }
   }
 
   /**
@@ -65,11 +76,11 @@ export class OCRService {
    * Parse receipt information from OCR text
    */
   private parseReceiptData(text: string): ExtractedReceiptData {
-    // Handle PDF guidance message - don't try to parse it
-    if (text.includes("PDF receipt detected") || text.includes("manual entry")) {
+    // Handle fallback guidance messages - don't try to parse them
+    if (text.includes("manual entry") || text.includes("text extraction failed") || text.includes("minimal readable text")) {
       return {
         items: []
-        // Don't set merchant or other fields for PDF guidance messages
+        // Don't set merchant or other fields for guidance messages
       };
     }
 
@@ -79,24 +90,30 @@ export class OCRService {
       items: []
     };
 
-    // Common merchant patterns
+    // Common merchant patterns - enhanced for PDF text
     const merchantPatterns = [
-      /^([A-Z][A-Za-z\s&'.-]{2,30})/,
-      /\b([A-Z][A-Za-z\s&'.-]{3,25})\b.*(?:restaurant|cafe|store|shop|market|pharmacy|gas)/i,
+      /^([A-Z][A-Za-z\s&'.-]{2,40})/,
+      /\b([A-Z][A-Za-z\s&'.-]{3,35})\b.*(?:restaurant|cafe|store|shop|market|pharmacy|gas|inc|llc|corp|ltd)/i,
+      /(?:merchant|business|store|company):?\s*([A-Za-z\s&'.-]{3,35})/i,
+      /^([A-Za-z\s&'.-]{3,35}(?:\s+(?:inc|llc|corp|ltd|restaurant|cafe|store|shop))?)/im,
     ];
 
-    // Amount patterns (looking for totals)
+    // Amount patterns (looking for totals) - enhanced for PDF text
     const amountPatterns = [
-      /(?:total|amount due|balance|sum):?\s*\$?(\d+\.?\d{0,2})/i,
-      /\$(\d+\.\d{2})(?:\s|$)/,
-      /(\d+\.\d{2})\s*(?:total|due|amount)/i,
+      /(?:total|amount due|balance|sum|grand total|final total):?\s*\$?(\d+\.?\d{0,2})/i,
+      /\$(\d+\.\d{2})(?:\s|$|total)/,
+      /(\d+\.\d{2})\s*(?:total|due|amount|usd|dollars?)/i,
+      /(?:total amount|total cost|amount paid|total charge):?\s*\$?(\d+\.?\d{0,2})/i,
+      /(?:^|\s)(\d+\.\d{2})\s*(?:$|\s)/m, // Standalone amounts
     ];
 
-    // Date patterns
+    // Date patterns - enhanced for PDF text
     const datePatterns = [
       /(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/,
       /(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{2,4})/i,
-      /(?:date|on):?\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i,
+      /(?:date|on|transaction date|purchase date):?\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i,
+      /(\d{4}-\d{1,2}-\d{1,2})/,  // ISO date format
+      /(?:date|on):?\s*(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*,?\s+\d{2,4})/i,
     ];
 
     // Category detection based on keywords
