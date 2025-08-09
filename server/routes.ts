@@ -103,6 +103,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/receipts/:id", async (req, res) => {
+    try {
+      const receipt = await storage.updateReceipt(req.params.id, req.body);
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+      res.json(receipt);
+    } catch (error) {
+      console.error("Error updating receipt:", error);
+      res.status(500).json({ error: "Failed to update receipt" });
+    }
+  });
+
   // Process uploaded receipt file
   app.post("/api/receipts/process", async (req, res) => {
     try {
