@@ -479,23 +479,23 @@ export default function StatementDetailPage() {
                   )}
                 </div>
                 
-                {/* Row 3: Notes, Personal Toggle, Match Status */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
+                {/* Row 3: Notes, Personal Toggle, Match Status - Mobile Responsive */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {/* Match Status with Receipt Link */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
                         {charge.isMatched ? "Matched" : "Unmatched"}
                       </Badge>
                       {charge.isMatched ? (
                         <Link href={`/receipts/${charge.id}`}>
                           <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
-                            <FileText className="h-3 w-3 mr-1" />
-                            View Receipt
+                            <FileText className="h-3 w-3 sm:mr-1" />
+                            <span className="hidden sm:inline">View</span>
                           </Button>
                         </Link>
                       ) : (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center">
                           <input
                             type="file"
                             id={`upload-${charge.id}`}
@@ -511,16 +511,16 @@ export default function StatementDetailPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-6 px-2 text-xs"
+                            className="h-6 px-1 sm:px-2 text-xs"
                             onClick={() => document.getElementById(`upload-${charge.id}`)?.click()}
                             disabled={uploadingCharges[charge.id]}
                           >
                             {uploadingCharges[charge.id] ? (
-                              "Uploading..."
+                              "..."
                             ) : (
                               <>
-                                <Receipt className="h-3 w-3 mr-1" />
-                                Upload Receipt
+                                <Receipt className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline">Upload</span>
                               </>
                             )}
                           </Button>
@@ -533,20 +533,12 @@ export default function StatementDetailPage() {
                       variant={charge.isPersonalExpense ? "default" : "outline"}
                       size="sm"
                       onClick={() => handleTogglePersonalExpense(charge.id)}
-                      className="h-6 px-2 text-xs"
+                      className="h-6 px-1 sm:px-2 text-xs"
                     >
                       {charge.isPersonalExpense ? "Personal" : "Business"}
                     </Button>
-                  </div>
-                  
-                  {/* Notes Section */}
-                  <div className="flex items-center gap-2">
-                    {charge.userNotes && (
-                      <Badge variant="outline" className="text-xs">
-                        <MessageSquare className="h-3 w-3 mr-1" />
-                        Has Notes
-                      </Badge>
-                    )}
+                    
+                    {/* Notes Button */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -556,12 +548,20 @@ export default function StatementDetailPage() {
                           [charge.id]: !prev[charge.id] 
                         }));
                       }}
-                      className="h-6 px-2 text-xs"
+                      className="h-6 px-1 sm:px-2 text-xs"
                     >
-                      <Edit3 className="h-3 w-3 mr-1" />
-                      {selectedChargeNotes[charge.id] ? "Hide" : "Notes"}
+                      <Edit3 className="h-3 w-3 sm:mr-1" />
+                      <span className="hidden sm:inline">{selectedChargeNotes[charge.id] ? "Hide" : "Notes"}</span>
                     </Button>
                   </div>
+                  
+                  {/* Notes Badge (mobile friendly) */}
+                  {charge.userNotes && (
+                    <Badge variant="outline" className="text-xs self-start sm:self-center">
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      <span className="hidden sm:inline">Has Notes</span>
+                    </Badge>
+                  )}
                 </div>
                 
                 {/* Expandable Notes Section */}

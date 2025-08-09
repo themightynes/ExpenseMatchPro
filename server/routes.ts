@@ -1417,7 +1417,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Upload file to object storage
-      const fileUrl = await ObjectStorageService.uploadFile(file.buffer, file.originalname);
+      const objectStorage = new ObjectStorageService();
+      const fileUrl = await objectStorage.uploadFile(file.buffer, file.originalname);
       
       // Create receipt record
       const receipt = await storage.createReceipt({
