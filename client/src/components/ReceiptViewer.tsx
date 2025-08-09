@@ -74,61 +74,120 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
     crop: PixelCrop,
   ) => {
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.error("Failed to get 2D context from canvas");
+      return;
+    }
 
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
-    const pixelRatio = window.devicePixelRatio;
+    const pixelRatio = window.devicePixelRatio || 1;
 
-    canvas.width = crop.width * pixelRatio * scaleX;
-    canvas.height = crop.height * pixelRatio * scaleY;
+    console.log("Canvas preview params:", { 
+      crop, 
+      scaleX, 
+      scaleY, 
+      pixelRatio,
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+      displayWidth: image.width,
+      displayHeight: image.height
+    });
+
+    canvas.width = crop.width * pixelRatio;
+    canvas.height = crop.height * pixelRatio;
 
     ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     ctx.imageSmoothingQuality = 'high';
 
-    ctx.drawImage(
-      image,
-      crop.x * scaleX,
-      crop.y * scaleY,
-      crop.width * scaleX,
-      crop.height * scaleY,
-      0,
-      0,
-      crop.width * scaleX,
-      crop.height * scaleY,
-    );
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    try {
+      ctx.drawImage(
+        image,
+        crop.x * scaleX,
+        crop.y * scaleY,
+        crop.width * scaleX,
+        crop.height * scaleY,
+        0,
+        0,
+        crop.width,
+        crop.height,
+      );
+      console.log("Canvas drawing completed");
+    } catch (error) {
+      console.error("Error drawing to canvas:", error);
+    }
   }, []);
 
   const applyCrop = useCallback(async () => {
-    if (!completedCrop || !previewCanvasRef.current || !imgRef.current) return;
+    if (!completedCrop || !previewCanvasRef.current || !imgRef.current) {
+      console.log("Missing requirements for crop:", { completedCrop, canvas: previewCanvasRef.current, img: imgRef.current });
+      return;
+    }
 
-    const canvas = previewCanvasRef.current;
-    canvasPreview(imgRef.current, canvas, completedCrop);
+    try {
+      const canvas = previewCanvasRef.current;
+      const img = imgRef.current;
+      
+      console.log("Applying crop:", completedCrop);
+      
+      // Generate canvas preview
+      canvasPreview(img, canvas, completedCrop);
 
-    // Convert canvas to blob and update the image
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      
-      const url = URL.createObjectURL(blob);
-      
-      // Create a new image element to replace the current one
-      const newImg = new Image();
-      newImg.onload = () => {
+      // Convert canvas to blob and update the image
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          console.error("Failed to create blob from canvas");
+          toast({
+            title: "Crop failed",
+            description: "Failed to process the cropped image.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        console.log("Blob created successfully, size:", blob.size);
+        
+        const url = URL.createObjectURL(blob);
+        
+        // Update the image source directly
         if (imgRef.current) {
+          imgRef.current.onload = () => {
+            console.log("Cropped image loaded successfully");
+            URL.revokeObjectURL(url);
+            setIsCropping(false);
+            setCrop(undefined);
+            setCompletedCrop(undefined);
+            
+            toast({
+              title: "Image cropped successfully",
+              description: "The receipt image has been cropped.",
+            });
+          };
+          
+          imgRef.current.onerror = () => {
+            console.error("Failed to load cropped image");
+            URL.revokeObjectURL(url);
+            toast({
+              title: "Crop failed",
+              description: "Failed to load the cropped image.",
+              variant: "destructive",
+            });
+          };
+          
           imgRef.current.src = url;
         }
-        URL.revokeObjectURL(url);
-        setIsCropping(false);
-        setCrop(undefined);
-        setCompletedCrop(undefined);
-        
-        toast({
-          title: "Image cropped successfully",
-          description: "The receipt image has been cropped.",
-        });
-      };
-      newImg.src = url;
-    }, 'image/jpeg', 0.95);
+      }, 'image/jpeg', 0.95);
+    } catch (error) {
+      console.error("Error applying crop:", error);
+      toast({
+        title: "Crop failed",
+        description: "An error occurred while cropping the image.",
+        variant: "destructive",
+      });
+    }
   }, [completedCrop, canvasPreview, toast]);
 
   const updateMutation = useMutation({
