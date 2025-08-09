@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Receipt, CreditCard, BarChart3, Plus } from "lucide-react";
+import { Home, Receipt, CreditCard, BarChart3, Plus, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { icon: Home, label: "Home", path: "/" },
   { icon: Receipt, label: "Receipts", path: "/receipts" },
-  { icon: Plus, label: "Add", path: "/upload", isMain: true },
+  { icon: Mail, label: "Email", path: "/email-import" },
   { icon: CreditCard, label: "Statements", path: "/statements" },
   { icon: BarChart3, label: "Matching", path: "/matching" },
 ];

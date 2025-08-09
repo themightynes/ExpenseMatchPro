@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import Matching from "@/pages/matching";
 import StatementsPage from "@/pages/statements";
 import ReceiptsPage from "@/pages/receipts";
+import EmailImport from "@/pages/EmailImport";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
           <Route path="/matching" component={Matching} />
           <Route path="/statements" component={StatementsPage} />
           <Route path="/receipts" component={ReceiptsPage} />
+          <Route path="/email-import" component={EmailImport} />
           <Route component={NotFound} />
         </Switch>
       </div>

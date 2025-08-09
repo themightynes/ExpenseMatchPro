@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ocrService } from "./ocrService";
+import { EmailService } from "./emailService";
 
 // Helper function to create statement folder structure
 async function createStatementFolder(statementId: string | null) {
@@ -107,6 +108,7 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const objectStorageService = new ObjectStorageService();
+  const emailService = new EmailService();
 
   // Serve uploaded files
   app.get("/objects/:objectPath(*)", async (req, res) => {
@@ -1242,6 +1244,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting statement receipts:", error);
       res.status(500).json({ error: "Failed to get statement receipts" });
+    }
+  });
+
+  // Email Integration Routes
+  
+  // Initialize email service with credentials
+  app.post("/api/email/setup", async (req, res) => {
+    try {
+      const { clientId, clientSecret, tenantId } = req.body;
+      
+      if (!clientId || !clientSecret || !tenantId) {
+        return res.status(400).json({ 
+          error: "Missing required fields: clientId, clientSecret, tenantId" 
+        });
+      }
+      
+      await emailService.initializeAuth(clientId, clientSecret, tenantId);
+      res.json({ message: "Email service initialized successfully" });
+    } catch (error) {
+      console.error("Error setting up email service:", error);
+      res.status(500).json({ error: "Failed to setup email service" });
+    }
+  });
+
+  // Import receipts from Outlook emails
+  app.post("/api/email/import", async (req, res) => {
+    try {
+      const { userEmail, daysBack = 30 } = req.body;
+      
+      if (!userEmail) {
+        return res.status(400).json({ error: "userEmail is required" });
+      }
+      
+      const result = await emailService.importEmailReceipts(userEmail, storage, daysBack);
+      
+      res.json({
+        message: `Import completed: ${result.imported} receipts imported`,
+        imported: result.imported,
+        errors: result.errors
+      });
+    } catch (error) {
+      console.error("Error importing email receipts:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to import email receipts" 
+      });
+    }
+  });
+
+  // Search and preview receipt emails without importing
+  app.post("/api/email/search", async (req, res) => {
+    try {
+      const { userEmail, daysBack = 30 } = req.body;
+      
+      if (!userEmail) {
+        return res.status(400).json({ error: "userEmail is required" });
+      }
+      
+      const emails = await emailService.searchReceiptEmails(userEmail, daysBack);
+      
+      const preview = emails.map(email => ({
+        id: email.id,
+        subject: email.subject,
+        sender: email.sender,
+        receivedDateTime: email.receivedDateTime,
+        attachmentCount: email.attachments.length,
+        attachments: email.attachments.map(att => ({
+          name: att.name,
+          contentType: att.contentType,
+          size: att.size
+        })),
+        hasReceiptContent: email.body.toLowerCase().includes('receipt') || 
+                          email.body.toLowerCase().includes('invoice') ||
+                          email.body.includes('$')
+      }));
+      
+      res.json({
+        emails: preview,
+        totalFound: preview.length,
+        searchPeriod: `${daysBack} days`
+      });
+    } catch (error) {
+      console.error("Error searching email receipts:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to search email receipts" 
+      });
     }
   });
 
