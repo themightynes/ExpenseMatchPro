@@ -1,8 +1,11 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Receipt, AmexCharge } from "@shared/schema";
@@ -12,9 +15,43 @@ interface DragMatchingInterfaceProps {
   onBack: () => void;
 }
 
+interface FilterState {
+  receipts: {
+    minAmount: string;
+    maxAmount: string;
+    startDate: string;
+    endDate: string;
+    merchant: string;
+  };
+  charges: {
+    minAmount: string;
+    maxAmount: string;
+    startDate: string;
+    endDate: string;
+    merchant: string;
+  };
+}
+
 export default function DragMatchingInterface({ statementId, onBack }: DragMatchingInterfaceProps) {
   const [draggedReceipt, setDraggedReceipt] = useState<Receipt | null>(null);
   const [hoveredCharge, setHoveredCharge] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    receipts: {
+      minAmount: "",
+      maxAmount: "",
+      startDate: "",
+      endDate: "",
+      merchant: "",
+    },
+    charges: {
+      minAmount: "",
+      maxAmount: "",
+      startDate: "",
+      endDate: "",
+      merchant: "",
+    },
+  });
   const { toast } = useToast();
 
   const { data: candidates, isLoading } = useQuery({
@@ -54,8 +91,52 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
   }
 
   const pairs = (candidates as any)?.pairs || [];
-  const receipts: Receipt[] = (candidates as any)?.receipts || [];
-  const charges: AmexCharge[] = (candidates as any)?.charges || [];
+  const allReceipts: Receipt[] = (candidates as any)?.receipts || [];
+  const allCharges: AmexCharge[] = (candidates as any)?.charges || [];
+
+  // Apply filters
+  const filteredReceipts = useMemo(() => {
+    return allReceipts.filter(receipt => {
+      const amount = parseFloat(receipt.amount);
+      const date = receipt.date ? new Date(receipt.date) : null;
+      
+      // Amount filters
+      if (filters.receipts.minAmount && amount < parseFloat(filters.receipts.minAmount)) return false;
+      if (filters.receipts.maxAmount && amount > parseFloat(filters.receipts.maxAmount)) return false;
+      
+      // Date filters
+      if (filters.receipts.startDate && date && date < new Date(filters.receipts.startDate)) return false;
+      if (filters.receipts.endDate && date && date > new Date(filters.receipts.endDate)) return false;
+      
+      // Merchant filter
+      if (filters.receipts.merchant && !receipt.merchant?.toLowerCase().includes(filters.receipts.merchant.toLowerCase())) return false;
+      
+      return true;
+    });
+  }, [allReceipts, filters.receipts]);
+
+  const filteredCharges = useMemo(() => {
+    return allCharges.filter(charge => {
+      const amount = parseFloat(charge.amount);
+      const date = new Date(charge.date);
+      
+      // Amount filters
+      if (filters.charges.minAmount && amount < parseFloat(filters.charges.minAmount)) return false;
+      if (filters.charges.maxAmount && amount > parseFloat(filters.charges.maxAmount)) return false;
+      
+      // Date filters
+      if (filters.charges.startDate && date < new Date(filters.charges.startDate)) return false;
+      if (filters.charges.endDate && date > new Date(filters.charges.endDate)) return false;
+      
+      // Merchant filter
+      if (filters.charges.merchant && !charge.description?.toLowerCase().includes(filters.charges.merchant.toLowerCase())) return false;
+      
+      return true;
+    });
+  }, [allCharges, filters.charges]);
+
+  const receipts = filteredReceipts;
+  const charges = filteredCharges;
 
   const handleDragStart = (receipt: Receipt) => {
     setDraggedReceipt(receipt);
@@ -98,6 +179,45 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
     return "poor";
   };
 
+  const clearFilters = () => {
+    setFilters({
+      receipts: {
+        minAmount: "",
+        maxAmount: "",
+        startDate: "",
+        endDate: "",
+        merchant: "",
+      },
+      charges: {
+        minAmount: "",
+        maxAmount: "",
+        startDate: "",
+        endDate: "",
+        merchant: "",
+      },
+    });
+  };
+
+  const updateReceiptFilter = (field: keyof FilterState["receipts"], value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      receipts: {
+        ...prev.receipts,
+        [field]: value,
+      },
+    }));
+  };
+
+  const updateChargeFilter = (field: keyof FilterState["charges"], value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      charges: {
+        ...prev.charges,
+        [field]: value,
+      },
+    }));
+  };
+
   const getMatchQualityColor = (quality: string) => {
     switch (quality) {
       case "excellent": return "text-green-600 bg-green-50 border-green-200";
@@ -119,12 +239,166 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
           ← Back
         </Button>
         <h1 className="text-2xl font-bold text-primary">Drag & Drop Matching</h1>
-        <div></div>
+        <Button
+          variant="outline"
+          onClick={() => setShowFilters(!showFilters)}
+          className="flex items-center gap-2"
+        >
+          <i className="fas fa-filter"></i>
+          {showFilters ? "Hide Filters" : "Show Filters"}
+        </Button>
       </div>
 
-      <p className="text-center text-gray-600 mb-8">
+      <p className="text-center text-gray-600 mb-4">
         Drag receipts from the left to matching charges on the right
       </p>
+
+      {/* Filters Section */}
+      {showFilters && (
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Filters</CardTitle>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Clear All
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-8">
+              {/* Receipt Filters */}
+              <div>
+                <h3 className="font-semibold mb-4 text-gray-900">Receipt Filters</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="receipt-min-amount" className="text-sm">Min Amount</Label>
+                      <Input
+                        id="receipt-min-amount"
+                        type="number"
+                        placeholder="0.00"
+                        value={filters.receipts.minAmount}
+                        onChange={(e) => updateReceiptFilter("minAmount", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="receipt-max-amount" className="text-sm">Max Amount</Label>
+                      <Input
+                        id="receipt-max-amount"
+                        type="number"
+                        placeholder="1000.00"
+                        value={filters.receipts.maxAmount}
+                        onChange={(e) => updateReceiptFilter("maxAmount", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="receipt-start-date" className="text-sm">Start Date</Label>
+                      <Input
+                        id="receipt-start-date"
+                        type="date"
+                        value={filters.receipts.startDate}
+                        onChange={(e) => updateReceiptFilter("startDate", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="receipt-end-date" className="text-sm">End Date</Label>
+                      <Input
+                        id="receipt-end-date"
+                        type="date"
+                        value={filters.receipts.endDate}
+                        onChange={(e) => updateReceiptFilter("endDate", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="receipt-merchant" className="text-sm">Merchant</Label>
+                    <Input
+                      id="receipt-merchant"
+                      placeholder="Search merchant..."
+                      value={filters.receipts.merchant}
+                      onChange={(e) => updateReceiptFilter("merchant", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Charge Filters */}
+              <div>
+                <h3 className="font-semibold mb-4 text-gray-900">Charge Filters</h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="charge-min-amount" className="text-sm">Min Amount</Label>
+                      <Input
+                        id="charge-min-amount"
+                        type="number"
+                        placeholder="0.00"
+                        value={filters.charges.minAmount}
+                        onChange={(e) => updateChargeFilter("minAmount", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="charge-max-amount" className="text-sm">Max Amount</Label>
+                      <Input
+                        id="charge-max-amount"
+                        type="number"
+                        placeholder="1000.00"
+                        value={filters.charges.maxAmount}
+                        onChange={(e) => updateChargeFilter("maxAmount", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="charge-start-date" className="text-sm">Start Date</Label>
+                      <Input
+                        id="charge-start-date"
+                        type="date"
+                        value={filters.charges.startDate}
+                        onChange={(e) => updateChargeFilter("startDate", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="charge-end-date" className="text-sm">End Date</Label>
+                      <Input
+                        id="charge-end-date"
+                        type="date"
+                        value={filters.charges.endDate}
+                        onChange={(e) => updateChargeFilter("endDate", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="charge-merchant" className="text-sm">Merchant/Description</Label>
+                    <Input
+                      id="charge-merchant"
+                      placeholder="Search description..."
+                      value={filters.charges.merchant}
+                      onChange={(e) => updateChargeFilter("merchant", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Summary */}
+            <div className="mt-6 pt-4 border-t">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <div>
+                  Showing: {receipts.length} of {allReceipts.length} receipts, {charges.length} of {allCharges.length} charges
+                </div>
+                {(receipts.length !== allReceipts.length || charges.length !== allCharges.length) && (
+                  <Badge variant="secondary" className="text-xs">
+                    Filters Active
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-8">
         {/* Receipts Column */}

@@ -1,8 +1,10 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Receipt, AmexCharge } from "@shared/schema";
@@ -12,8 +14,24 @@ interface MatchingInterfaceProps {
   onBack: () => void;
 }
 
+interface FilterState {
+  minAmount: string;
+  maxAmount: string;
+  startDate: string;
+  endDate: string;
+  merchant: string;
+}
+
 export default function MatchingInterface({ statementId, onBack }: MatchingInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    minAmount: "",
+    maxAmount: "",
+    startDate: "",
+    endDate: "",
+    merchant: "",
+  });
   const { toast } = useToast();
 
   const { data: candidates, isLoading } = useQuery({
@@ -67,8 +85,27 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
   }
 
   const pairs = (candidates as any)?.pairs || [];
-  const receipts: Receipt[] = (candidates as any)?.receipts || [];
-  const charges: AmexCharge[] = (candidates as any)?.charges || [];
+  const allReceipts: Receipt[] = (candidates as any)?.receipts || [];
+  const allCharges: AmexCharge[] = (candidates as any)?.charges || [];
+
+  // Apply filters to receipts
+  const filteredReceipts = useMemo(() => {
+    return allReceipts.filter(receipt => {
+      const amount = parseFloat(receipt.amount);
+      const date = receipt.date ? new Date(receipt.date) : null;
+      
+      if (filters.minAmount && amount < parseFloat(filters.minAmount)) return false;
+      if (filters.maxAmount && amount > parseFloat(filters.maxAmount)) return false;
+      if (filters.startDate && date && date < new Date(filters.startDate)) return false;
+      if (filters.endDate && date && date > new Date(filters.endDate)) return false;
+      if (filters.merchant && !receipt.merchant?.toLowerCase().includes(filters.merchant.toLowerCase())) return false;
+      
+      return true;
+    });
+  }, [allReceipts, filters]);
+
+  const receipts = filteredReceipts;
+  const charges: AmexCharge[] = allCharges;
 
   console.log("Matching candidates:", { pairs, receipts, charges });
 
@@ -203,10 +240,117 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     return matrix[str2.length][str1.length];
   };
 
+  const clearFilters = () => {
+    setFilters({
+      minAmount: "",
+      maxAmount: "",
+      startDate: "",
+      endDate: "",
+      merchant: "",
+    });
+    setCurrentIndex(0); // Reset to first item when filters change
+  };
+
+  const updateFilter = (field: keyof FilterState, value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value,
+    }));
+    setCurrentIndex(0); // Reset to first item when filters change
+  };
+
   const matchScores = currentCharge ? calculateMatchScore(currentReceipt, currentCharge) : [];
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Header with filter toggle */}
+      <div className="flex justify-between items-center mb-4">
+        <Button
+          variant="outline"
+          onClick={() => setShowFilters(!showFilters)}
+          className="flex items-center gap-2"
+        >
+          <i className="fas fa-filter"></i>
+          {showFilters ? "Hide Filters" : "Show Filters"}
+        </Button>
+        <div className="text-sm text-gray-600">
+          {receipts.length !== allReceipts.length && (
+            <Badge variant="secondary" className="text-xs mr-2">
+              {receipts.length} of {allReceipts.length} receipts shown
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Filters Section */}
+      {showFilters && (
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Receipt Filters</CardTitle>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Clear All
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="min-amount" className="text-sm">Min Amount</Label>
+                  <Input
+                    id="min-amount"
+                    type="number"
+                    placeholder="0.00"
+                    value={filters.minAmount}
+                    onChange={(e) => updateFilter("minAmount", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="max-amount" className="text-sm">Max Amount</Label>
+                  <Input
+                    id="max-amount"
+                    type="number"
+                    placeholder="1000.00"
+                    value={filters.maxAmount}
+                    onChange={(e) => updateFilter("maxAmount", e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="start-date" className="text-sm">Start Date</Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={filters.startDate}
+                    onChange={(e) => updateFilter("startDate", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="end-date" className="text-sm">End Date</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={filters.endDate}
+                    onChange={(e) => updateFilter("endDate", e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <Label htmlFor="merchant" className="text-sm">Merchant</Label>
+              <Input
+                id="merchant"
+                placeholder="Search merchant..."
+                value={filters.merchant}
+                onChange={(e) => updateFilter("merchant", e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Progress */}
       <div className="text-center mb-6">
         <p className="text-gray-600">Swipe right to match, left to skip, or use the buttons below</p>
