@@ -29,8 +29,12 @@ export default function StatementsPage() {
   const getStatementStats = (statementId: string) => {
     const charges = allCharges.filter(charge => charge.statementId === statementId);
     const matchedCharges = charges.filter(charge => charge.isMatched);
-    const totalAmount = charges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0);
-    const matchedAmount = matchedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0);
+    const statementReceipts = receipts.filter(receipt => receipt.statementId === statementId);
+    const unmatchedReceipts = statementReceipts.filter(receipt => !receipt.isMatched && receipt.amount && parseFloat(receipt.amount) > 0);
+    
+    const totalAmount = Math.abs(charges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
+    const matchedAmount = Math.abs(matchedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
+    const unmatchedReceiptValue = unmatchedReceipts.reduce((sum, receipt) => sum + parseFloat(receipt.amount || '0'), 0);
     
     return {
       totalCharges: charges.length,
@@ -38,6 +42,9 @@ export default function StatementsPage() {
       unmatchedCharges: charges.length - matchedCharges.length,
       totalAmount,
       matchedAmount,
+      unmatchedReceiptValue,
+      unmatchedReceiptCount: unmatchedReceipts.length,
+      missingReceiptCount: charges.length - matchedCharges.length,
       matchPercentage: charges.length > 0 ? (matchedCharges.length / charges.length) * 100 : 0
     };
   };
@@ -185,17 +192,53 @@ export default function StatementsPage() {
                           <Progress value={stats.matchPercentage} className="h-2" />
                         </div>
 
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="text-center p-3 bg-gray-50 rounded-lg">
-                            <p className="text-2xl font-bold text-green-600">${stats.matchedAmount.toFixed(2)}</p>
-                            <p className="text-sm text-gray-600">Matched Amount</p>
+                        {/* Financial Summary - Compact Version */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <span className="text-xs font-medium text-blue-700">Total Amount</span>
+                            </div>
+                            <p className="text-lg font-bold text-blue-900">${stats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs text-blue-600">{stats.totalCharges} charges</p>
                           </div>
-                          <div className="text-center p-3 bg-gray-50 rounded-lg">
-                            <p className="text-2xl font-bold text-orange-600">{stats.unmatchedCharges}</p>
-                            <p className="text-sm text-gray-600">Unmatched</p>
+                          
+                          <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-xs font-medium text-green-700">Matched</span>
+                            </div>
+                            <p className="text-lg font-bold text-green-900">${stats.matchedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs text-green-600">{stats.matchedCharges} receipts matched</p>
                           </div>
                         </div>
+
+                        {/* Action Items - Only show if there are issues */}
+                        {(stats.unmatchedReceiptCount > 0 || stats.missingReceiptCount > 0) && (
+                          <div className="grid grid-cols-2 gap-3">
+                            {stats.unmatchedReceiptCount > 0 && (
+                              <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                  <span className="text-xs font-medium text-orange-700">Unmatched Receipts</span>
+                                </div>
+                                <p className="text-lg font-bold text-orange-900">${stats.unmatchedReceiptValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-xs text-orange-600">{stats.unmatchedReceiptCount} need matching</p>
+                              </div>
+                            )}
+                            
+                            {stats.missingReceiptCount > 0 && (
+                              <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                  <span className="text-xs font-medium text-red-700">Missing Receipts</span>
+                                </div>
+                                <p className="text-lg font-bold text-red-900">${(stats.totalAmount - stats.matchedAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-xs text-red-600">{stats.missingReceiptCount} charges without receipts</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Action Buttons */}
                         <div className="flex gap-2">
