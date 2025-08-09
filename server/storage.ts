@@ -422,6 +422,24 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async toggleChargePersonalExpense(chargeId: string): Promise<AmexCharge | undefined> {
+    try {
+      // First get the current charge
+      const charge = await this.getAmexCharge(chargeId);
+      if (!charge) return undefined;
+
+      // Toggle the personal expense flag
+      const newPersonalStatus = !charge.isPersonalExpense;
+      
+      return await this.updateAmexCharge(chargeId, {
+        isPersonalExpense: newPersonalStatus
+      });
+    } catch (error) {
+      console.error("Error in toggleChargePersonalExpense:", error);
+      return undefined;
+    }
+  }
+
 
 
   async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {

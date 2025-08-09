@@ -36,6 +36,10 @@ export default function StatementsPage() {
   const deleteStatementMutation = useMutation({
     mutationFn: async (statementId: string) => {
       const response = await apiRequest("DELETE", `/api/statements/${statementId}`);
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(errorData || `HTTP ${response.status}: ${response.statusText}`);
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -43,6 +47,7 @@ export default function StatementsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/charges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/financial-stats"] });
       toast({
         title: "Statement Deleted",
         description: "Statement and all associated charges have been removed.",
@@ -50,9 +55,10 @@ export default function StatementsPage() {
     },
     onError: (error) => {
       console.error("Error deleting statement:", error);
+      const message = error instanceof Error ? error.message : "Unknown error occurred";
       toast({
         title: "Error",
-        description: "Failed to delete statement. Please try again.",
+        description: `Failed to delete statement: ${message}`,
         variant: "destructive",
       });
     },
@@ -102,37 +108,71 @@ export default function StatementsPage() {
   };
 
   const getStatementStats = (statementId: string) => {
+    // Get charges for this specific statement
     const charges = allCharges.filter(charge => charge.statementId === statementId);
-    const statementReceipts = receipts.filter(receipt => receipt.statementId === statementId);
     
-    // Count matched receipts (receipts that have matchedChargeId set) - this is our source of truth
-    const matchedReceipts = statementReceipts.filter(receipt => receipt.isMatched && receipt.matchedChargeId);
+    // Get ALL receipts that have this statement ID OR are matched to charges in this statement
+    const directStatementReceipts = receipts.filter(receipt => receipt.statementId === statementId);
+    const chargeIds = charges.map(charge => charge.id);
+    const matchedToStatementReceipts = receipts.filter(receipt => 
+      receipt.matchedChargeId && chargeIds.includes(receipt.matchedChargeId)
+    );
     
-    // Get the charges that are matched by finding charges that have IDs in the matchedChargeId array
+    // Combine and deduplicate receipts
+    const allStatementReceiptIds = new Set([
+      ...directStatementReceipts.map(r => r.id),
+      ...matchedToStatementReceipts.map(r => r.id)
+    ]);
+    const statementReceipts = receipts.filter(receipt => allStatementReceiptIds.has(receipt.id));
+    
+    // Find matched receipts - must have both isMatched=true AND matchedChargeId set
+    const matchedReceipts = statementReceipts.filter(receipt => 
+      receipt.isMatched && 
+      receipt.matchedChargeId &&
+      chargeIds.includes(receipt.matchedChargeId)
+    );
+    
+    // Find matched charges - charges that have corresponding receipts
     const matchedChargeIds = matchedReceipts.map(receipt => receipt.matchedChargeId);
     const matchedCharges = charges.filter(charge => matchedChargeIds.includes(charge.id));
     
-    // Unmatched receipts are those with amount but no charge connection
+    // Unmatched receipts in this statement that have amount data
     const unmatchedReceipts = statementReceipts.filter(receipt => 
       !receipt.isMatched && 
       receipt.amount && 
-      parseFloat(receipt.amount) > 0
+      parseFloat(receipt.amount) > 0 &&
+      receipt.processingStatus === 'completed'
     );
 
-    const totalAmount = Math.abs(charges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
-    const matchedAmount = Math.abs(matchedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
-    const unmatchedReceiptValue = unmatchedReceipts.reduce((sum, receipt) => sum + parseFloat(receipt.amount || '0'), 0);
+    // Calculate amounts - handle potential negative charges by taking absolute values
+    const totalAmount = charges.reduce((sum, charge) => {
+      const amount = parseFloat(charge.amount || '0');
+      return sum + Math.abs(amount);
+    }, 0);
+    
+    const matchedAmount = matchedCharges.reduce((sum, charge) => {
+      const amount = parseFloat(charge.amount || '0');
+      return sum + Math.abs(amount);
+    }, 0);
+    
+    const unmatchedReceiptValue = unmatchedReceipts.reduce((sum, receipt) => {
+      const amount = parseFloat(receipt.amount || '0');
+      return sum + Math.abs(amount);
+    }, 0);
+
+    // Calculate percentage based on charges (since that's our source of truth)
+    const matchPercentage = charges.length > 0 ? (matchedCharges.length / charges.length) * 100 : 0;
 
     return {
       totalCharges: charges.length,
-      matchedCharges: matchedReceipts.length,
-      unmatchedCharges: charges.length - matchedReceipts.length,
+      matchedCharges: matchedCharges.length, // Count of matched charges, not receipts
+      unmatchedCharges: charges.length - matchedCharges.length,
       totalAmount,
       matchedAmount,
       unmatchedReceiptValue,
       unmatchedReceiptCount: unmatchedReceipts.length,
-      missingReceiptCount: charges.length - matchedReceipts.length,
-      matchPercentage: charges.length > 0 ? (matchedReceipts.length / charges.length) * 100 : 0
+      missingReceiptCount: charges.length - matchedCharges.length,
+      matchPercentage
     };
   };
 
