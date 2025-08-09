@@ -4,8 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Folder, FolderOpen, File, Search, Eye, ChevronRight, ChevronDown, ArrowLeft } from "lucide-react";
+import { Folder, FolderOpen, File, Search, Eye, ChevronRight, ChevronDown, ArrowLeft, Upload, Plus } from "lucide-react";
 import { Link } from "wouter";
+import MobileHeader from "@/components/MobileHeader";
+import FileUploadZone from "@/components/FileUploadZone";
 import ReceiptViewer from "@/components/ReceiptViewer";
 import type { Receipt, AmexStatement } from "@shared/schema";
 
@@ -20,6 +22,7 @@ export default function ReceiptsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["root"]));
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
 
   const { data: receipts = [], isLoading: receiptsLoading } = useQuery<Receipt[]>({
     queryKey: ["/api/receipts"],
@@ -120,54 +123,58 @@ export default function ReceiptsPage() {
       : folderData.receipts;
 
     return (
-      <div key={folderPath} className={`${level > 0 ? 'ml-4' : ''}`}>
+      <Card key={folderPath} className={`${level > 0 ? 'ml-3' : ''} mb-3`}>
         {/* Folder Header */}
         <div
-          className="flex items-center gap-2 py-2 px-3 rounded-lg hover:bg-gray-50 cursor-pointer group"
+          className="flex items-center gap-3 p-4 cursor-pointer active:bg-gray-50"
           onClick={() => toggleFolder(folderPath)}
         >
           {hasSubfolders && (
-            isExpanded ? <ChevronDown className="h-4 w-4 text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-500" />
+            isExpanded ? <ChevronDown className="h-5 w-5 text-gray-500" /> : <ChevronRight className="h-5 w-5 text-gray-500" />
           )}
           {isExpanded && hasSubfolders ? (
-            <FolderOpen className="h-5 w-5 text-amber-500" />
+            <FolderOpen className="h-6 w-6 text-amber-500" />
           ) : (
-            <Folder className="h-5 w-5 text-amber-600" />
+            <Folder className="h-6 w-6 text-amber-600" />
           )}
-          <span className="font-medium text-gray-900">{folderName}</span>
-          <Badge variant="secondary" className="ml-auto">
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900 text-lg">{folderName.replace(/_/g, ' ')}</h3>
+          </div>
+          <Badge variant="secondary" className="text-sm px-3 py-1">
             {totalReceipts}
           </Badge>
         </div>
 
         {/* Folder Contents */}
         {isExpanded && (
-          <div className="ml-6 space-y-1">
+          <div className="px-4 pb-4 space-y-2">
             {/* Direct receipts in this folder */}
             {displayReceipts.map(receipt => (
               <div
                 key={receipt.id}
-                className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50 cursor-pointer group"
+                className="flex items-center gap-3 p-4 rounded-xl bg-white border border-gray-200 active:bg-gray-50 cursor-pointer shadow-sm"
                 onClick={() => setSelectedReceipt(receipt)}
               >
-                <File className="h-4 w-4 text-blue-500" />
+                <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <File className="h-6 w-6 text-blue-600" />
+                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="font-semibold text-gray-900 truncate">
                     {receipt.originalFileName}
                   </p>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
                     {getReceiptStatusBadge(receipt)}
                     {receipt.merchant && (
-                      <span className="text-xs text-gray-500">{receipt.merchant}</span>
-                    )}
-                    {receipt.amount && (
-                      <span className="text-xs font-medium text-gray-900">${receipt.amount}</span>
+                      <span className="text-sm text-gray-600 truncate">{receipt.merchant}</span>
                     )}
                   </div>
+                  {receipt.amount && (
+                    <div className="mt-1">
+                      <span className="text-lg font-bold text-green-600">${receipt.amount}</span>
+                    </div>
+                  )}
                 </div>
-                <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100">
-                  <Eye className="h-4 w-4" />
-                </Button>
+                <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
               </div>
             ))}
 
@@ -177,67 +184,90 @@ export default function ReceiptsPage() {
             )}
           </div>
         )}
-      </div>
+      </Card>
     );
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="mr-3">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-              </Link>
-              <Folder className="text-primary text-2xl mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">All Receipts</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search receipts..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
-                />
-              </div>
-            </div>
+      <MobileHeader 
+        title="Receipts"
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowUpload(!showUpload)}
+            className="p-1 h-8 w-8"
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        }
+      />
+
+      <div className="px-4 py-6">
+        {/* Upload Section */}
+        {showUpload && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-lg">Upload Receipts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FileUploadZone 
+                onUploadComplete={() => {
+                  setShowUpload(false);
+                  // Refresh receipts data
+                  window.location.reload();
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Search */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search receipts..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Receipt Folders</span>
-              <Badge variant="outline">
-                {receipts.length} Total Receipts
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {receiptsLoading ? (
-              <div className="text-center py-8 text-gray-500">Loading receipts...</div>
-            ) : receipts.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No receipts found. Start by uploading your first receipt.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {Object.entries(folderStructure).map(([folderName, folderData]) =>
-                  renderFolder(folderName, folderData)
-                )}
-              </div>
+        {/* Stats */}
+        <div className="mb-4">
+          <Badge variant="outline" className="text-sm">
+            {receipts.length} Total Receipts
+          </Badge>
+        </div>
+
+        {/* Mobile-Optimized Receipt List */}
+        {receiptsLoading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading receipts...</p>
+          </div>
+        ) : receipts.length === 0 ? (
+          <Card className="text-center py-12">
+            <CardContent>
+              <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No receipts yet</h3>
+              <p className="text-gray-600 mb-4">Start by uploading your first receipt</p>
+              <Button onClick={() => setShowUpload(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Upload Receipt
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(folderStructure).map(([folderName, folderData]) =>
+              renderFolder(folderName, folderData)
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
       </div>
 
       {/* Receipt Viewer Modal */}

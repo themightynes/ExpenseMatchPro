@@ -1,327 +1,131 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, ZoomIn, ZoomOut, RotateCw, Save, Edit, Lock, Download, FileText, Crop, Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import ReactCrop, { Crop as CropType, PixelCrop, centerCrop, makeAspectCrop } from "react-image-crop";
-import "react-image-crop/dist/ReactCrop.css";
-import type { Receipt } from "@shared/schema";
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Edit, 
+  Save, 
+  X, 
+  FileText, 
+  Download,
+  RotateCw,
+  ZoomIn,
+  ZoomOut
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import type { Receipt } from '@shared/schema';
+
+// Import react-image-crop for cropping functionality
+import ReactCrop from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
+import type { Crop, PixelCrop } from 'react-image-crop';
 
 interface ReceiptViewerProps {
   receipt: Receipt;
-  receipts?: Receipt[];
+  receipts: Receipt[];
   isOpen: boolean;
   onClose: () => void;
-  onNavigate?: (receipt: Receipt) => void;
+  onNavigate: (receipt: Receipt) => void;
 }
 
-const EXPENSE_CATEGORIES = [
-  "Restaurant-Bar & Café",
-  "Restaurant-Restaurant", 
-  "Travel-Airfare",
-  "Travel-Hotel",
-  "Transportation-Ground",
-  "Office Supplies",
-  "Software & Technology",
-  "Entertainment",
-  "Fuel-Gas",
-  "Parking & Tolls",
-  "Other"
-];
-
-export default function ReceiptViewer({ receipt, receipts = [], isOpen, onClose, onNavigate }: ReceiptViewerProps) {
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
+function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: ReceiptViewerProps) {
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [editedData, setEditedData] = useState({
+    merchant: '',
+    amount: '',
+    date: '',
+    category: '',
+  });
+  const [rotation, setRotation] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [isCropping, setIsCropping] = useState(false);
-  const [crop, setCrop] = useState<CropType>();
+  const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
-  const [controlsVisible, setControlsVisible] = useState(true);
-  const [lastActivity, setLastActivity] = useState(Date.now());
   const imgRef = useRef<HTMLImageElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [editedData, setEditedData] = useState({
-    merchant: receipt.merchant || "",
-    amount: receipt.amount || "",
-    date: receipt.date ? new Date(receipt.date).toISOString().split('T')[0] : "",
-    category: receipt.category || "",
-  });
 
-  // Update edited data when receipt changes
-  useEffect(() => {
-    setEditedData({
-      merchant: receipt.merchant || "",
-      amount: receipt.amount || "",
-      date: receipt.date ? new Date(receipt.date).toISOString().split('T')[0] : "",
-      category: receipt.category || "",
-    });
-    setIsEditing(false); // Exit editing mode when navigating
-    setIsCropping(false); // Exit cropping mode when navigating
-    setZoom(1); // Reset zoom
-    setRotation(0); // Reset rotation
-  }, [receipt.id]);
-  const { toast } = useToast();
-  
-  // Navigation helpers
+  // Find current receipt index
   const currentIndex = receipts.findIndex(r => r.id === receipt.id);
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < receipts.length - 1;
-  
-  const navigatePrevious = () => {
-    if (hasPrevious && onNavigate) {
-      onNavigate(receipts[currentIndex - 1]);
-    }
-  };
-  
-  const navigateNext = () => {
-    if (hasNext && onNavigate) {
-      onNavigate(receipts[currentIndex + 1]);
-    }
-  };
-  
-  // Keyboard navigation
+
+  // Image handling
+  const imageUrl = receipt.fileUrl?.startsWith('http') ? receipt.fileUrl : 
+                   receipt.fileUrl?.startsWith('/') ? `${window.location.origin}${receipt.fileUrl}` : 
+                   receipt.fileUrl;
+  const isPDF = receipt.originalFileName?.toLowerCase().endsWith('.pdf');
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyPress = (e: KeyboardEvent) => {
       if (!isOpen) return;
       
-      if (e.key === 'ArrowLeft' && hasPrevious) {
-        e.preventDefault();
-        navigatePrevious();
-      } else if (e.key === 'ArrowRight' && hasNext) {
-        e.preventDefault();
-        navigateNext();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
+      switch(e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (hasPrevious) navigatePrevious();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (hasNext) navigateNext();
+          break;
+        case 'Escape':
+          e.preventDefault();
+          onClose();
+          break;
       }
     };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
   }, [isOpen, hasPrevious, hasNext]);
 
-  // Auto-hide controls after inactivity
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (Date.now() - lastActivity > 3000) { // 3 seconds of inactivity
-        setControlsVisible(false);
-      }
-    }, 3000);
+  const navigatePrevious = useCallback(() => {
+    if (hasPrevious) {
+      onNavigate(receipts[currentIndex - 1]);
+    }
+  }, [hasPrevious, currentIndex, receipts, onNavigate]);
 
-    return () => clearTimeout(timer);
-  }, [lastActivity]);
+  const navigateNext = useCallback(() => {
+    if (hasNext) {
+      onNavigate(receipts[currentIndex + 1]);
+    }
+  }, [hasNext, currentIndex, receipts, onNavigate]);
 
-  // Track user activity to show controls
-  const handleActivity = useCallback(() => {
-    setLastActivity(Date.now());
-    setControlsVisible(true);
-  }, []);
-
-  // Crop utility functions
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
-    setCrop(centerCrop(
-      makeAspectCrop(
-        {
-          unit: '%',
-          width: 90,
-        },
-        16 / 9,
-        width,
-        height,
-      ),
-      width,
-      height,
-    ));
+    setCrop({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
   }, []);
 
-  const canvasPreview = useCallback((
-    image: HTMLImageElement,
-    canvas: HTMLCanvasElement,
-    crop: PixelCrop,
-  ) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.error("Failed to get 2D context from canvas");
-      return;
-    }
-
-    const scaleX = image.naturalWidth / image.width;
-    const scaleY = image.naturalHeight / image.height;
-    const pixelRatio = window.devicePixelRatio || 1;
-
-    console.log("Canvas preview params:", { 
-      crop, 
-      scaleX, 
-      scaleY, 
-      pixelRatio,
-      naturalWidth: image.naturalWidth,
-      naturalHeight: image.naturalHeight,
-      displayWidth: image.width,
-      displayHeight: image.height
-    });
-
-    canvas.width = crop.width * pixelRatio;
-    canvas.height = crop.height * pixelRatio;
-
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    ctx.imageSmoothingQuality = 'high';
-
-    // Clear the canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+  const handleSave = async () => {
     try {
-      ctx.drawImage(
-        image,
-        crop.x * scaleX,
-        crop.y * scaleY,
-        crop.width * scaleX,
-        crop.height * scaleY,
-        0,
-        0,
-        crop.width,
-        crop.height,
-      );
-      console.log("Canvas drawing completed");
-    } catch (error) {
-      console.error("Error drawing to canvas:", error);
-    }
-  }, []);
-
-  const applyCrop = useCallback(async () => {
-    if (!completedCrop || !previewCanvasRef.current || !imgRef.current) {
-      console.log("Missing requirements for crop:", { completedCrop, canvas: previewCanvasRef.current, img: imgRef.current });
-      return;
-    }
-
-    try {
-      const canvas = previewCanvasRef.current;
-      const img = imgRef.current;
-      
-      console.log("Applying crop:", completedCrop);
-      
-      // Generate canvas preview
-      canvasPreview(img, canvas, completedCrop);
-
-      // Convert canvas to blob and update the image
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          console.error("Failed to create blob from canvas");
-          toast({
-            title: "Crop failed",
-            description: "Failed to process the cropped image.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        console.log("Blob created successfully, size:", blob.size);
-        
-        const url = URL.createObjectURL(blob);
-        
-        // Update the image source directly
-        if (imgRef.current) {
-          imgRef.current.onload = () => {
-            console.log("Cropped image loaded successfully");
-            URL.revokeObjectURL(url);
-            setIsCropping(false);
-            setCrop(undefined);
-            setCompletedCrop(undefined);
-            
-            toast({
-              title: "Image cropped successfully",
-              description: "The receipt image has been cropped.",
-            });
-          };
-          
-          imgRef.current.onerror = () => {
-            console.error("Failed to load cropped image");
-            URL.revokeObjectURL(url);
-            toast({
-              title: "Crop failed",
-              description: "Failed to load the cropped image.",
-              variant: "destructive",
-            });
-          };
-          
-          imgRef.current.src = url;
-        }
-      }, 'image/jpeg', 0.95);
-    } catch (error) {
-      console.error("Error applying crop:", error);
-      toast({
-        title: "Crop failed",
-        description: "An error occurred while cropping the image.",
-        variant: "destructive",
+      await apiRequest('/api/receipts/' + receipt.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editedData),
       });
-    }
-  }, [completedCrop, canvasPreview, toast]);
 
-  const updateMutation = useMutation({
-    mutationFn: async (updates: any) => {
-      console.log("Updating receipt with data:", updates);
-      const response = await apiRequest("PATCH", `/api/receipts/${receipt.id}`, updates);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Update failed:", response.status, errorText);
-        throw new Error(`Update failed: ${response.status}`);
-      }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      console.log("Receipt updated successfully:", data);
-      
-      // Check if auto-matching occurred
-      if (data.autoMatched) {
-        toast({
-          title: "Receipt auto-matched!",
-          description: `Automatically matched to AMEX charge with ${data.matchConfidence}% confidence. ${data.matchReason}`,
-          duration: 6000,
-        });
-      } else {
-        toast({
-          title: "Receipt Updated",
-          description: "Receipt data has been saved successfully.",
-        });
-      }
-      
-      queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Receipt updated",
+        description: "Receipt information has been saved successfully.",
+      });
+
       setIsEditing(false);
-    },
-    onError: (error) => {
-      console.error("Update mutation error:", error);
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+    } catch (error) {
+      console.error('Failed to save receipt:', error);
       toast({
-        title: "Update Failed",
-        description: "Failed to save receipt data. Please try again.",
+        title: "Error",
+        description: "Failed to save receipt information.",
         variant: "destructive",
       });
-    },
-  });
-
-  if (!isOpen) return null;
-
-  const imageUrl = receipt.fileUrl ? `/objects/${receipt.fileUrl.split('/objects/')[1]}` : null;
-  const isPDF = receipt.originalFileName?.toLowerCase().endsWith('.pdf') || false;
-
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
-  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
-
-  const handleSave = () => {
-    const updates = {
-      merchant: editedData.merchant || null,
-      amount: editedData.amount || null,
-      date: editedData.date || null,
-      category: editedData.category || null,
-    };
-    updateMutation.mutate(updates);
+    }
   };
 
   const handleEdit = () => {
@@ -334,99 +138,93 @@ export default function ReceiptViewer({ receipt, receipts = [], isOpen, onClose,
     setIsEditing(true);
   };
 
-  const isProcessing = receipt.processingStatus === 'processing';
-  const canEdit = !receipt.isMatched; // Allow editing unless already matched
   const needsManualEntry = !receipt.merchant && !receipt.amount && !receipt.date;
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-6xl max-h-[90vh] w-full overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            {/* Navigation buttons */}
-            {receipts.length > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={navigatePrevious}
-                  disabled={!hasPrevious}
-                  className="flex items-center gap-1"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <span className="text-sm text-gray-500 px-2">
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      {/* Mobile Header */}
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-20">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Button variant="ghost" size="sm" onClick={onClose} className="p-2 flex-shrink-0">
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-semibold text-gray-900 truncate text-base">
+              {receipt.originalFileName}
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              {currentIndex >= 0 && receipts.length > 1 && (
+                <span className="text-sm text-gray-500">
                   {currentIndex + 1} of {receipts.length}
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={navigateNext}
-                  disabled={!hasNext}
-                  className="flex items-center gap-1"
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">{receipt.originalFileName}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge variant={receipt.processingStatus === 'completed' ? 'default' : 'secondary'}>
-                  {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
+              )}
+              {receipt.isMatched && (
+                <Badge className="bg-green-50 text-green-700 border-green-200 text-xs">
+                  Matched
                 </Badge>
-                {receipt.isMatched && <Badge variant="default">Matched</Badge>}
-                {receipts.length > 1 && (
-                  <Badge variant="outline" className="text-xs">
-                    Use ← → arrow keys to navigate
-                  </Badge>
-                )}
-              </div>
+              )}
+              {needsManualEntry && (
+                <Badge className="bg-yellow-50 text-yellow-700 border-yellow-200 text-xs">
+                  Needs Entry
+                </Badge>
+              )}
             </div>
           </div>
-          
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
         </div>
+        
+        {receipts.length > 1 && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={navigatePrevious} 
+              disabled={!hasPrevious}
+              className="p-2"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={navigateNext} 
+              disabled={!hasNext}
+              className="p-2"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+      </div>
 
-        <div className="flex">
-          {/* Image Panel */}
-          <div 
-            className="flex-1 bg-gray-100 relative overflow-auto" 
-            style={{ maxHeight: '70vh' }}
-            onMouseMove={handleActivity}
-            onClick={handleActivity}
-          >
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Receipt Image/PDF Viewer */}
+        <div className="flex-1 bg-gray-100 overflow-auto">
+          <div className="flex justify-center items-center min-h-full p-4">
             {imageUrl ? (
-              <div className="p-4 flex justify-center items-center min-h-full">
-                {isPDF ? (
-                  <div className="w-full h-full flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg shadow-md p-4 max-w-sm text-center">
-                      <FileText className="h-12 w-12 mx-auto mb-3 text-blue-500" />
-                      <h3 className="text-base font-medium mb-2">PDF Receipt</h3>
-                      <p className="text-sm text-gray-600 mb-3 truncate" title={receipt.originalFileName}>
+              isPDF ? (
+                <div className="w-full max-w-sm">
+                  <Card className="text-center">
+                    <CardContent className="p-6">
+                      <FileText className="h-16 w-16 mx-auto mb-4 text-blue-500" />
+                      <h3 className="text-lg font-medium mb-2">PDF Receipt</h3>
+                      <p className="text-sm text-gray-600 mb-4 truncate" title={receipt.originalFileName}>
                         {receipt.originalFileName}
                       </p>
-                      <div className="flex flex-col gap-2">
+                      <div className="space-y-3">
                         <Button 
-                          onClick={() => {
-                            console.log("Opening PDF:", imageUrl);
-                            window.open(imageUrl, '_blank');
-                          }}
-                          className="flex items-center gap-2"
+                          onClick={() => window.open(imageUrl, '_blank')}
+                          className="w-full"
+                          size="lg"
                         >
-                          <FileText className="h-4 w-4" />
+                          <FileText className="h-5 w-5 mr-2" />
                           Open PDF in New Tab
                         </Button>
                         <Button 
                           variant="outline"
                           onClick={() => {
-                            console.log("Downloading PDF:", imageUrl);
                             const link = document.createElement('a');
                             link.href = imageUrl;
                             link.download = receipt.originalFileName || 'receipt.pdf';
@@ -435,49 +233,23 @@ export default function ReceiptViewer({ receipt, receipts = [], isOpen, onClose,
                             link.click();
                             document.body.removeChild(link);
                           }}
-                          className="flex items-center gap-2"
+                          className="w-full"
                         >
-                          <Download className="h-4 w-4" />
+                          <Download className="h-4 w-4 mr-2" />
                           Download PDF
                         </Button>
-                        <p className="text-xs text-gray-500 mt-2">
-                          Click "Open PDF in New Tab" to view the document
-                        </p>
                       </div>
-                    </div>
-                  </div>
-                ) : isCropping ? (
-                  <ReactCrop
-                    crop={crop}
-                    onChange={(_, percentCrop) => setCrop(percentCrop)}
-                    onComplete={(c) => setCompletedCrop(c)}
-                    aspect={undefined}
-                    minWidth={50}
-                    minHeight={50}
-                  >
-                    <img
-                      ref={imgRef}
-                      src={imageUrl}
-                      alt={receipt.originalFileName}
-                      onLoad={onImageLoad}
-                      className="max-w-full h-auto shadow-lg"
-                      style={{
-                        transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                        transformOrigin: 'center',
-                        transition: 'transform 0.2s ease-in-out'
-                      }}
-                      onError={(e) => {
-                        console.error("Failed to load image:", imageUrl);
-                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=';
-                      }}
-                    />
-                  </ReactCrop>
-                ) : (
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <div className="w-full max-w-4xl">
                   <img
                     ref={imgRef}
                     src={imageUrl}
                     alt={receipt.originalFileName}
-                    className="max-w-full h-auto shadow-lg"
+                    onLoad={onImageLoad}
+                    className="w-full h-auto rounded-lg shadow-lg"
                     style={{
                       transform: `scale(${zoom}) rotate(${rotation}deg)`,
                       transformOrigin: 'center',
@@ -488,234 +260,149 @@ export default function ReceiptViewer({ receipt, receipts = [], isOpen, onClose,
                       e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=';
                     }}
                   />
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-64 text-gray-500">
-                <div className="text-center">
-                  <FileText className="h-12 w-12 mx-auto mb-2" />
-                  <p>No image available</p>
                 </div>
-              </div>
-            )}
-
-            {/* File Controls - Only show for images, not PDFs */}
-            {imageUrl && !isPDF && (
-              <div 
-                className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-2 transition-opacity duration-300 ${controlsVisible ? 'opacity-100' : 'opacity-20'}`}
-                onMouseEnter={handleActivity}
-              >
-                <Button variant="outline" size="sm" onClick={handleZoomOut}>
-                  <ZoomOut className="h-4 w-4" />
-                </Button>
-                <span className="px-3 py-1 text-sm font-medium">{Math.round(zoom * 100)}%</span>
-                <Button variant="outline" size="sm" onClick={handleZoomIn}>
-                  <ZoomIn className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleRotate}>
-                  <RotateCw className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => {
-                    setIsCropping(!isCropping);
-                    if (isCropping) {
-                      setCrop(undefined);
-                      setCompletedCrop(undefined);
-                    }
-                  }}
-                >
-                  <Crop className="h-4 w-4" />
-                </Button>
-                {isCropping && completedCrop && (
-                  <Button variant="outline" size="sm" onClick={applyCrop}>
-                    <Check className="h-4 w-4" />
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => window.open(imageUrl, '_blank')}>
-                  <Download className="h-4 w-4" />
-                </Button>
+              )
+            ) : (
+              <div className="text-center text-gray-500">
+                <FileText className="h-16 w-16 mx-auto mb-4" />
+                <p>Unable to load receipt image</p>
               </div>
             )}
           </div>
+        </div>
 
-          {/* Details Panel */}
-          <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto" style={{ maxHeight: '70vh' }}>
-            <div className="p-4 space-y-4">
+        {/* Mobile Bottom Panel - Receipt Details */}
+        <div className="bg-white border-t border-gray-200 max-h-[50vh] overflow-y-auto">
+          <div className="p-4 space-y-4">
+            {/* Edit Form */}
+            {isEditing ? (
               <Card>
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Edit Receipt Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="merchant">Merchant</Label>
+                    <Input
+                      id="merchant"
+                      value={editedData.merchant}
+                      onChange={(e) => setEditedData(prev => ({ ...prev, merchant: e.target.value }))}
+                      placeholder="Enter merchant name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="amount">Amount</Label>
+                    <Input
+                      id="amount"
+                      value={editedData.amount}
+                      onChange={(e) => setEditedData(prev => ({ ...prev, amount: e.target.value }))}
+                      placeholder="Enter amount"
+                      type="number"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="date">Date</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={editedData.date}
+                      onChange={(e) => setEditedData(prev => ({ ...prev, date: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="category">Category</Label>
+                    <Select value={editedData.category} onValueChange={(value) => setEditedData(prev => ({ ...prev, category: value }))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Meals">Meals</SelectItem>
+                        <SelectItem value="Travel">Travel</SelectItem>
+                        <SelectItem value="Office Supplies">Office Supplies</SelectItem>
+                        <SelectItem value="Entertainment">Entertainment</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button onClick={handleSave} className="flex-1">
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Changes
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsEditing(false)} className="flex-1">
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              /* Receipt Details Display */
+              <Card>
+                <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm">Receipt Details</CardTitle>
-                    {canEdit && (
-                      <div className="flex gap-1">
-                        {isEditing ? (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={handleSave}
-                              disabled={updateMutation.isPending}
-                              className="text-xs px-2 py-1 h-auto"
-                            >
-                              <Save className="h-3 w-3 mr-1" />
-                              {updateMutation.isPending ? 'Saving...' : 'Save'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setIsEditing(false)}
-                              className="text-xs px-2 py-1 h-auto"
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleEdit}
-                            className="text-xs px-2 py-1 h-auto"
-                          >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Edit
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    {!canEdit && (
-                      <Badge variant="secondary" className="text-xs">
-                        <Lock className="h-3 w-3 mr-1" />
-                        Locked
-                      </Badge>
+                    <CardTitle className="text-lg">Receipt Details</CardTitle>
+                    {!receipt.isMatched && (
+                      <Button variant="outline" size="sm" onClick={handleEdit}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit
+                      </Button>
                     )}
                   </div>
-                  {isProcessing && (
-                    <p className="text-xs text-blue-600 mt-1">
-                      OCR processing... You can manually enter data below to speed up the workflow.
-                    </p>
-                  )}
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {isEditing ? (
-                    <div className="space-y-3">
-                      <div>
-                        <Label htmlFor="merchant" className="text-xs text-gray-500">
-                          Merchant
-                        </Label>
-                        <Input
-                          id="merchant"
-                          value={editedData.merchant}
-                          onChange={(e) => setEditedData(prev => ({ ...prev, merchant: e.target.value }))}
-                          placeholder="Enter merchant name"
-                          className="mt-1 text-sm h-8"
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="amount" className="text-xs text-gray-500">
-                          Amount
-                        </Label>
-                        <Input
-                          id="amount"
-                          type="number"
-                          step="0.01"
-                          value={editedData.amount}
-                          onChange={(e) => setEditedData(prev => ({ ...prev, amount: e.target.value }))}
-                          placeholder="Enter amount"
-                          className="mt-1 text-sm h-8"
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="date" className="text-xs text-gray-500">
-                          Date
-                        </Label>
-                        <Input
-                          id="date"
-                          type="date"
-                          value={editedData.date}
-                          onChange={(e) => setEditedData(prev => ({ ...prev, date: e.target.value }))}
-                          className="mt-1 text-sm h-8"
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="category" className="text-xs text-gray-500">
-                          Category
-                        </Label>
-                        <Select
-                          value={editedData.category}
-                          onValueChange={(value) => setEditedData(prev => ({ ...prev, category: value }))}
-                        >
-                          <SelectTrigger className="mt-1 text-sm h-8">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {EXPENSE_CATEGORIES.map((category) => (
-                              <SelectItem key={category} value={category}>
-                                {category}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Merchant</label>
+                      <p className="text-base font-medium">{receipt.merchant || 'Not set'}</p>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div>
-                        <label className="text-xs font-medium text-gray-500">Merchant</label>
-                        <p className="text-sm">{receipt.merchant || 'Not detected'}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-500">Amount</label>
-                        <p className="text-sm font-semibold">{receipt.amount ? `$${receipt.amount}` : 'Not detected'}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-500">Date</label>
-                        <p className="text-sm">{receipt.date ? new Date(receipt.date).toLocaleDateString() : 'Not detected'}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-500">Category</label>
-                        <p className="text-sm">{receipt.category || 'Not assigned'}</p>
-                      </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Amount</label>
+                      <p className="text-base font-medium text-green-600">
+                        {receipt.amount ? `$${receipt.amount}` : 'Not set'}
+                      </p>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {receipt.ocrText && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">OCR Text</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-xs bg-gray-50 p-3 rounded border max-h-40 overflow-y-auto">
-                      <pre className="whitespace-pre-wrap font-mono">{receipt.ocrText}</pre>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Date</label>
+                      <p className="text-base">
+                        {receipt.date ? new Date(receipt.date).toLocaleDateString() : 'Not set'}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">File Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div>
-                    <label className="text-xs font-medium text-gray-500">File Name</label>
-                    <p className="text-sm">{receipt.fileName}</p>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Category</label>
+                      <p className="text-base">{receipt.category || 'Not set'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500">Original Name</label>
-                    <p className="text-sm">{receipt.originalFileName}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500">Upload Date</label>
-                    <p className="text-sm">{receipt.createdAt ? new Date(receipt.createdAt).toLocaleString() : 'Unknown'}</p>
+                  
+                  <div className="pt-2">
+                    <label className="text-sm font-medium text-gray-500">Status</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant={receipt.processingStatus === 'completed' ? 'default' : 'secondary'}>
+                        {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
+                      </Badge>
+                      {receipt.isMatched && <Badge variant="default">Matched to AMEX</Badge>}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            )}
+
+            {/* File Information */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">File Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Original Name</label>
+                  <p className="text-sm break-all">{receipt.originalFileName}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Upload Date</label>
+                  <p className="text-sm">{receipt.createdAt ? new Date(receipt.createdAt).toLocaleString() : 'Unknown'}</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
@@ -732,3 +419,5 @@ export default function ReceiptViewer({ receipt, receipts = [], isOpen, onClose,
     </div>
   );
 }
+
+export default ReceiptViewer;
