@@ -506,6 +506,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single AMEX statement
+  app.get("/api/statements/:id", async (req, res) => {
+    try {
+      const statementId = req.params.id;
+      const statement = await storage.getAmexStatement(statementId);
+      
+      if (!statement) {
+        return res.status(404).json({ error: "Statement not found" });
+      }
+      
+      res.json(statement);
+    } catch (error) {
+      console.error("Error getting statement:", error);
+      res.status(500).json({ error: "Failed to get statement" });
+    }
+  });
+
   app.post("/api/statements", async (req, res) => {
     try {
       const validatedData = insertAmexStatementSchema.parse(req.body);

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import CsvUploadModal from "@/components/CsvUploadModal";
-import MobileStatementDialog from "@/components/MobileStatementDialog";
+
 import type { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
 import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List, Trash2, Edit2, Check, X } from "lucide-react";
 import { Link } from "wouter";
@@ -15,7 +15,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function StatementsPage() {
   const [showCsvModal, setShowCsvModal] = useState(false);
-  const [selectedStatement, setSelectedStatement] = useState<AmexStatement | null>(null);
+
   const [editingStatement, setEditingStatement] = useState<string | null>(null);
   const [editedName, setEditedName] = useState("");
 
@@ -426,14 +426,12 @@ export default function StatementsPage() {
 
                         {/* Action Buttons */}
                         <div className="flex gap-2">
-                          <Button 
-                            variant="outline" 
-                            className="flex-1"
-                            onClick={() => setSelectedStatement(statement)}
-                          >
-                            <List className="h-4 w-4 mr-2" />
-                            View Details
-                          </Button>
+                          <Link href={`/statements/${statement.id}`} className="flex-1">
+                            <Button variant="outline" className="w-full">
+                              <List className="h-4 w-4 mr-2" />
+                              View Details
+                            </Button>
+                          </Link>
                           <Link href={`/matching?statementId=${statement.id}`} className="flex-1">
                             <Button variant="outline" className="w-full">
                               <Eye className="h-4 w-4 mr-2" />
@@ -465,14 +463,7 @@ export default function StatementsPage() {
         statements={statements}
       />
 
-      {/* Statement Details Dialog */}
-      {selectedStatement && (
-        <MobileStatementDialog
-          statement={selectedStatement}
-          open={!!selectedStatement}
-          onOpenChange={(open) => !open && setSelectedStatement(null)}
-        />
-      )}
+
     </div>
   );
 }

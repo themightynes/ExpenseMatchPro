@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Matching from "@/pages/matching";
 import StatementsPage from "@/pages/statements";
+import StatementDetailPage from "@/pages/statement-detail";
 import ReceiptsPage from "@/pages/receipts";
 import EmailImport from "@/pages/EmailImport";
 
@@ -19,6 +20,7 @@ function Router() {
           <Route path="/" component={Dashboard} />
           <Route path="/matching" component={Matching} />
           <Route path="/statements" component={StatementsPage} />
+          <Route path="/statements/:id" component={StatementDetailPage} />
           <Route path="/receipts" component={ReceiptsPage} />
           <Route path="/email-import" component={EmailImport} />
           <Route component={NotFound} />
