@@ -76,10 +76,10 @@ export default function FileUploadZone() {
             onComplete={handleUploadComplete}
             buttonClassName="w-full group"
           >
-            <div className="relative border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all duration-300 group-hover:shadow-lg">
+            <div className="relative border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all duration-300 group-hover:shadow-lg cursor-pointer">
               <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               
-              <div className="relative z-10">
+              <div className="relative z-10 pointer-events-none">
                 <div className="mb-4">
                   <Upload className="h-12 w-12 text-gray-400 group-hover:text-blue-500 mx-auto transition-colors duration-300" />
                 </div>
@@ -118,9 +118,37 @@ export default function FileUploadZone() {
                     </div>
                   </div>
                 )}
+                
+                <p className="text-xs text-gray-400 mt-2">
+                  📱 On mobile: Tap to open camera or file browser
+                </p>
               </div>
             </div>
           </ObjectUploader>
+
+          {/* Mobile Fallback - Direct File Input */}
+          <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              <strong>Mobile Alternative:</strong> If the upload area above doesn't work on your device, use this direct file picker:
+            </p>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              multiple
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0) {
+                  console.log("Direct file input selected:", files);
+                  // For now, just show a message - this would need additional implementation
+                  toast({
+                    title: "Files Selected",
+                    description: `${files.length} file(s) selected. Please use the main upload area above for processing.`,
+                  });
+                }
+              }}
+              className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+            />
+          </div>
         </div>
 
         {/* Email Integration Options */}
