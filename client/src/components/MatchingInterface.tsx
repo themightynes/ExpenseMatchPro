@@ -66,12 +66,13 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
+  const pairs = (candidates as any)?.pairs || [];
   const receipts: Receipt[] = (candidates as any)?.receipts || [];
   const charges: AmexCharge[] = (candidates as any)?.charges || [];
 
-  console.log("Matching candidates:", { receipts, charges });
+  console.log("Matching candidates:", { pairs, receipts, charges });
 
-  if (receipts.length === 0) {
+  if (pairs.length === 0 && receipts.length === 0) {
     return (
       <Card className="max-w-2xl mx-auto">
         <CardContent className="pt-6 text-center">
@@ -105,22 +106,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
-  if (currentIndex >= receipts.length) {
-    return (
-      <Card className="max-w-2xl mx-auto">
-        <CardContent className="pt-6 text-center">
-          <i className="fas fa-check-circle text-4xl text-green-500 mb-4"></i>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">All Caught Up!</h2>
-          <p className="text-gray-600 mb-4">
-            There are no receipts or charges that need matching for this statement period.
-          </p>
-          <Button onClick={onBack}>Back to Statement Selection</Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (currentIndex >= receipts.length) {
+  if (currentIndex >= totalItems) {
     return (
       <Card className="max-w-2xl mx-auto">
         <CardContent className="pt-6 text-center">
@@ -135,8 +121,11 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
-  const currentReceipt = receipts[currentIndex];
-  const currentCharge = charges[0]; // For simplicity, match against first charge
+  // Use intelligent pairs if available, otherwise fall back to first charge
+  const totalItems = Math.max(pairs.length, receipts.length);
+  const currentPair = pairs[currentIndex];
+  const currentReceipt = currentPair?.receipt || receipts[currentIndex];
+  const currentCharge = currentPair?.charge || charges[0]; // Use suggested charge or first available
 
   const calculateMatchScore = (receipt: Receipt, charge: AmexCharge) => {
     const scores = [];
@@ -224,11 +213,11 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
         <div className="mt-2 bg-gray-200 rounded-full h-2 max-w-xs mx-auto">
           <div 
             className="bg-primary h-2 rounded-full transition-all duration-300" 
-            style={{ width: `${((currentIndex + 1) / receipts.length) * 100}%` }}
+            style={{ width: `${((currentIndex + 1) / totalItems) * 100}%` }}
           ></div>
         </div>
         <p className="text-sm text-gray-500 mt-1">
-          {currentIndex + 1} of {receipts.length} reviewed
+          {currentIndex + 1} of {totalItems} reviewed
         </p>
       </div>
 
@@ -257,12 +246,36 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
                 <>
                   <div className="bg-blue-50 rounded-lg p-4 mb-4">
                     <div className="space-y-2">
-                      <p><span className="font-medium">Merchant:</span> {currentCharge.merchant}</p>
+                      <p><span className="font-medium">Merchant:</span> {currentCharge.description || currentCharge.merchant}</p>
                       <p><span className="font-medium">Date:</span> {new Date(currentCharge.date).toLocaleDateString()}</p>
                       <p><span className="font-medium">Amount:</span> ${currentCharge.amount}</p>
                       <p><span className="font-medium">Reference:</span> {currentCharge.reference || "N/A"}</p>
                     </div>
                   </div>
+                  
+                  {/* Show intelligent matching warnings */}
+                  {currentPair && (
+                    <div className="space-y-2 mb-4">
+                      {currentPair.amountDiff > 0.01 && (
+                        <div className="flex items-center text-yellow-600">
+                          <i className="fas fa-exclamation-triangle mr-2"></i>
+                          <span className="text-sm">Amount differs by ${currentPair.amountDiff.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {currentPair.dateDiff > 0 && (
+                        <div className="flex items-center text-yellow-600">
+                          <i className="fas fa-calendar-alt mr-2"></i>
+                          <span className="text-sm">Dates differ by {Math.round(currentPair.dateDiff)} days</span>
+                        </div>
+                      )}
+                      {currentPair.merchantMatch && (
+                        <div className="flex items-center text-green-600">
+                          <i className="fas fa-check-circle mr-2"></i>
+                          <span className="text-sm">Merchant names are similar</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="space-y-3">
                     {matchScores.map((score, index) => (

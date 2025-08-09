@@ -545,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get matching candidates
+  // Get matching candidates with intelligent pairing
   app.get("/api/matching/candidates/:statementId", async (req, res) => {
     try {
       const statementId = req.params.statementId;
@@ -562,22 +562,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get unmatched charges for the specific statement being worked on
       const unmatchedCharges = await storage.getUnmatchedCharges(statementId);
 
-      console.log("Matching candidates (cross-statement):", { 
+      // Create intelligent receipt-charge pairs
+      const pairs = [];
+      for (const receipt of unmatchedReceipts) {
+        const bestMatches = unmatchedCharges
+          .map(charge => {
+            const amountDiff = Math.abs(parseFloat(receipt.amount) - parseFloat(charge.amount));
+            const dateDiff = receipt.date && charge.date ? 
+              Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
+            
+            // Merchant similarity (simple contains check for now)
+            const merchantMatch = receipt.merchant && charge.description ?
+              (charge.description.toLowerCase().includes(receipt.merchant.toLowerCase()) ||
+               receipt.merchant.toLowerCase().includes(charge.description.toLowerCase())) : false;
+            
+            // Calculate confidence score (lower is better)
+            let confidence = amountDiff * 10; // Amount difference weighted heavily
+            confidence += dateDiff * 2; // Date difference weighted moderately
+            confidence -= merchantMatch ? 50 : 0; // Merchant match is a big bonus
+            
+            return {
+              receipt,
+              charge,
+              confidence,
+              amountDiff,
+              dateDiff,
+              merchantMatch
+            };
+          })
+          .sort((a, b) => a.confidence - b.confidence); // Sort by best match first
+        
+        if (bestMatches.length > 0) {
+          pairs.push(bestMatches[0]); // Take the best match for this receipt
+        }
+      }
+
+      // Sort pairs by confidence (best matches first)
+      const sortedPairs = pairs.sort((a, b) => a.confidence - b.confidence);
+
+      console.log("Intelligent matching candidates:", { 
         statementId, 
         totalReceipts: allReceipts.length,
         unmatchedReceipts: unmatchedReceipts.length, 
         unmatchedCharges: unmatchedCharges.length,
-        sampleReceipt: unmatchedReceipts.length > 0 ? {
-          id: unmatchedReceipts[0].id,
-          statementId: unmatchedReceipts[0].statementId,
-          isMatched: unmatchedReceipts[0].isMatched,
-          processingStatus: unmatchedReceipts[0].processingStatus,
-          amount: unmatchedReceipts[0].amount,
-          date: unmatchedReceipts[0].date
+        pairsGenerated: sortedPairs.length,
+        bestMatch: sortedPairs.length > 0 ? {
+          receiptAmount: sortedPairs[0].receipt.amount,
+          chargeAmount: sortedPairs[0].charge.amount,
+          amountDiff: sortedPairs[0].amountDiff,
+          dateDiff: Math.round(sortedPairs[0].dateDiff),
+          merchantMatch: sortedPairs[0].merchantMatch,
+          confidence: Math.round(sortedPairs[0].confidence)
         } : null
       });
 
       res.json({
+        pairs: sortedPairs,
         receipts: unmatchedReceipts,
         charges: unmatchedCharges,
       });
