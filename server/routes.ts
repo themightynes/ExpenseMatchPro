@@ -537,15 +537,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Utility endpoint to reorganize already matched receipts
+  // Utility endpoint to reorganize already matched receipts with proper Oracle naming
   app.post("/api/receipts/reorganize-matched", async (req, res) => {
     try {
       const matchedReceipts = await storage.getMatchedReceipts();
       let reorganized = 0;
       let errors = 0;
+      let statusMessages: string[] = [];
 
       for (const receipt of matchedReceipts) {
         try {
+          // First ensure the receipt has the correct statementId from its matched charge
           if (receipt.matchedChargeId) {
             const charge = await storage.getAmexCharge(receipt.matchedChargeId);
             if (charge && charge.statementId !== receipt.statementId) {
@@ -553,23 +555,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await storage.updateReceipt(receipt.id, {
                 statementId: charge.statementId
               });
-              
-              // Reorganize the file
-              await fileOrganizer.organizeReceipt({ ...receipt, statementId: charge.statementId });
-              reorganized++;
+              receipt.statementId = charge.statementId; // Update local copy
+              statusMessages.push(`Updated statement ID for ${receipt.fileName}`);
             }
           }
+          
+          // Only reorganize if receipt has required data for Oracle naming
+          if (receipt.date && receipt.merchant && receipt.amount && receipt.statementId) {
+            await fileOrganizer.organizeReceipt(receipt);
+            reorganized++;
+            statusMessages.push(`Reorganized ${receipt.fileName} with Oracle naming`);
+          } else {
+            statusMessages.push(`Skipped ${receipt.fileName} - missing required data (date: ${!!receipt.date}, merchant: ${!!receipt.merchant}, amount: ${!!receipt.amount}, statementId: ${!!receipt.statementId})`);
+          }
+          
         } catch (error) {
           console.error(`Error reorganizing receipt ${receipt.id}:`, error);
           errors++;
+          statusMessages.push(`Error: ${receipt.fileName} - ${error.message}`);
         }
       }
 
       res.json({ 
-        message: `Reorganized ${reorganized} receipts`, 
+        message: `Reorganized ${reorganized} matched receipts with Oracle naming convention`, 
         reorganized, 
         errors,
-        total: matchedReceipts.length 
+        total: matchedReceipts.length,
+        details: statusMessages.slice(0, 10) // Show first 10 status messages
       });
     } catch (error) {
       console.error("Error reorganizing matched receipts:", error);

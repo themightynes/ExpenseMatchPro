@@ -317,29 +317,7 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
-  async toggleChargePersonalExpense(id: string): Promise<AmexCharge | undefined> {
-    const charge = await this.getAmexCharge(id);
-    if (!charge) return undefined;
-    
-    const [updated] = await db.update(amexCharges)
-      .set({ isPersonalExpense: !charge.isPersonalExpense })
-      .where(eq(amexCharges.id, id))
-      .returning();
-    return updated || undefined;
-  }
 
-  async toggleChargePersonalExpense(id: string): Promise<AmexCharge | undefined> {
-    // Get current status
-    const [charge] = await db.select().from(amexCharges).where(eq(amexCharges.id, id));
-    if (!charge) return undefined;
-    
-    // Toggle the personal expense flag
-    const [updated] = await db.update(amexCharges)
-      .set({ isPersonalExpense: !charge.isPersonalExpense })
-      .where(eq(amexCharges.id, id))
-      .returning();
-    return updated || undefined;
-  }
 
   async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {
     return await db.select().from(amexCharges)
@@ -484,17 +462,25 @@ export class DatabaseStorage implements IStorage {
       return `/objects/Inbox_New/${receipt.fileName}`;
     }
 
-    // Get statement period name for folder structure
-    const statement = receipt.statementId;
+    // Oracle iExpense-friendly naming convention
     const dateStr = receipt.date.toISOString().split('T')[0]; // YYYY-MM-DD
-    const merchant = receipt.merchant.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
-    const amount = receipt.amount.replace(/\./g, '_');
+    const merchant = receipt.merchant
+      .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .toUpperCase()
+      .substring(0, 25); // Limit length for Oracle compatibility
+    
+    const amount = receipt.amount.replace(/\./g, 'DOT'); // Replace decimal point
     const ext = receipt.fileName.split('.').pop();
     
-    const newFileName = `${dateStr}_${merchant}_$${amount}.${ext}`;
-    const folder = receipt.isMatched ? 'matched' : 'unmatched';
+    // Oracle-friendly format: DATE_MERCHANT_$AMOUNT_RECEIPT.ext
+    const newFileName = `${dateStr}_${merchant}_$${amount}_RECEIPT.${ext}`;
     
-    return `/objects/statements/${statement}/${folder}/${newFileName}`;
+    // Determine folder based on matching status
+    const folder = receipt.isMatched ? 'Matched' : 'Unmatched';
+    
+    // Get statement name for folder - need to fetch from database
+    return `/objects/statements/${receipt.statementId}/${folder}/${newFileName}`;
   }
 
   async updateReceiptPath(receiptId: string, organizedPath: string): Promise<Receipt | undefined> {
