@@ -171,7 +171,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   }, [isOpen, hasPrevious, hasNext]);
 
   // Touch event handlers for pinch-to-zoom
-  const getTouchDistance = (touches: TouchList) => {
+  const getTouchDistance = (touches: React.TouchList) => {
     if (touches.length < 2) return null;
     const touch1 = touches[0];
     const touch2 = touches[1];

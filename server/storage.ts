@@ -15,7 +15,7 @@ import {
   type InsertExpenseTemplate
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, isNull, desc, between, count, lte, gte } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, desc, between, count, lte, gte } from "drizzle-orm";
 
 export interface IStorage {
   // User methods

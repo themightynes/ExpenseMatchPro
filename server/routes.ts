@@ -812,7 +812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // If receipt is marked as matched but has no matchedChargeId, try to find the charge
           if (!receipt.matchedChargeId && receipt.amount) {
             const matchingCharge = allCharges.find(charge => 
-              Math.abs(parseFloat(charge.amount) - parseFloat(receipt.amount)) < 0.01 &&
+              Math.abs(parseFloat(charge.amount) - parseFloat(receipt.amount || '0')) < 0.01 &&
               Math.abs(new Date(charge.date).getTime() - new Date(receipt.date || new Date()).getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
             );
 
@@ -885,10 +885,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             statusMessages.push(`${receipt.fileName} - no statement assignment, staying in Inbox`);
           }
 
-        } catch (error) {
+        } catch (error: any) {
           console.error(`Error processing receipt ${receipt.id}:`, error);
           errors++;
-          statusMessages.push(`Error: ${receipt.fileName} - ${error.message}`);
+          statusMessages.push(`Error: ${receipt.fileName} - ${error?.message || 'Unknown error'}`);
         }
       }
 
@@ -973,10 +973,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             statusMessages.push(`Skipped ${receipt.fileName} - still missing required data (date: ${!!receipt.date}, merchant: ${!!receipt.merchant}, amount: ${!!receipt.amount}, statementId: ${!!receipt.statementId})`);
           }
 
-        } catch (error) {
+        } catch (error: any) {
           console.error(`Error reorganizing receipt ${receipt.id}:`, error);
           errors++;
-          statusMessages.push(`Error: ${receipt.fileName} - ${error.message}`);
+          statusMessages.push(`Error: ${receipt.fileName} - ${error?.message || 'Unknown error'}`);
         }
       }
 
@@ -1093,7 +1093,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const receipt of unmatchedReceipts) {
         const bestMatches = unmatchedCharges
           .map(charge => {
-            const amountDiff = Math.abs(parseFloat(receipt.amount) - parseFloat(charge.amount));
+            const amountDiff = Math.abs(parseFloat(receipt.amount || '0') - parseFloat(charge.amount));
             const dateDiff = receipt.date && charge.date ? 
               Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
 
