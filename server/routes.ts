@@ -177,7 +177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AMEX CSV Import endpoint
+  // AMEX CSV Import endpoint - Creates new statement period automatically
   app.post("/api/charges/import-csv", upload.single('csvFile'), async (req: Request & { file?: Express.Multer.File }, res) => {
     try {
       if (!req.file) {
@@ -188,11 +188,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lines = csvContent.split('\n');
       const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
       
-      const { statementId } = req.body;
-      if (!statementId) {
-        return res.status(400).json({ error: "Statement ID is required" });
+      const { periodName } = req.body;
+      if (!periodName) {
+        return res.status(400).json({ error: "Period name is required" });
       }
 
+      // First pass: analyze CSV data to determine date range
+      const charges = [];
+      let minDate = new Date();
+      let maxDate = new Date(0);
       let imported = 0;
       let errors = 0;
 
@@ -218,10 +222,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          // Convert to our charge format
-          const chargeData = {
-            statementId,
-            date: new Date(validatedRow.Date),
+          const chargeDate = new Date(validatedRow.Date);
+          
+          // Track date range for statement period
+          if (chargeDate < minDate) minDate = chargeDate;
+          if (chargeDate > maxDate) maxDate = chargeDate;
+
+          // Store charge data for later insertion
+          charges.push({
+            date: chargeDate,
             description: validatedRow.Description,
             cardMember: validatedRow["Card Member"],
             accountNumber: validatedRow["Account #"],
@@ -236,12 +245,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
             category: validatedRow.Category,
             isMatched: false,
             receiptId: null,
-          };
+          });
 
-          await storage.createAmexCharge(chargeData);
-          imported++;
         } catch (error) {
           console.error(`Error processing row ${i}:`, error);
+          errors++;
+        }
+      }
+
+      if (charges.length === 0) {
+        return res.status(400).json({ error: "No valid charges found in CSV file" });
+      }
+
+      // Create new statement period with detected date range
+      const statement = await storage.createAmexStatement({
+        periodName: periodName.trim(),
+        startDate: minDate,
+        endDate: maxDate,
+        isActive: false, // Let user activate if needed
+      });
+
+      // Insert all charges with the new statement ID
+      for (const chargeData of charges) {
+        try {
+          await storage.createAmexCharge({
+            ...chargeData,
+            statementId: statement.id,
+          });
+          imported++;
+        } catch (error) {
+          console.error("Error creating charge:", error);
           errors++;
         }
       }
@@ -249,7 +282,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ 
         message: `Import completed. ${imported} charges imported, ${errors} errors.`,
         imported,
-        errors 
+        errors,
+        statementName: statement.periodName,
+        statementId: statement.id
       });
     } catch (error) {
       console.error("Error importing CSV:", error);

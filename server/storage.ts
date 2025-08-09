@@ -208,9 +208,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getReceiptsByStatement(statementId: string): Promise<Receipt[]> {
-    return await db.select().from(receipts)
-      .where(eq(receipts.statementId, statementId))
-      .orderBy(desc(receipts.createdAt));
+    // Get statement date range
+    const [statement] = await db.select().from(amexStatements).where(eq(amexStatements.id, statementId));
+    if (!statement) {
+      return [];
+    }
+
+    // Find receipts that fall within the statement period (both assigned and date-matched)
+    const result = await db.select().from(receipts).where(
+      and(
+        gte(receipts.date, statement.startDate),
+        lte(receipts.date, statement.endDate)
+      )
+    ).orderBy(desc(receipts.createdAt));
+    
+    return result;
   }
 
   async autoAssignReceiptToStatement(receiptId: string): Promise<Receipt | undefined> {
