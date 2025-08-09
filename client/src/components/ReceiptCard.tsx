@@ -86,7 +86,7 @@ export default function ReceiptCard({ receipt, receipts = [] }: ReceiptCardProps
         <i className={getFileIcon(receipt.fileName)}></i>
       </div>
       <div className="ml-4 flex-1">
-        <p className="font-medium text-gray-900 truncate">
+        <p className="font-medium text-gray-900 leading-tight break-words">
           {receipt.organizedPath ? receipt.organizedPath.split('/').pop() : (receipt.originalFileName || receipt.fileName)}
         </p>
         <div className="flex items-center mt-1">
