@@ -1384,6 +1384,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload receipt directly to a charge
+  app.post("/api/receipts/upload-to-charge", upload.single('receipt'), async (req, res) => {
+    try {
+      const { chargeId } = req.body;
+      const file = req.file;
+
+      if (!file || !chargeId) {
+        return res.status(400).json({ error: "File and chargeId are required" });
+      }
+
+      // Get the charge to extract information
+      const charge = await storage.getAmexCharge(chargeId);
+      if (!charge) {
+        return res.status(404).json({ error: "Charge not found" });
+      }
+
+      // Create receipt with charge information pre-filled
+      const receiptData = {
+        fileName: file.originalname,
+        originalFileName: file.originalname,
+        merchant: charge.description,
+        amount: charge.amount,
+        date: charge.date,
+        category: charge.category || null,
+        ocrText: "Direct upload - linked to charge",
+        extractedData: null,
+        processingStatus: "completed" as const,
+        statementId: charge.statementId,
+        isMatched: true,
+        matchedChargeId: chargeId,
+      };
+
+      // Upload file to object storage
+      const fileUrl = await ObjectStorageService.uploadFile(file.buffer, file.originalname);
+      
+      // Create receipt record
+      const receipt = await storage.createReceipt({
+        ...receiptData,
+        fileUrl
+      });
+
+      // Organize the receipt with Oracle naming
+      await fileOrganizer.organizeReceipt(receipt);
+
+      // Update charge to mark as matched
+      await storage.updateAmexCharge(chargeId, { isMatched: true });
+
+      res.json({ 
+        message: "Receipt uploaded and matched successfully",
+        receipt,
+        charge
+      });
+    } catch (error) {
+      console.error("Error uploading receipt to charge:", error);
+      res.status(500).json({ error: "Failed to upload receipt" });
+    }
+  });
+
   // Email Integration Routes
 
   // Initialize email service with credentials

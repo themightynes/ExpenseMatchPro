@@ -49,6 +49,7 @@ export default function StatementDetailPage() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [selectedChargeNotes, setSelectedChargeNotes] = useState<{ [key: string]: boolean }>({});
   const [chargeNotes, setChargeNotes] = useState<{ [key: string]: string }>({});
+  const [uploadingCharges, setUploadingCharges] = useState<{ [key: string]: boolean }>({});
 
   // All useQuery hooks together
   const { data: statement } = useQuery<AmexStatement>({
@@ -223,6 +224,45 @@ export default function StatementDetailPage() {
     const notes = chargeNotes[chargeId] || "";
     updateChargeNotesMutation.mutate({ chargeId, notes });
     setSelectedChargeNotes(prev => ({ ...prev, [chargeId]: false }));
+  };
+
+  const handleReceiptUpload = async (chargeId: string, file: File) => {
+    setUploadingCharges(prev => ({ ...prev, [chargeId]: true }));
+    
+    try {
+      const formData = new FormData();
+      formData.append('receipt', file);
+      formData.append('chargeId', chargeId);
+      
+      const response = await fetch('/api/receipts/upload-to-charge', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload receipt');
+      }
+      
+      const result = await response.json();
+      
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/charges", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/receipts", statementId] });
+      
+      toast({
+        title: "Receipt Uploaded",
+        description: `Receipt uploaded and matched to charge successfully.`,
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed", 
+        description: "Failed to upload receipt. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingCharges(prev => ({ ...prev, [chargeId]: false }));
+    }
   };
 
   // Early return after all hooks are called
@@ -447,13 +487,44 @@ export default function StatementDetailPage() {
                       <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
                         {charge.isMatched ? "Matched" : "Unmatched"}
                       </Badge>
-                      {charge.isMatched && (
+                      {charge.isMatched ? (
                         <Link href={`/receipts/${charge.id}`}>
                           <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
                             <FileText className="h-3 w-3 mr-1" />
                             View Receipt
                           </Button>
                         </Link>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="file"
+                            id={`upload-${charge.id}`}
+                            accept="image/*,.pdf"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleReceiptUpload(charge.id, file);
+                              }
+                            }}
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => document.getElementById(`upload-${charge.id}`)?.click()}
+                            disabled={uploadingCharges[charge.id]}
+                          >
+                            {uploadingCharges[charge.id] ? (
+                              "Uploading..."
+                            ) : (
+                              <>
+                                <Receipt className="h-3 w-3 mr-1" />
+                                Upload Receipt
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       )}
                     </div>
                     
