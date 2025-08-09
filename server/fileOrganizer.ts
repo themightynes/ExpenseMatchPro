@@ -23,11 +23,24 @@ export class FileOrganizer {
         return newPath;
       }
 
-      // TODO: Implement file moving in object storage
-      // For now, we'll update the database path but keep the original file
-      // In a full implementation, you'd move the file in the storage bucket
-      
-      await storage.updateReceiptPath(receipt.id, newPath);
+      // Move the file in object storage to the new organized location
+      try {
+        await this.objectStorage.moveObject(receipt.fileUrl, newPath);
+        
+        // Update both the organized path and the actual file URL to the new location
+        await storage.updateReceipt(receipt.id, { 
+          organizedPath: newPath,
+          fileUrl: newPath 
+        });
+        
+        console.log(`Receipt file moved from ${receipt.fileUrl} to ${newPath}`);
+      } catch (moveError) {
+        console.error("Error moving file in object storage:", moveError);
+        
+        // Still update the organized path for tracking, but keep original fileUrl
+        await storage.updateReceiptPath(receipt.id, newPath);
+        console.log(`Updated organized path to ${newPath}, but file remains at ${receipt.fileUrl}`);
+      }
       
       return newPath;
     } catch (error) {
@@ -65,6 +78,11 @@ export class FileOrganizer {
     reason?: string;
   }> {
     try {
+      const receipt = await storage.getReceipt(receiptId);
+      if (!receipt) {
+        return { matched: false };
+      }
+
       const suggestions = await this.suggestMatching(receiptId);
       
       if (suggestions.suggestions.length === 0) {

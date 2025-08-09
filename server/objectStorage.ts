@@ -251,6 +251,38 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  // Move an object from one path to another in object storage
+  async moveObject(sourcePath: string, destinationPath: string): Promise<void> {
+    try {
+      // Get the source file
+      const sourceFile = await this.getObjectEntityFile(sourcePath);
+      
+      // Parse destination path to get bucket and object name
+      const { bucketName: destBucketName, objectName: destObjectName } = parseObjectPath(destinationPath);
+      const destBucket = objectStorageClient.bucket(destBucketName);
+      const destFile = destBucket.file(destObjectName);
+      
+      // Copy the file to the new location
+      await sourceFile.copy(destFile);
+      
+      // Copy metadata including ACL policies
+      const [sourceMetadata] = await sourceFile.getMetadata();
+      if (sourceMetadata.metadata) {
+        await destFile.setMetadata({
+          metadata: sourceMetadata.metadata
+        });
+      }
+      
+      // Delete the original file
+      await sourceFile.delete();
+      
+      console.log(`Successfully moved object from ${sourcePath} to ${destinationPath}`);
+    } catch (error) {
+      console.error(`Failed to move object from ${sourcePath} to ${destinationPath}:`, error);
+      throw error;
+    }
+  }
 }
 
 function parseObjectPath(path: string): {
