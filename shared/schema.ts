@@ -35,6 +35,7 @@ export const amexStatements = pgTable("amex_statements", {
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   isActive: boolean("is_active").default(false),
+  userNotes: text("user_notes"),
   createdAt: timestamp("created_at").default(sql`now()`),
 });
 

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import CsvUploadModal from "@/components/CsvUploadModal";
-import StatementChargesDialog from "@/components/StatementChargesDialog";
+import MobileStatementDialog from "@/components/MobileStatementDialog";
 import type { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
 import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List, Trash2, Edit2, Check, X } from "lucide-react";
 import { Link } from "wouter";
@@ -467,7 +467,7 @@ export default function StatementsPage() {
 
       {/* Statement Details Dialog */}
       {selectedStatement && (
-        <StatementChargesDialog
+        <MobileStatementDialog
           statement={selectedStatement}
           open={!!selectedStatement}
           onOpenChange={(open) => !open && setSelectedStatement(null)}
