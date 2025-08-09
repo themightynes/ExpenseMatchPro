@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import MobileHeader from "@/components/MobileHeader";
 import type { Receipt, AmexCharge } from "@shared/schema";
 
 interface MatchingInterfaceProps {
@@ -189,8 +190,8 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     }
 
     // Merchant similarity
-    if (receipt.merchant && charge.merchant) {
-      const similarity = calculateStringSimilarity(receipt.merchant.toLowerCase(), charge.merchant.toLowerCase());
+    if (receipt.merchant && charge.description) {
+      const similarity = calculateStringSimilarity(receipt.merchant.toLowerCase(), charge.description.toLowerCase());
       scores.push({
         type: "Merchant",
         matches: similarity > 0.8,
@@ -261,25 +262,31 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
   const matchScores = currentCharge ? calculateMatchScore(currentReceipt, currentCharge) : [];
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header with filter toggle */}
-      <div className="flex justify-between items-center mb-4">
-        <Button
-          variant="outline"
-          onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2"
-        >
-          <i className="fas fa-filter"></i>
-          {showFilters ? "Hide Filters" : "Show Filters"}
-        </Button>
-        <div className="text-sm text-gray-600">
-          {filteredReceipts.length !== allReceipts.length && (
-            <Badge variant="secondary" className="text-xs mr-2">
+    <div className="min-h-screen bg-gray-50">
+      <MobileHeader 
+        title="Match Receipts"
+        showBack={true}
+        onBack={onBack}
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowFilters(!showFilters)}
+            className="p-1 h-8 w-8"
+          >
+            <i className="fas fa-filter w-4 h-4" />
+          </Button>
+        }
+      />
+      
+      <div className="px-4 py-6">
+        {filteredReceipts.length !== allReceipts.length && (
+          <div className="mb-4">
+            <Badge variant="secondary" className="text-xs">
               {filteredReceipts.length} of {allReceipts.length} receipts shown
             </Badge>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
 
       {/* Filters Section */}
       {showFilters && (
@@ -364,123 +371,131 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
         </p>
       </div>
 
-      {/* Card Stack */}
-      <div className="relative h-96 mb-8">
-        <Card className="absolute inset-0 p-6">
-          <div className="grid grid-cols-2 gap-6 h-full">
-            {/* Receipt Side */}
-            <div className="border-r border-gray-200 pr-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Receipt</h3>
-              <div className="bg-gray-100 rounded-lg p-4 h-48 flex items-center justify-center mb-4">
-                <i className="fas fa-file-image text-4xl text-gray-400"></i>
+      {/* Mobile-Optimized Card Stack */}
+      <div className="space-y-4 mb-8">
+        {/* Receipt Card */}
+        <Card className="bg-white shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <i className="fas fa-receipt text-blue-600 text-sm"></i>
               </div>
-              <div className="space-y-2">
-                <p><span className="font-medium">Merchant:</span> {currentReceipt.merchant || "Not detected"}</p>
-                <p><span className="font-medium">Date:</span> {currentReceipt.date ? new Date(currentReceipt.date).toLocaleDateString() : "Not detected"}</p>
-                <p><span className="font-medium">Amount:</span> {currentReceipt.amount ? `$${currentReceipt.amount}` : "Not detected"}</p>
-                <p><span className="font-medium">Category:</span> {currentReceipt.category || "Not assigned"}</p>
+              <CardTitle className="text-lg text-gray-900">Receipt</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="font-medium text-gray-600">Merchant:</span>
+                <p className="text-gray-900 font-medium">{currentReceipt.merchant || "Not detected"}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Amount:</span>
+                <p className="text-gray-900 font-medium text-lg">${currentReceipt.amount || "0.00"}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Date:</span>
+                <p className="text-gray-900">{currentReceipt.date ? new Date(currentReceipt.date).toLocaleDateString() : "Not detected"}</p>
+              </div>
+              <div>
+                <span className="font-medium text-gray-600">Category:</span>
+                <p className="text-gray-900 truncate">{currentReceipt.category || "Not assigned"}</p>
               </div>
             </div>
-
-            {/* AMEX Charge Side */}
-            <div className="pl-6">
-              <h3 className="font-semibold text-gray-900 mb-4">AMEX Charge</h3>
-              {currentCharge ? (
-                <>
-                  <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                    <div className="space-y-2">
-                      <p><span className="font-medium">Merchant:</span> {currentCharge.description || currentCharge.merchant}</p>
-                      <p><span className="font-medium">Date:</span> {new Date(currentCharge.date).toLocaleDateString()}</p>
-                      <p><span className="font-medium">Amount:</span> ${currentCharge.amount}</p>
-                      <p><span className="font-medium">Reference:</span> {currentCharge.reference || "N/A"}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Show intelligent matching warnings */}
-                  {currentPair && (
-                    <div className="space-y-2 mb-4">
-                      {currentPair.amountDiff > 0.01 && (
-                        <div className="flex items-center text-yellow-600">
-                          <i className="fas fa-exclamation-triangle mr-2"></i>
-                          <span className="text-sm">Amount differs by ${currentPair.amountDiff.toFixed(2)}</span>
-                        </div>
-                      )}
-                      {currentPair.dateDiff > 0 && (
-                        <div className="flex items-center text-yellow-600">
-                          <i className="fas fa-calendar-alt mr-2"></i>
-                          <span className="text-sm">Dates differ by {Math.round(currentPair.dateDiff)} days</span>
-                        </div>
-                      )}
-                      {currentPair.merchantMatch && (
-                        <div className="flex items-center text-green-600">
-                          <i className="fas fa-check-circle mr-2"></i>
-                          <span className="text-sm">Merchant names are similar</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  <div className="space-y-3">
-                    {matchScores.map((score, index) => (
-                      <div key={index} className={`flex items-center ${score.matches ? "text-green-600" : "text-yellow-600"}`}>
-                        <i className={`fas ${score.matches ? "fa-check-circle" : "fa-exclamation-circle"} mr-2`}></i>
-                        <span className="text-sm">{score.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <i className="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                  <p>No unmatched charges available</p>
-                </div>
-              )}
-            </div>
-          </div>
+          </CardContent>
         </Card>
 
-        {/* Background cards for stack effect */}
-        <div className="absolute inset-0 bg-white rounded-xl shadow-md border border-gray-100 transform rotate-1 -z-10"></div>
-        <div className="absolute inset-0 bg-white rounded-xl shadow-sm border border-gray-50 transform -rotate-1 -z-20"></div>
+        {/* AMEX Charge Card */}
+        <Card className="bg-white shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                <i className="fas fa-credit-card text-green-600 text-sm"></i>
+              </div>
+              <CardTitle className="text-lg text-gray-900">AMEX Charge</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {currentCharge ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-600">Merchant:</span>
+                    <p className="text-gray-900 font-medium truncate">{currentCharge.description}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Amount:</span>
+                    <p className="text-gray-900 font-medium text-lg">${currentCharge.amount}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Date:</span>
+                    <p className="text-gray-900">{new Date(currentCharge.date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Reference:</span>
+                    <p className="text-gray-900 truncate">{currentCharge.reference || "N/A"}</p>
+                  </div>
+                </div>
+                
+                {/* Match Score Indicators */}
+                <div className="flex gap-2 pt-2">
+                  {matchScores.map((score, index) => (
+                    <div key={index} className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${score.matches ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                      <i className={`fas ${score.matches ? "fa-check" : "fa-exclamation-triangle"} text-xs`}></i>
+                      <span>{score.type}</span>
+                      {score.matches && <span>✓</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <i className="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                <p>No unmatched charges available</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex justify-center space-x-6">
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-16 h-16 rounded-full bg-red-50 hover:bg-red-100 text-red-500 border-red-200"
-          onClick={skipMatch}
-        >
-          <i className="fas fa-times text-2xl"></i>
-        </Button>
-        
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-16 h-16 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-500"
-          onClick={markForReview}
-        >
-          <i className="fas fa-question text-2xl"></i>
-        </Button>
-        
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-16 h-16 rounded-full bg-green-50 hover:bg-green-100 text-green-500 border-green-200"
-          onClick={() => currentCharge && matchMutation.mutate({ receiptId: currentReceipt.id, chargeId: currentCharge.id })}
-          disabled={!currentCharge || matchMutation.isPending}
-        >
-          <i className="fas fa-heart text-2xl"></i>
-        </Button>
+      {/* Mobile Action Buttons - Fixed Position */}
+      <div className="fixed bottom-20 left-0 right-0 bg-white border-t border-gray-200 p-4 z-30">
+        <div className="flex justify-center space-x-4">
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1 max-w-24 h-14 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border-red-200 flex flex-col gap-1"
+            onClick={skipMatch}
+          >
+            <i className="fas fa-times text-lg"></i>
+            <span className="text-xs font-medium">Skip</span>
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1 max-w-24 h-14 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 flex flex-col gap-1"
+            onClick={markForReview}
+          >
+            <i className="fas fa-question text-lg"></i>
+            <span className="text-xs font-medium">Review</span>
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1 max-w-24 h-14 rounded-xl bg-green-50 hover:bg-green-100 text-green-600 border-green-200 flex flex-col gap-1"
+            onClick={() => currentCharge && matchMutation.mutate({ receiptId: currentReceipt.id, chargeId: currentCharge.id })}
+            disabled={!currentCharge || matchMutation.isPending}
+          >
+            <i className="fas fa-heart text-lg"></i>
+            <span className="text-xs font-medium">Match</span>
+          </Button>
+        </div>
       </div>
 
-      <div className="text-center mt-6">
-        <p className="text-sm text-gray-600">
-          <span className="font-medium">Left:</span> Skip • 
-          <span className="font-medium">Middle:</span> Manual Review • 
-          <span className="font-medium">Right:</span> Match
-        </p>
+        {/* Spacer for fixed buttons */}
+        <div className="h-20"></div>
       </div>
     </div>
   );

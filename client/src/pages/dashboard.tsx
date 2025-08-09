@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { queryClient } from "@/lib/queryClient";
+import MobileHeader from "@/components/MobileHeader";
+import FinancialCard from "@/components/FinancialCard";
+import QuickAction from "@/components/QuickAction";
 import StatsCard from "@/components/StatsCard";
 import FileUploadZone from "@/components/FileUploadZone";
 import ReceiptCard from "@/components/ReceiptCard";
@@ -9,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
+import { DollarSign, Receipt as ReceiptIcon, CreditCard, TrendingUp, Upload, FileText, BarChart3, PlusCircle } from "lucide-react";
 import type { Receipt, AmexStatement } from "@shared/schema";
 
 export default function Dashboard() {
@@ -50,30 +54,96 @@ export default function Dashboard() {
   const recentReceipts = receipts.slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-gray-50 font-inter">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <i className="fas fa-receipt text-primary text-2xl mr-3"></i>
-              <h1 className="text-xl font-semibold text-gray-900">Receipt Manager</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button className="text-gray-500 hover:text-gray-700">
-                <i className="fas fa-bell text-lg"></i>
-              </button>
-              <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">JD</span>
-              </div>
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      <MobileHeader 
+        title="Receipt Manager"
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowCsvModal(true)}
+            className="p-1 h-8 w-8"
+          >
+            <Upload className="w-4 h-4" />
+          </Button>
+        }
+      />
+
+      <div className="px-4 py-6 space-y-6">
+        {/* Quick Balance Overview */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Financial Overview</h2>
+          <div className="grid grid-cols-2 gap-3">
+            <FinancialCard
+              title="Total Expenses"
+              amount={financialStats?.totalStatementAmount || 0}
+              icon={<DollarSign className="w-4 h-4 text-blue-600" />}
+              variant="default"
+            />
+            <FinancialCard
+              title="Matched"
+              amount={financialStats?.totalMatchedAmount || 0}
+              subtitle={`${financialStats?.matchingPercentage || 0}% complete`}
+              icon={<TrendingUp className="w-4 h-4 text-green-600" />}
+              variant="success"
+            />
+            <FinancialCard
+              title="Missing Receipts"
+              amount={financialStats?.totalMissingReceiptAmount || 0}
+              subtitle={`${financialStats?.missingReceiptCount || 0} charges`}
+              icon={<ReceiptIcon className="w-4 h-4 text-orange-600" />}
+              variant="warning"
+            />
+            <FinancialCard
+              title="Personal Expenses"
+              amount={financialStats?.personalExpensesAmount || 0}
+              subtitle={`${financialStats?.personalExpensesCount || 0} flagged`}
+              icon={<CreditCard className="w-4 h-4 text-gray-600" />}
+              variant="default"
+            />
           </div>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Financial Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+        {/* Quick Actions */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <QuickAction
+              icon={<PlusCircle className="w-5 h-5" />}
+              label="Upload Receipt"
+              variant="primary"
+              onClick={() => {/* Handle upload */}}
+            />
+            <QuickAction
+              icon={<Upload className="w-5 h-5" />}
+              label="Import CSV"
+              variant="default"
+              onClick={() => setShowCsvModal(true)}
+            />
+            <Link href="/matching">
+              <QuickAction
+                icon={<BarChart3 className="w-5 h-5" />}
+                label="Match Receipts"
+                variant="default"
+                badge={stats?.readyCount}
+                onClick={() => {}}
+                className="w-full"
+              />
+            </Link>
+            <Link href="/statements">
+              <QuickAction
+                icon={<FileText className="w-5 h-5" />}
+                label="View Statements"
+                variant="default"
+                onClick={() => {}}
+                className="w-full"
+              />
+            </Link>
+          </div>
+        </div>
+
+        {/* Legacy Stats Grid - Hidden on Mobile */}
+        <div className="hidden md:grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <StatsCard
             icon="fas fa-credit-card"
             iconColor="text-blue-600"
