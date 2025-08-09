@@ -56,6 +56,61 @@ export class FileOrganizer {
   }
 
   /**
+   * Automatically matches a receipt to a charge if confidence is high enough
+   */
+  async attemptAutoMatch(receiptId: string): Promise<{
+    matched: boolean;
+    matchedCharge?: any;
+    confidence?: number;
+    reason?: string;
+  }> {
+    try {
+      const suggestions = await this.suggestMatching(receiptId);
+      
+      if (suggestions.suggestions.length === 0) {
+        return { matched: false };
+      }
+
+      const bestMatch = suggestions.suggestions[0];
+      
+      // Auto-match if confidence is very high (85% or higher)
+      if (bestMatch.confidence >= 85) {
+        console.log(`Auto-matching receipt ${receiptId} to charge ${bestMatch.charge.id} with ${bestMatch.confidence}% confidence: ${bestMatch.reason}`);
+        
+        // Update receipt as matched
+        await storage.updateReceipt(receiptId, { 
+          isMatched: true,
+          matchedChargeId: bestMatch.charge.id
+        });
+
+        // Update charge as matched
+        await storage.updateAmexCharge(bestMatch.charge.id, { 
+          isMatched: true,
+          receiptId: receiptId 
+        });
+
+        // Reorganize the receipt file
+        const receipt = await storage.getReceipt(receiptId);
+        if (receipt) {
+          await this.organizeReceipt(receipt);
+        }
+
+        return {
+          matched: true,
+          matchedCharge: bestMatch.charge,
+          confidence: bestMatch.confidence,
+          reason: bestMatch.reason
+        };
+      }
+
+      return { matched: false };
+    } catch (error) {
+      console.error("Error attempting auto-match:", error);
+      return { matched: false };
+    }
+  }
+
+  /**
    * Suggests a matching charge based on amount, date, and merchant
    */
   async suggestMatching(receiptId: string): Promise<{
@@ -123,8 +178,8 @@ export class FileOrganizer {
 
         // Merchant matching (fuzzy match)
         if (receipt.merchant && charge.description) {
-          const merchantLower = receipt.merchant.toLowerCase();
-          const descriptionLower = charge.description.toLowerCase();
+          const merchantLower = receipt.merchant.toLowerCase().trim();
+          const descriptionLower = charge.description.toLowerCase().trim();
           
           if (descriptionLower.includes(merchantLower)) {
             confidence += 25;

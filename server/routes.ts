@@ -140,11 +140,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/receipts/:id", async (req, res) => {
     try {
-      const receipt = await storage.updateReceipt(req.params.id, req.body);
-      if (!receipt) {
+      const receiptId = req.params.id;
+      const updates = req.body;
+      
+      console.log(`Updating receipt with data:`, updates);
+      
+      const updatedReceipt = await storage.updateReceipt(receiptId, updates);
+      if (!updatedReceipt) {
         return res.status(404).json({ error: "Receipt not found" });
       }
-      res.json(receipt);
+      
+      console.log(`Receipt updated successfully:`, updatedReceipt);
+      
+      // Check if receipt is now "ready" (has all required data) and attempt auto-matching
+      const isReady = updatedReceipt.merchant && updatedReceipt.amount && updatedReceipt.date;
+      let autoMatchResult = null;
+      
+      if (isReady && !updatedReceipt.isMatched) {
+        // If receipt doesn't have a statement assigned, try to assign it to the active statement
+        if (!updatedReceipt.statementId) {
+          const statements = await storage.getAmexStatements();
+          const activeStatement = statements.find(s => s.isActive);
+          if (activeStatement) {
+            console.log(`Assigning receipt ${receiptId} to active statement ${activeStatement.periodName}`);
+            await storage.updateReceipt(receiptId, { statementId: activeStatement.id });
+            updatedReceipt.statementId = activeStatement.id;
+          }
+        }
+        
+        if (updatedReceipt.statementId) {
+          console.log(`Receipt ${receiptId} is ready, attempting auto-match...`);
+          autoMatchResult = await fileOrganizer.attemptAutoMatch(receiptId);
+          
+          if (autoMatchResult.matched) {
+            console.log(`Successfully auto-matched receipt ${receiptId} with ${autoMatchResult.confidence}% confidence`);
+            // Refetch the updated receipt after matching
+            const matchedReceipt = await storage.getReceipt(receiptId);
+            return res.json({
+              ...matchedReceipt,
+              autoMatched: true,
+              matchConfidence: autoMatchResult.confidence,
+              matchReason: autoMatchResult.reason
+            });
+          }
+        }
+      }
+      
+      // Reorganize file after update
+      await fileOrganizer.organizeReceipt(updatedReceipt);
+      
+      res.json({
+        ...updatedReceipt,
+        autoMatched: false
+      });
     } catch (error) {
       console.error("Error updating receipt:", error);
       res.status(500).json({ error: "Failed to update receipt" });

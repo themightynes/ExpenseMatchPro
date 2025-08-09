@@ -144,11 +144,23 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
     },
     onSuccess: (data) => {
       console.log("Receipt updated successfully:", data);
-      toast({
-        title: "Receipt Updated",
-        description: "Receipt data has been saved successfully.",
-      });
+      
+      // Check if auto-matching occurred
+      if (data.autoMatched) {
+        toast({
+          title: "Receipt auto-matched!",
+          description: `Automatically matched to AMEX charge with ${data.matchConfidence}% confidence. ${data.matchReason}`,
+          duration: 6000,
+        });
+      } else {
+        toast({
+          title: "Receipt Updated",
+          description: "Receipt data has been saved successfully.",
+        });
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setIsEditing(false);
     },
     onError: (error) => {
