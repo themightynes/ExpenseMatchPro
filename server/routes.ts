@@ -1345,6 +1345,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get unmatched receipts within a specific statement period
+  app.get("/api/statements/:id/unmatched-receipts", async (req, res) => {
+    try {
+      const statementId = req.params.id;
+      
+      // Get statement to determine date range
+      const statement = await storage.getAmexStatement(statementId);
+      if (!statement) {
+        return res.status(404).json({ error: "Statement not found" });
+      }
+
+      // Get all unmatched receipts that fall within the statement period
+      const unmatchedReceipts = await storage.getUnmatchedReceiptsInPeriod(
+        statement.startDate, 
+        statement.endDate
+      );
+      
+      res.json(unmatchedReceipts);
+    } catch (error) {
+      console.error("Error getting unmatched receipts for statement:", error);
+      res.status(500).json({ error: "Failed to get unmatched receipts" });
+    }
+  });
+
   // Email Integration Routes
 
   // Initialize email service with credentials

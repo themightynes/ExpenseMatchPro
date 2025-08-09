@@ -69,6 +69,13 @@ export default function StatementDetailPage() {
     enabled: !!statementId,
   });
 
+  // Get unmatched receipts for this statement period
+  const { data: unmatchedReceipts = [] } = useQuery<ReceiptType[]>({
+    queryKey: ["/api/statements", statementId, "unmatched-receipts"],
+    queryFn: () => fetch(`/api/statements/${statementId}/unmatched-receipts`).then(res => res.json()),
+    enabled: !!statementId,
+  });
+
   // All useMutation hooks together
   const updateNotesMutation = useMutation({
     mutationFn: async (newNotes: string) => {
@@ -126,6 +133,37 @@ export default function StatementDetailPage() {
     },
   });
 
+  // Quick match mutation for linking receipts to charges
+  const quickMatchMutation = useMutation({
+    mutationFn: async ({ receiptId, chargeId }: { receiptId: string; chargeId: string }) => {
+      const response = await fetch('/api/matching/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receiptId, chargeId }),
+      });
+      if (!response.ok) throw new Error('Failed to match receipt');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/receipts", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/charges", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/statements", statementId, "unmatched-receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Receipt Matched",
+        description: "Receipt has been successfully linked to the charge.",
+      });
+    },
+    onError: (error) => {
+      console.error("Error matching:", error);
+      toast({
+        title: "Match Failed",
+        description: "There was an error linking the receipt. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // All useEffect hooks together - MUST be after all other hooks  
   useEffect(() => {
     if (statement?.userNotes && notes === "") {
@@ -171,6 +209,10 @@ export default function StatementDetailPage() {
   // Handler functions
   const handleTogglePersonalExpense = (chargeId: string) => {
     togglePersonalExpenseMutation.mutate(chargeId);
+  };
+
+  const handleQuickMatch = (receiptId: string, chargeId: string) => {
+    quickMatchMutation.mutate({ receiptId, chargeId });
   };
 
   const handleSaveNotes = () => {
@@ -495,6 +537,108 @@ export default function StatementDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Unmatched Receipts Section */}
+      {unmatchedReceipts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-orange-600" />
+              Unmatched Receipts in Statement Period
+              <Badge variant="secondary" className="ml-2">
+                {unmatchedReceipts.length} receipts
+              </Badge>
+            </CardTitle>
+            <p className="text-sm text-gray-600">
+              These receipts fall within this statement period but haven't been matched to charges yet. Click on a receipt to match it to an unmatched charge.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {unmatchedReceipts.map((receipt) => (
+              <Card key={receipt.id} className="border border-orange-200 bg-orange-50">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="text-sm font-medium text-gray-900">
+                          {receipt.merchant || "Unknown Merchant"}
+                        </div>
+                        <div className="text-lg font-bold text-orange-700">
+                          {receipt.amount ? formatCurrency(receipt.amount) : "No Amount"}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {receipt.date ? formatDate(receipt.date) : "No Date"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {receipt.fileName} • {receipt.category || "Uncategorized"}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <Link href={`/receipts?selected=${receipt.id}`}>
+                        <Button variant="outline" size="sm" className="h-7 px-3 text-xs">
+                          <Eye className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                      </Link>
+                      <Link href={`/matching?statement=${statementId}&receipt=${receipt.id}`}>
+                        <Button size="sm" className="h-7 px-3 text-xs bg-orange-600 hover:bg-orange-700">
+                          Match
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Quick Match Section - Show unmatched charges for this receipt */}
+                  <div className="mt-3 pt-3 border-t border-orange-200">
+                    <div className="text-xs font-medium text-gray-700 mb-2">Quick Match to Unmatched Charges:</div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {charges
+                        .filter(charge => !charge.isMatched)
+                        .slice(0, 3) // Show top 3 best matches
+                        .map((charge) => {
+                          // Simple matching score calculation
+                          const amountDiff = receipt.amount && charge.amount ? 
+                            Math.abs(parseFloat(receipt.amount) - Math.abs(parseFloat(charge.amount))) : 999;
+                          const dateDiff = receipt.date && charge.date ?
+                            Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
+                          const merchantMatch = receipt.merchant && charge.description ?
+                            charge.description.toLowerCase().includes(receipt.merchant.toLowerCase()) : false;
+                          
+                          return (
+                            <div key={charge.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                              <div className="flex-1 text-xs">
+                                <div className="font-medium truncate">{charge.description}</div>
+                                <div className="text-gray-500 flex gap-2">
+                                  <span>{formatCurrency(charge.amount)}</span>
+                                  <span>•</span>
+                                  <span>{formatDate(charge.date)}</span>
+                                  {merchantMatch && <span className="text-green-600">• Merchant Match</span>}
+                                  {amountDiff < 1 && <span className="text-green-600">• Amount Match</span>}
+                                </div>
+                              </div>
+                              <Button
+                                onClick={() => handleQuickMatch(receipt.id, charge.id)}
+                                disabled={quickMatchMutation.isPending}
+                                size="sm"
+                                className="h-6 px-2 text-xs ml-2"
+                              >
+                                {quickMatchMutation.isPending ? "..." : "Link"}
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      {charges.filter(charge => !charge.isMatched).length === 0 && (
+                        <div className="text-xs text-gray-500 p-2">No unmatched charges available</div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Statement Notes */}
       <Card>

@@ -31,6 +31,7 @@ export interface IStorage {
   deleteReceipt(id: string): Promise<boolean>;
   getReceiptsByStatus(status: string): Promise<Receipt[]>;
   getReceiptsByStatement(statementId: string): Promise<Receipt[]>;
+  getUnmatchedReceiptsInPeriod(startDate: Date, endDate: Date): Promise<Receipt[]>;
   autoAssignReceiptToStatement(receiptId: string): Promise<Receipt | undefined>;
 
   // AMEX Statement methods
@@ -278,6 +279,20 @@ export class DatabaseStorage implements IStorage {
         lte(receipts.date, statement.endDate)
       )
     ).orderBy(desc(receipts.createdAt));
+
+    return result;
+  }
+
+  async getUnmatchedReceiptsInPeriod(startDate: Date, endDate: Date): Promise<Receipt[]> {
+    // Find unmatched receipts that fall within the specified date range
+    const result = await db.select().from(receipts).where(
+      and(
+        eq(receipts.isMatched, false),
+        gte(receipts.date, startDate),
+        lte(receipts.date, endDate),
+        isNotNull(receipts.date) // Only include receipts with actual dates
+      )
+    ).orderBy(desc(receipts.date));
 
     return result;
   }
