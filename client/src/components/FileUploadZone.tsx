@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ObjectUploader } from "@/components/ObjectUploader";
+import { MobileFileUploader } from "@/components/MobileFileUploader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Upload, Mail, FileText, Image, Check, Zap } from "lucide-react";
@@ -17,6 +18,17 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const processReceiptMutation = useMutation({
     mutationFn: async (data: { fileUrl: string; fileName: string; originalFileName: string }) => {
@@ -95,35 +107,49 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
       <CardContent>
         {/* Modern File Upload Zone */}
         <div className="space-y-4">
-          <ObjectUploader
-            maxNumberOfFiles={10}
-            maxFileSize={10485760}
-            onGetUploadParameters={handleGetUploadParameters}
-            onComplete={handleUploadComplete}
-            buttonClassName="w-full group touch-manipulation"
-          >
-            <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-4 md:p-6 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center">
-              
-              <Upload className="h-6 w-6 md:h-8 md:w-8 text-gray-400 mx-auto mb-2 md:mb-3" />
-              <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1 md:mb-2 text-sm md:text-base">
-                Tap to upload receipts
-              </h3>
-              <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mb-2 md:mb-3">
-                PDF, JPG, PNG files • Up to 10 files, 10MB each
-              </p>
-              
-              {isProcessing && (
-                <div className="flex items-center justify-center gap-2 mt-2 md:mt-3">
-                  <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-2 border-blue-500 border-t-transparent"></div>
-                  <span className="text-xs md:text-sm text-blue-600">
-                    {uploadProgress.total > 1 
-                      ? `Processing ${uploadProgress.current} of ${uploadProgress.total} receipts...`
-                      : "Processing..."}
-                  </span>
-                </div>
-              )}
-            </div>
-          </ObjectUploader>
+          {isMobile ? (
+            <MobileFileUploader onUploadComplete={onUploadComplete}>
+              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center">
+                <Upload className="h-6 w-6 text-gray-400 mx-auto mb-2" />
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1 text-sm">
+                  Tap to upload receipts
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  PDF, JPG, PNG files • Up to 10 files, 10MB each
+                </p>
+              </div>
+            </MobileFileUploader>
+          ) : (
+            <ObjectUploader
+              maxNumberOfFiles={10}
+              maxFileSize={10485760}
+              onGetUploadParameters={handleGetUploadParameters}
+              onComplete={handleUploadComplete}
+              buttonClassName="w-full group touch-manipulation"
+            >
+              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center">
+                
+                <Upload className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-base">
+                  Drop receipts here or click to upload
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  PDF, JPG, PNG files • Up to 10 files, 10MB each
+                </p>
+                
+                {isProcessing && (
+                  <div className="flex items-center justify-center gap-2 mt-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                    <span className="text-sm text-blue-600">
+                      {uploadProgress.total > 1 
+                        ? `Processing ${uploadProgress.current} of ${uploadProgress.total} receipts...`
+                        : "Processing..."}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </ObjectUploader>
+          )}
         </div>
 
         {/* Compact Email Integration */}
