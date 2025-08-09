@@ -176,6 +176,21 @@ export default function StatementsPage() {
     };
   };
 
+  // Calculate aggregated statistics across all statements using individual statement data
+  const getAggregatedStats = () => {
+    return statements.reduce((acc, statement) => {
+      const stats = getStatementStats(statement.id);
+      return {
+        totalCharges: acc.totalCharges + stats.totalCharges,
+        matchedCharges: acc.matchedCharges + stats.matchedCharges,
+        totalAmount: acc.totalAmount + stats.totalAmount,
+        matchedAmount: acc.matchedAmount + stats.matchedAmount,
+      };
+    }, { totalCharges: 0, matchedCharges: 0, totalAmount: 0, matchedAmount: 0 });
+  };
+
+  const aggregatedStats = getAggregatedStats();
+
   if (statementsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 font-inter">
@@ -235,7 +250,7 @@ export default function StatementsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Charges</p>
-                  <p className="text-2xl font-bold text-gray-900">{allCharges.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{aggregatedStats.totalCharges}</p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-500" />
               </div>
@@ -248,7 +263,7 @@ export default function StatementsPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Matched Charges</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {allCharges.filter(c => c.isMatched).length}
+                    {aggregatedStats.matchedCharges}
                   </p>
                 </div>
                 <Eye className="h-8 w-8 text-purple-500" />
@@ -262,7 +277,7 @@ export default function StatementsPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Amount</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    ${allCharges.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0).toFixed(2)}
+                    ${aggregatedStats.totalAmount.toFixed(2)}
                   </p>
                 </div>
                 <DollarSign className="h-8 w-8 text-yellow-500" />
