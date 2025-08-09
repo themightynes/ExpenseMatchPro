@@ -94,4 +94,8 @@ Preferred communication style: Simple, everyday language.
 - **Fixed Receipt-Charge Linking**: Uses correct AMEX 'description' field instead of non-existent 'merchant' field
 - **Receipt Deletion**: Added delete functionality to remove unwanted receipts with automatic charge unlinking
 - **Duplicate Statement Detection**: CSV upload now checks for overlapping statement periods to prevent duplicate imports
-- **Comprehensive Documentation**: Created complete documentation system with feature guides, API reference, changelog, and roadmap
+- **Email Integration**: Implemented secure email receipt import system adapted for corporate security constraints
+- **Copy-Paste Email Processing**: Manual email content processing that extracts receipt information from pasted text
+- **Email Navigation**: Added email import page to main navigation with user-friendly interface
+- **Corporate Email Support**: Alternative methods for secure email environments including forwarding and EML file options
+- **Comprehensive Documentation**: Created complete documentation system with changelog, features guide, API reference, and user manual
