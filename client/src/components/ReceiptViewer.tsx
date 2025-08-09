@@ -126,6 +126,10 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const imgRef = useRef<HTMLImageElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Touch handling for pinch-to-zoom
+  const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
 
   // Find current receipt index
   const currentIndex = receipts.findIndex(r => r.id === receipt.id);
@@ -161,6 +165,50 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [isOpen, hasPrevious, hasNext]);
+
+  // Touch event handlers for pinch-to-zoom
+  const getTouchDistance = (touches: TouchList) => {
+    if (touches.length < 2) return null;
+    const touch1 = touches[0];
+    const touch2 = touches[1];
+    return Math.sqrt(
+      Math.pow(touch2.clientX - touch1.clientX, 2) + 
+      Math.pow(touch2.clientY - touch1.clientY, 2)
+    );
+  };
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const distance = getTouchDistance(e.touches);
+      setLastTouchDistance(distance);
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance) {
+      e.preventDefault();
+      const currentDistance = getTouchDistance(e.touches);
+      if (currentDistance) {
+        const scale = currentDistance / lastTouchDistance;
+        const newZoom = Math.max(0.5, Math.min(3, zoom * scale));
+        setZoom(newZoom);
+        setLastTouchDistance(currentDistance);
+      }
+    }
+  }, [lastTouchDistance, zoom]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length < 2) {
+      setLastTouchDistance(null);
+    }
+  }, []);
+
+  // Zoom control functions
+  const zoomIn = () => setZoom(prev => Math.min(3, prev + 0.25));
+  const zoomOut = () => setZoom(prev => Math.max(0.5, prev - 0.25));
+  const resetZoom = () => setZoom(1);
+  const rotate = () => setRotation(prev => (prev + 90) % 360);
 
   const navigatePrevious = useCallback(() => {
     if (hasPrevious) {
@@ -302,8 +350,14 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Receipt Image/PDF Viewer */}
-        <div className="flex-1 bg-gray-100 overflow-auto">
-          <div className="flex justify-center items-center min-h-full p-4">
+        <div className="flex-1 bg-gray-100 overflow-auto relative">
+          <div 
+            ref={imageContainerRef}
+            className="flex justify-center items-center min-h-full p-4"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
             {imageUrl ? (
               isPDF ? (
                 <div className="w-full max-w-sm">
@@ -350,11 +404,11 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                     src={imageUrl}
                     alt={receipt.originalFileName}
                     onLoad={onImageLoad}
-                    className="w-full h-auto rounded-lg shadow-lg"
+                    className="w-full h-auto rounded-lg shadow-lg touch-none"
                     style={{
                       transform: `scale(${zoom}) rotate(${rotation}deg)`,
                       transformOrigin: 'center',
-                      transition: 'transform 0.2s ease-in-out'
+                      transition: zoom === 1 && rotation === 0 ? 'transform 0.2s ease-in-out' : 'none'
                     }}
                     onError={(e) => {
                       console.error("Failed to load image:", imageUrl);
@@ -370,6 +424,54 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
               </div>
             )}
           </div>
+          
+          {/* Zoom Controls - Only show for images, not PDFs */}
+          {imageUrl && !isPDF && (
+            <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={zoomIn}
+                className="p-2 h-8 w-8"
+                disabled={zoom >= 3}
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={zoomOut}
+                className="p-2 h-8 w-8"
+                disabled={zoom <= 0.5}
+              >
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetZoom}
+                className="p-2 h-8 w-8"
+                disabled={zoom === 1 && rotation === 0}
+              >
+                <span className="text-xs font-mono">1:1</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={rotate}
+                className="p-2 h-8 w-8"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          
+          {/* Zoom indicator */}
+          {imageUrl && !isPDF && zoom !== 1 && (
+            <div className="absolute bottom-4 left-4 bg-black/70 text-white px-2 py-1 rounded text-sm">
+              {Math.round(zoom * 100)}%
+            </div>
+          )}
         </div>
 
         {/* Mobile Bottom Panel - Receipt Details */}
