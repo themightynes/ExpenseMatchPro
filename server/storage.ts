@@ -32,12 +32,14 @@ export interface IStorage {
   getReceiptsByStatus(status: string): Promise<Receipt[]>;
   getReceiptsByStatement(statementId: string): Promise<Receipt[]>;
   autoAssignReceiptToStatement(receiptId: string): Promise<Receipt | undefined>;
-  
+
   // AMEX Statement methods
   createAmexStatement(statement: InsertAmexStatement): Promise<AmexStatement>;
   getAmexStatement(id: string): Promise<AmexStatement | undefined>;
   getAllAmexStatements(): Promise<AmexStatement[]>;
   updateAmexStatement(id: string, updates: Partial<AmexStatement>): Promise<AmexStatement | undefined>;
+  deleteAmexStatement(id: string): Promise<boolean>;
+  deleteAmexChargesByStatement(statementId: string): Promise<boolean>;
   getActiveStatement(): Promise<AmexStatement | undefined>;
 
   // AMEX Charge methods
@@ -60,7 +62,7 @@ export interface IStorage {
     readyCount: number;
     processingCount: number;
   }>;
-  
+
   // File organization
   getOrganizedPath(receipt: Receipt): string;
   updateReceiptPath(receiptId: string, organizedPath: string): Promise<Receipt | undefined>;
@@ -155,7 +157,7 @@ export class DatabaseStorage implements IStorage {
           isMatched: false,
         }
       ]);
-      
+
     } catch (error) {
       console.error("Error initializing sample data:", error);
     }
@@ -192,7 +194,7 @@ export class DatabaseStorage implements IStorage {
   async updateReceipt(id: string, updates: Partial<Receipt>): Promise<Receipt | undefined> {
     // Handle date conversion and empty string cleanup
     const processedUpdates: any = { ...updates };
-    
+
     // Convert date field - handle empty strings and null values
     if ('date' in processedUpdates) {
       if (typeof processedUpdates.date === 'string') {
@@ -203,28 +205,28 @@ export class DatabaseStorage implements IStorage {
         }
       }
     }
-    
+
     // Convert amount field - handle empty strings
     if ('amount' in processedUpdates && typeof processedUpdates.amount === 'string') {
       if (processedUpdates.amount.trim() === '') {
         processedUpdates.amount = null;
       }
     }
-    
+
     // Convert merchant field - handle empty strings
     if ('merchant' in processedUpdates && typeof processedUpdates.merchant === 'string') {
       if (processedUpdates.merchant.trim() === '') {
         processedUpdates.merchant = null;
       }
     }
-    
+
     // Convert category field - handle empty strings
     if ('category' in processedUpdates && typeof processedUpdates.category === 'string') {
       if (processedUpdates.category.trim() === '') {
         processedUpdates.category = null;
       }
     }
-    
+
     // Don't manually set updatedAt as it should be handled by database default
     const [updated] = await db.update(receipts)
       .set(processedUpdates)
@@ -238,7 +240,7 @@ export class DatabaseStorage implements IStorage {
       const result = await db
         .delete(receipts)
         .where(eq(receipts.id, id));
-      
+
       // Check if the deletion was successful
       // Drizzle returns an array for delete operations, check the length
       return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
@@ -274,7 +276,7 @@ export class DatabaseStorage implements IStorage {
         lte(receipts.date, statement.endDate)
       )
     ).orderBy(desc(receipts.createdAt));
-    
+
     return result;
   }
 
@@ -290,7 +292,7 @@ export class DatabaseStorage implements IStorage {
       start: s.startDate, 
       end: s.endDate 
     })));
-    
+
     const statements = allStatements.filter(s => 
       receipt.date && s.startDate <= receipt.date && receipt.date <= s.endDate
     );
@@ -328,6 +330,32 @@ export class DatabaseStorage implements IStorage {
       .where(eq(amexStatements.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async deleteAmexStatement(id: string): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(amexStatements)
+        .where(eq(amexStatements.id, id));
+      
+      return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
+    } catch (error) {
+      console.error("Error in deleteAmexStatement:", error);
+      return false;
+    }
+  }
+
+  async deleteAmexChargesByStatement(statementId: string): Promise<boolean> {
+    try {
+      const result = await db
+        .delete(amexCharges)
+        .where(eq(amexCharges.statementId, statementId));
+        
+      return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
+    } catch (error) {
+      console.error("Error in deleteAmexChargesByStatement:", error);
+      return false;
+    }
   }
 
   async getActiveStatement(): Promise<AmexStatement | undefined> {
@@ -478,10 +506,10 @@ export class DatabaseStorage implements IStorage {
     const matchedChargeIds = matchedReceipts
       .map(r => r.matchedChargeId)
       .filter(id => id !== null);
-    
+
     const missingReceiptCharges = workCharges.filter(charge => 
       !matchedChargeIds.includes(charge.id));
-    
+
     const totalMissingReceiptAmount = missingReceiptCharges.reduce((sum, charge) => 
       sum + parseFloat(charge.amount || '0'), 0);
 
@@ -514,7 +542,7 @@ export class DatabaseStorage implements IStorage {
 
     // Use available data with intelligent fallbacks
     const dateStr = receipt.date ? receipt.date.toISOString().split('T')[0] : 'UNKNOWN_DATE';
-    
+
     let merchant = 'UNKNOWN_MERCHANT';
     if (receipt.merchant) {
       merchant = receipt.merchant
@@ -523,16 +551,16 @@ export class DatabaseStorage implements IStorage {
         .toUpperCase()
         .substring(0, 25); // Limit length for Oracle compatibility
     }
-    
+
     const amount = receipt.amount ? receipt.amount.replace(/\./g, 'DOT') : 'UNKNOWN_AMOUNT';
     const ext = receipt.fileName.split('.').pop();
-    
+
     // Oracle-friendly format: DATE_MERCHANT_$AMOUNT_RECEIPT.ext
     const newFileName = `${dateStr}_${merchant}_$${amount}_RECEIPT.${ext}`;
-    
+
     // Determine folder based on matching status
     const folder = receipt.isMatched ? 'Matched' : 'Unmatched';
-    
+
     return `/objects/statements/${receipt.statementId}/${folder}/${newFileName}`;
   }
 

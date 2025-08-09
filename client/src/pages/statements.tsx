@@ -1,6 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +7,10 @@ import { Progress } from "@/components/ui/progress";
 import CsvUploadModal from "@/components/CsvUploadModal";
 import StatementChargesDialog from "@/components/StatementChargesDialog";
 import type { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
-import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List } from "lucide-react";
+import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List, Trash2 } from "lucide-react";
+import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function StatementsPage() {
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -26,16 +28,43 @@ export default function StatementsPage() {
     queryKey: ["/api/receipts"],
   });
 
+  const { toast } = useToast();
+
+  const deleteStatementMutation = useMutation({
+    mutationFn: async (statementId: string) => {
+      const response = await apiRequest("DELETE", `/api/statements/${statementId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/statements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/charges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Statement Deleted",
+        description: "Statement and all associated charges have been removed.",
+      });
+    },
+    onError: (error) => {
+      console.error("Error deleting statement:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete statement. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getStatementStats = (statementId: string) => {
     const charges = allCharges.filter(charge => charge.statementId === statementId);
     const matchedCharges = charges.filter(charge => charge.isMatched);
     const statementReceipts = receipts.filter(receipt => receipt.statementId === statementId);
     const unmatchedReceipts = statementReceipts.filter(receipt => !receipt.isMatched && receipt.amount && parseFloat(receipt.amount) > 0);
-    
+
     const totalAmount = Math.abs(charges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
     const matchedAmount = Math.abs(matchedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || '0'), 0));
     const unmatchedReceiptValue = unmatchedReceipts.reduce((sum, receipt) => sum + parseFloat(receipt.amount || '0'), 0);
-    
+
     return {
       totalCharges: charges.length,
       matchedCharges: matchedCharges.length,
@@ -147,7 +176,7 @@ export default function StatementsPage() {
         {/* Statements List */}
         <div className="space-y-6">
           <h2 className="text-xl font-semibold text-gray-900">Statement Periods</h2>
-          
+
           {statements.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center">
@@ -202,7 +231,7 @@ export default function StatementsPage() {
                             <p className="text-lg font-bold text-blue-900">${stats.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             <p className="text-xs text-blue-600">{stats.totalCharges} charges</p>
                           </div>
-                          
+
                           <div className="p-3 bg-green-50 rounded-lg border border-green-100">
                             <div className="flex items-center gap-2 mb-1">
                               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -226,7 +255,7 @@ export default function StatementsPage() {
                                 <p className="text-xs text-orange-600">{stats.unmatchedReceiptCount} need matching</p>
                               </div>
                             )}
-                            
+
                             {stats.missingReceiptCount > 0 && (
                               <div className="p-3 bg-red-50 rounded-lg border border-red-100">
                                 <div className="flex items-center gap-2 mb-1">
@@ -257,14 +286,11 @@ export default function StatementsPage() {
                             </Button>
                           </Link>
                           <Button 
-                            variant="outline" 
+                            variant="destructive"
                             size="sm"
-                            onClick={() => {
-                              // TODO: Export functionality
-                              alert("Export functionality coming soon!");
-                            }}
+                            onClick={() => deleteStatementMutation.mutate(statement.id)}
                           >
-                            Export
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>

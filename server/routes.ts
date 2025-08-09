@@ -16,11 +16,11 @@ import { EmailService } from "./emailService";
 // Helper function to create statement folder structure
 async function createStatementFolder(statementId: string | null) {
   if (!statementId) return;
-  
+
   try {
     const statement = await storage.getAmexStatement(statementId);
     if (!statement) return;
-    
+
     // Create folder structure: /statements/{periodName}/unmatched/ and /statements/{periodName}/matched/
     console.log(`Creating folder structure for statement: ${statement.periodName}`);
     // Note: In a full implementation, you would create actual folders in object storage
@@ -39,31 +39,31 @@ const upload = multer({ storage: multer.memoryStorage() });
 async function checkForDuplicateStatements(csvContent: string, existingStatements: any[]): Promise<any[]> {
   const lines = csvContent.split('\n');
   if (lines.length < 2) return [];
-  
+
   const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
   const charges = [];
-  
+
   // Parse first few rows to get date range
   for (let i = 1; i < Math.min(lines.length, 10); i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    
+
     try {
       const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
       const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
-      
+
       const rowData: any = {};
       headers.forEach((header: string, index: number) => {
         rowData[header] = cleanValues[index] || '';
       });
-      
+
       if (rowData.Date) {
         const dateParts = rowData.Date.split('/');
         if (dateParts.length === 3) {
           const month = parseInt(dateParts[0]);
           const day = parseInt(dateParts[1]);
           const year = parseInt(dateParts[2]);
-          
+
           if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
             const chargeDate = new Date(year, month - 1, day);
             charges.push({
@@ -78,22 +78,22 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
       continue;
     }
   }
-  
+
   if (charges.length === 0) return [];
-  
+
   // Check for overlapping date ranges and similar charges
   const duplicates = [];
   for (const statement of existingStatements) {
     if (!statement.startDate || !statement.endDate) continue;
-    
+
     const statementStart = new Date(statement.startDate);
     const statementEnd = new Date(statement.endDate);
-    
+
     // Check if any charges fall within existing statement period
     const overlappingCharges = charges.filter(charge => 
       charge.date >= statementStart && charge.date <= statementEnd
     );
-    
+
     if (overlappingCharges.length > 0) {
       duplicates.push({
         existingStatement: statement,
@@ -102,7 +102,7 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
       });
     }
   }
-  
+
   return duplicates;
 }
 
@@ -135,7 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ uploadURL });
     } catch (error) {
       console.error("Error getting upload URL:", error);
-      
+
       // Check if object storage is properly configured
       try {
         const privateDir = process.env.PRIVATE_OBJECT_DIR;
@@ -148,7 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (envError) {
         console.error("Environment check error:", envError);
       }
-      
+
       res.status(500).json({ error: "Failed to get upload URL. Object storage may not be configured." });
     }
   });
@@ -227,7 +227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/receipts/:id", async (req, res) => {
     try {
       const receiptId = req.params.id;
-      
+
       // Get receipt details before deletion
       const receipt = await storage.getReceipt(receiptId);
       if (!receipt) {
@@ -259,20 +259,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const receiptId = req.params.id;
       const updates = req.body;
-      
+
       console.log(`Updating receipt with data:`, updates);
-      
+
       const updatedReceipt = await storage.updateReceipt(receiptId, updates);
       if (!updatedReceipt) {
         return res.status(404).json({ error: "Receipt not found" });
       }
-      
+
       console.log(`Receipt updated successfully:`, updatedReceipt);
-      
+
       // Progressive matching: try to match as soon as we have some useful data
       const hasUsefulData = updatedReceipt.merchant || updatedReceipt.amount || updatedReceipt.date;
       let autoMatchResult = null;
-      
+
       if (hasUsefulData && !updatedReceipt.isMatched) {
         // Auto-assign to correct statement based on date (even if already assigned to wrong one)
         if (updatedReceipt.date) {
@@ -283,11 +283,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Receipt ${receiptId} reassigned to correct statement ${reassignedReceipt.statementId}`);
           }
         }
-        
+
         if (updatedReceipt.statementId) {
           console.log(`Receipt ${receiptId} has useful data, attempting progressive auto-match...`);
           autoMatchResult = await fileOrganizer.attemptAutoMatch(receiptId);
-          
+
           if (autoMatchResult.matched) {
             console.log(`Successfully auto-matched receipt ${receiptId} with ${autoMatchResult.confidence}% confidence`);
             // Refetch the updated receipt after matching
@@ -301,10 +301,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      
+
       // Reorganize file after update
       await fileOrganizer.organizeReceipt(updatedReceipt);
-      
+
       res.json({
         ...updatedReceipt,
         autoMatched: false
@@ -320,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const receiptId = req.params.id;
       const receipt = await storage.getReceipt(receiptId);
-      
+
       if (!receipt) {
         return res.status(404).json({ error: "Receipt not found" });
       }
@@ -335,7 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ocrService.processReceipt(receipt.fileUrl, receipt.originalFileName)
         .then(async ({ ocrText, extractedData }) => {
           console.log(`Manual OCR completed for receipt ${receiptId}`);
-          
+
           const updates: any = {
             ocrText,
             extractedData,
@@ -360,7 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (extractedData.category && !receipt.category) updates.category = extractedData.category;
 
           await storage.updateReceipt(receiptId, updates);
-          
+
           // Try auto-assignment and matching after OCR
           try {
             const updatedReceipt = await storage.autoAssignReceiptToStatement(receiptId);
@@ -395,7 +395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const objectPath = objectStorageService.normalizeObjectEntityPath(req.body.fileUrl);
-      
+
       // Create receipt record and start OCR processing
       const receipt = await storage.createReceipt({
         fileName: req.body.fileName || 'uploaded-receipt',
@@ -409,7 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ocrService.processReceipt(objectPath, req.body.originalFileName || req.body.fileName)
         .then(async ({ ocrText, extractedData }) => {
           console.log(`OCR completed for receipt ${receipt.id}`);
-          
+
           // Update receipt with OCR results
           const updates: any = {
             ocrText,
@@ -424,7 +424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (extractedData.category) updates.category = extractedData.category;
 
           await storage.updateReceipt(receipt.id, updates);
-          
+
           // Try auto-assignment and matching after OCR
           try {
             const updatedReceipt = await storage.autoAssignReceiptToStatement(receipt.id);
@@ -437,7 +437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .catch(async (error) => {
           console.error(`OCR failed for receipt ${receipt.id}:`, error);
-          
+
           // Update receipt with failed status but allow manual entry
           await storage.updateReceipt(receipt.id, {
             ocrText: 'OCR failed - manual entry required',
@@ -463,7 +463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (organizedReceipt && organizedReceipt.statementId) {
           // Create organized folder structure when receipt gets assigned
           await createStatementFolder(organizedReceipt.statementId);
-          
+
           // Update receipt with organized path
           const organizedPath = storage.getOrganizedPath(organizedReceipt);
           await storage.updateReceiptPath(receipt.id, organizedPath);
@@ -484,7 +484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/statements", async (req, res) => {
     try {
       const statements = await storage.getAllAmexStatements();
-      
+
       // Add receipt counts for each statement
       const statementsWithCounts = await Promise.all(
         statements.map(async (statement) => {
@@ -540,7 +540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const csvContent = req.file.buffer.toString('utf-8');
       const lines = csvContent.split('\n');
       const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
-      
+
       const { periodName } = req.body;
       if (!periodName) {
         return res.status(400).json({ error: "Period name is required" });
@@ -549,7 +549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for duplicate statements before processing
       const existingStatements = await storage.getAllAmexStatements();
       const potentialDuplicates = await checkForDuplicateStatements(csvContent, existingStatements);
-      
+
       if (potentialDuplicates.length > 0) {
         return res.status(409).json({ 
           error: "Duplicate statement detected",
@@ -573,7 +573,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Parse CSV line (handle quoted values)
           const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
           const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
-          
+
           const rowData: any = {};
           headers.forEach((header: string, index: number) => {
             rowData[header] = cleanValues[index] || '';
@@ -593,25 +593,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error(`Invalid date format: ${validatedRow.Date}`);
             continue;
           }
-          
+
           const month = parseInt(dateParts[0]);
           const day = parseInt(dateParts[1]);
           const year = parseInt(dateParts[2]);
-          
+
           // Validate date components
           if (isNaN(month) || isNaN(day) || isNaN(year) || month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
             console.error(`Invalid date components: ${validatedRow.Date} -> month:${month}, day:${day}, year:${year}`);
             continue;
           }
-          
+
           const chargeDate = new Date(year, month - 1, day);
-          
+
           // Validate that the date was created correctly
           if (isNaN(chargeDate.getTime())) {
             console.error(`Failed to create valid date from: ${validatedRow.Date}`);
             continue;
           }
-          
+
           // Track date range for statement period
           if (!minDate || chargeDate < minDate) minDate = chargeDate;
           if (!maxDate || chargeDate > maxDate) maxDate = chargeDate;
@@ -683,7 +683,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create folder structure for new statement
       await createStatementFolder(statement.id);
-      
+
       // Try to auto-assign unmatched receipts to this new statement
       const unmatchedReceipts = await storage.getReceiptsByStatus('completed');
       for (const receipt of unmatchedReceipts) {
@@ -787,7 +787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               Math.abs(parseFloat(charge.amount) - parseFloat(receipt.amount)) < 0.01 &&
               Math.abs(new Date(charge.date).getTime() - new Date(receipt.date || new Date()).getTime()) < 7 * 24 * 60 * 60 * 1000 // Within 7 days
             );
-            
+
             if (matchingCharge) {
               updateData.matchedChargeId = matchingCharge.id;
               updateData.statementId = matchingCharge.statementId;
@@ -812,19 +812,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 receipt.statementId = charge.statementId;
                 needsUpdate = true;
               }
-              
+
               if (!receipt.merchant && charge.description) {
                 updateData.merchant = charge.description;
                 receipt.merchant = charge.description;
                 needsUpdate = true;
               }
-              
+
               if (!receipt.amount && charge.amount) {
                 updateData.amount = charge.amount;
                 receipt.amount = charge.amount;
                 needsUpdate = true;
               }
-              
+
               if (!receipt.date && charge.date) {
                 updateData.date = charge.date;
                 receipt.date = charge.date;
@@ -837,7 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (needsUpdate) {
             await storage.updateReceipt(receipt.id, updateData);
           }
-          
+
           // Always reorganize if receipt has statement assignment - use intelligent fallbacks
           if (receipt.statementId) {
             await fileOrganizer.organizeReceipt(receipt);
@@ -847,7 +847,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               !receipt.merchant ? 'merchant' : null,
               !receipt.amount ? 'amount' : null
             ].filter(Boolean);
-            
+
             if (missingData.length > 0) {
               statusMessages.push(`Reorganized ${receipt.fileName} → Oracle naming (used fallbacks for: ${missingData.join(', ')})`);
             } else {
@@ -856,7 +856,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             statusMessages.push(`${receipt.fileName} - no statement assignment, staying in Inbox`);
           }
-          
+
         } catch (error) {
           console.error(`Error processing receipt ${receipt.id}:`, error);
           errors++;
@@ -903,7 +903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 needsUpdate = true;
                 statusMessages.push(`Updated statement ID for ${receipt.fileName}`);
               }
-              
+
               // Fill in missing merchant data from charge  
               if (!receipt.merchant && charge.description) {
                 updateData.merchant = charge.description;
@@ -911,7 +911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 needsUpdate = true;
                 statusMessages.push(`Added merchant "${charge.description}" to ${receipt.fileName}`);
               }
-              
+
               // Fill in missing amount data from charge  
               if (!receipt.amount && charge.amount) {
                 updateData.amount = charge.amount;
@@ -919,7 +919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 needsUpdate = true;
                 statusMessages.push(`Added amount $${charge.amount} to ${receipt.fileName}`);
               }
-              
+
               // Fill in missing date from charge
               if (!receipt.date && charge.date) {
                 updateData.date = charge.date;
@@ -935,7 +935,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateReceipt(receipt.id, updateData);
             updated++;
           }
-          
+
           // Now reorganize if receipt has required data for Oracle naming
           if (receipt.date && receipt.merchant && receipt.amount && receipt.statementId) {
             await fileOrganizer.organizeReceipt(receipt);
@@ -944,7 +944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             statusMessages.push(`Skipped ${receipt.fileName} - still missing required data (date: ${!!receipt.date}, merchant: ${!!receipt.merchant}, amount: ${!!receipt.amount}, statementId: ${!!receipt.statementId})`);
           }
-          
+
         } catch (error) {
           console.error(`Error reorganizing receipt ${receipt.id}:`, error);
           errors++;
@@ -969,7 +969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/matching/match", async (req, res) => {
     try {
       const { receiptId, chargeId } = req.body;
-      
+
       if (!receiptId || !chargeId) {
         return res.status(400).json({ error: "receiptId and chargeId are required" });
       }
@@ -992,7 +992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         matchedChargeId: chargeId,
         statementId: charge.statementId
       };
-      
+
       // Fill missing fields with charge data
       if (!currentReceipt.merchant && charge.description) {
         updateData.merchant = charge.description;
@@ -1018,7 +1018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const organizedPath = storage.getOrganizedPath(receipt);
           await storage.updateReceiptPath(receiptId, organizedPath);
-          
+
           // Create statement folder if it doesn't exist
           await createStatementFolder(receipt.statementId);
         } catch (orgError) {
@@ -1046,7 +1046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/matching/candidates/:statementId", async (req, res) => {
     try {
       const statementId = req.params.statementId;
-      
+
       // Get ALL unmatched receipts (not restricted to statement) - let users match across all periods
       const allReceipts = await storage.getAllReceipts();
       const unmatchedReceipts = allReceipts.filter(r => 
@@ -1055,7 +1055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         r.amount && // Only include receipts with amount data
         parseFloat(r.amount) > 0 // Exclude zero or negative amounts
       );
-      
+
       // Get ALL unmatched charges across ALL statements - not just the current one
       const allCharges = await storage.getAllCharges();
       const unmatchedCharges = allCharges.filter(c => !c.isMatched);
@@ -1068,17 +1068,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const amountDiff = Math.abs(parseFloat(receipt.amount) - parseFloat(charge.amount));
             const dateDiff = receipt.date && charge.date ? 
               Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
-            
+
             // Merchant similarity (simple contains check for now)
             const merchantMatch = receipt.merchant && charge.description ?
               (charge.description.toLowerCase().includes(receipt.merchant.toLowerCase()) ||
                receipt.merchant.toLowerCase().includes(charge.description.toLowerCase())) : false;
-            
+
             // Calculate confidence score (lower is better)
             let confidence = amountDiff * 10; // Amount difference weighted heavily
             confidence += dateDiff * 2; // Date difference weighted moderately
             confidence -= merchantMatch ? 50 : 0; // Merchant match is a big bonus
-            
+
             return {
               receipt,
               charge,
@@ -1089,7 +1089,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
           })
           .sort((a, b) => a.confidence - b.confidence); // Sort by best match first
-        
+
         if (bestMatches.length > 0) {
           pairs.push(bestMatches[0]); // Take the best match for this receipt
         }
@@ -1130,7 +1130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const chargeId = req.params.id;
       const updatedCharge = await storage.toggleChargePersonalExpense(chargeId);
-      
+
       if (!updatedCharge) {
         return res.status(404).json({ error: "Charge not found" });
       }
@@ -1151,7 +1151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/export/oracle", async (req, res) => {
     try {
       const { statementId, includeAttachments = true, preFillCategories = true, groupByType = false } = req.body;
-      
+
       if (!statementId) {
         return res.status(400).json({ error: "statementId is required" });
       }
@@ -1228,11 +1228,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get charges for a specific statement
   app.get("/api/statements/:id/charges", async (req, res) => {
     try {
-      const charges = await storage.getChargesByStatement(req.params.id);
+      const statementId = req.params.id;
+      const charges = await storage.getChargesByStatement(statementId);
       res.json(charges);
     } catch (error) {
       console.error("Error getting statement charges:", error);
       res.status(500).json({ error: "Failed to get statement charges" });
+    }
+  });
+
+  // Delete statement and all its charges
+  app.delete("/api/statements/:id", async (req, res) => {
+    try {
+      const statementId = req.params.id;
+
+      // First, unlink any receipts that were matched to charges in this statement
+      const charges = await storage.getChargesByStatement(statementId);
+      for (const charge of charges) {
+        if (charge.isMatched && charge.receiptId) {
+          // Unlink the receipt
+          await storage.updateReceipt(charge.receiptId, {
+            isMatched: false,
+            statementId: null,
+            matchedChargeId: null
+          });
+        }
+      }
+
+      // Delete all charges for this statement
+      await storage.deleteChargesByStatement(statementId);
+
+      // Delete the statement
+      await storage.deleteStatement(statementId);
+
+      res.json({ success: true, message: "Statement deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting statement:", error);
+      res.status(500).json({ error: "Failed to delete statement" });
     }
   });
 
@@ -1248,18 +1280,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email Integration Routes
-  
+
   // Initialize email service with credentials
   app.post("/api/email/setup", async (req, res) => {
     try {
       const { clientId, clientSecret, tenantId } = req.body;
-      
+
       if (!clientId || !clientSecret || !tenantId) {
         return res.status(400).json({ 
           error: "Missing required fields: clientId, clientSecret, tenantId" 
         });
       }
-      
+
       await emailService.initializeAuth(clientId, clientSecret, tenantId);
       res.json({ message: "Email service initialized successfully" });
     } catch (error) {
@@ -1272,13 +1304,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/email/import", async (req, res) => {
     try {
       const { userEmail, daysBack = 30 } = req.body;
-      
+
       if (!userEmail) {
         return res.status(400).json({ error: "userEmail is required" });
       }
-      
+
       const result = await emailService.importEmailReceipts(userEmail, storage, daysBack);
-      
+
       res.json({
         message: `Import completed: ${result.imported} receipts imported`,
         imported: result.imported,
@@ -1296,13 +1328,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/email/search", async (req, res) => {
     try {
       const { userEmail, daysBack = 30 } = req.body;
-      
+
       if (!userEmail) {
         return res.status(400).json({ error: "userEmail is required" });
       }
-      
+
       const emails = await emailService.searchReceiptEmails(userEmail, daysBack);
-      
+
       const preview = emails.map(email => ({
         id: email.id,
         subject: email.subject,
@@ -1318,7 +1350,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                           email.body.toLowerCase().includes('invoice') ||
                           email.body.includes('$')
       }));
-      
+
       res.json({
         emails: preview,
         totalFound: preview.length,
@@ -1336,14 +1368,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/email/process-content", async (req, res) => {
     try {
       const { subject, sender, body, receivedDate } = req.body;
-      
+
       if (!subject || !body) {
         return res.status(400).json({ error: "subject and body are required" });
       }
 
       // Extract receipt information from email content
       const extractedData = emailService.extractReceiptFromEmailBody(body, subject, sender);
-      
+
       if (!extractedData) {
         return res.status(400).json({ error: "No receipt information found in email content" });
       }
@@ -1363,7 +1395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const receipt = await storage.createReceipt(receiptData);
-      
+
       res.json({
         receipt,
         extractedData,
