@@ -29,7 +29,8 @@ import {
   TrendingUp,
   Receipt,
   Building,
-  MapPin
+  MapPin,
+  FileText
 } from "lucide-react";
 import { AmexStatement, AmexCharge, Receipt as ReceiptType } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -130,17 +131,25 @@ export default function StatementDetailPage() {
     if (statement?.userNotes && notes === "") {
       setNotes(statement.userNotes);
     }
-  }, [statement?.userNotes, notes]);
+  }, [statement?.userNotes]);
 
   useEffect(() => {
-    const newChargeNotes: { [key: string]: string } = {};
-    charges.forEach(charge => {
-      if (charge.userNotes) {
-        newChargeNotes[charge.id] = charge.userNotes;
+    if (charges.length > 0) {
+      const newChargeNotes: { [key: string]: string } = {};
+      let hasChanges = false;
+      
+      charges.forEach(charge => {
+        if (charge.userNotes && chargeNotes[charge.id] !== charge.userNotes) {
+          newChargeNotes[charge.id] = charge.userNotes;
+          hasChanges = true;
+        }
+      });
+      
+      if (hasChanges) {
+        setChargeNotes(prev => ({ ...prev, ...newChargeNotes }));
       }
-    });
-    setChargeNotes(prev => ({ ...prev, ...newChargeNotes }));
-  }, [charges]);
+    }
+  }, [charges.length]);
 
   // Helper functions
   const formatCurrency = (amount: string) => {
@@ -342,169 +351,148 @@ export default function StatementDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Charges Table */}
+      {/* Charges List - Vertical Card Layout */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <span>Charges ({filteredCharges.length})</span>
+            <span>{showPersonalExpenses ? "Personal" : "Business"} Expenses ({filteredCharges.length})</span>
             <Badge variant="secondary">{formatCurrency(filteredCharges.reduce((sum, c) => sum + parseFloat(c.amount), 0).toString())}</Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-100" 
-                    onClick={() => handleSort('date')}
-                  >
-                    Date {sortColumn === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-100" 
-                    onClick={() => handleSort('description')}
-                  >
-                    Description {sortColumn === 'description' && (sortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-100 text-right" 
-                    onClick={() => handleSort('amount')}
-                  >
-                    Amount {sortColumn === 'amount' && (sortDirection === 'asc' ? '↑' : '↓')}
-                  </TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Card Member</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCharges.map((charge) => (
-                  <>
-                    <TableRow key={charge.id} className="hover:bg-gray-50">
-                      <TableCell className="font-mono text-sm">
-                        {formatDate(charge.date)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-xs">
-                          <p className="font-medium truncate">{charge.description}</p>
-                          {charge.statementAs && charge.statementAs !== charge.description && (
-                            <p className="text-xs text-gray-500 truncate">Appears as: {charge.statementAs}</p>
-                          )}
-                          {charge.extendedDetails && (
-                            <p className="text-xs text-gray-500 truncate">{charge.extendedDetails}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {formatCurrency(charge.amount)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {charge.category || "Uncategorized"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {charge.cardMember}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
-                            {charge.isMatched ? "Matched" : "Unmatched"}
-                          </Badge>
-                          {charge.isPersonalExpense && (
-                            <Badge variant="outline" className="text-xs">Personal</Badge>
-                          )}
-                          {charge.userNotes && (
-                            <Badge variant="outline" className="text-xs">
-                              <MessageSquare className="h-3 w-3 mr-1" />
-                              Notes
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500">
-                        {charge.cityState && (
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {charge.cityState}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedChargeNotes(prev => ({ 
-                                ...prev, 
-                                [charge.id]: !prev[charge.id] 
-                              }));
-                            }}
-                            className="h-7 px-2 text-xs"
-                          >
-                            <Edit3 className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => togglePersonalExpenseMutation.mutate(charge.id)}
-                            className="h-7 px-2 text-xs"
-                          >
-                            {charge.isPersonalExpense ? "Business" : "Personal"}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    
-                    {/* Notes Row */}
-                    {selectedChargeNotes[charge.id] && (
-                      <TableRow className="bg-blue-50">
-                        <TableCell colSpan={8}>
-                          <div className="space-y-2 p-2">
-                            <Label className="text-xs font-medium">Charge Notes:</Label>
-                            <Textarea
-                              placeholder="Add notes about this specific charge..."
-                              value={chargeNotes[charge.id] || ""}
-                              onChange={(e) => setChargeNotes(prev => ({ 
-                                ...prev, 
-                                [charge.id]: e.target.value 
-                              }))}
-                              className="min-h-[80px] text-xs resize-none"
-                            />
-                            <div className="flex gap-2">
-                              <Button 
-                                onClick={() => handleSaveChargeNotes(charge.id)}
-                                disabled={updateChargeNotesMutation.isPending}
-                                size="sm"
-                                className="h-7 px-3 text-xs"
-                              >
-                                {updateChargeNotesMutation.isPending ? "Saving..." : "Save"}
-                              </Button>
-                              <Button 
-                                variant="outline"
-                                onClick={() => setSelectedChargeNotes(prev => ({ 
-                                  ...prev, 
-                                  [charge.id]: false 
-                                }))}
-                                size="sm"
-                                className="h-7 px-3 text-xs"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+        <CardContent className="space-y-3">
+          {filteredCharges.map((charge) => (
+            <Card key={charge.id} className="border border-gray-200 hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                {/* Row 1: Date and Description */}
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <h3 className="font-medium text-sm text-gray-900 mb-1">{charge.description}</h3>
+                    {charge.extendedDetails && (
+                      <p className="text-xs text-gray-500">{charge.extendedDetails}</p>
                     )}
-                  </>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                  </div>
+                  <div className="text-sm font-medium text-gray-600 ml-4">
+                    {formatDate(charge.date)}
+                  </div>
+                </div>
+                
+                {/* Row 2: Amount, Category, Card Member */}
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center gap-4">
+                    <div className="text-lg font-bold text-gray-900">
+                      {formatCurrency(charge.amount)}
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {charge.category || "Uncategorized"}
+                    </Badge>
+                    <div className="text-sm text-gray-600">
+                      {charge.cardMember}
+                    </div>
+                  </div>
+                  {charge.cityState && (
+                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <MapPin className="h-3 w-3" />
+                      {charge.cityState}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Row 3: Notes, Personal Toggle, Match Status */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    {/* Match Status with Receipt Link */}
+                    <div className="flex items-center gap-2">
+                      <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
+                        {charge.isMatched ? "Matched" : "Unmatched"}
+                      </Badge>
+                      {charge.isMatched && (
+                        <Link href={`/receipts/${charge.id}`}>
+                          <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
+                            <FileText className="h-3 w-3 mr-1" />
+                            View Receipt
+                          </Button>
+                        </Link>
+                      )}
+                    </div>
+                    
+                    {/* Personal Expense Toggle */}
+                    <Button
+                      variant={charge.isPersonalExpense ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleTogglePersonalExpense(charge.id)}
+                      className="h-6 px-2 text-xs"
+                    >
+                      {charge.isPersonalExpense ? "Personal" : "Business"}
+                    </Button>
+                  </div>
+                  
+                  {/* Notes Section */}
+                  <div className="flex items-center gap-2">
+                    {charge.userNotes && (
+                      <Badge variant="outline" className="text-xs">
+                        <MessageSquare className="h-3 w-3 mr-1" />
+                        Has Notes
+                      </Badge>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedChargeNotes(prev => ({ 
+                          ...prev, 
+                          [charge.id]: !prev[charge.id] 
+                        }));
+                      }}
+                      className="h-6 px-2 text-xs"
+                    >
+                      <Edit3 className="h-3 w-3 mr-1" />
+                      {selectedChargeNotes[charge.id] ? "Hide" : "Notes"}
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Expandable Notes Section */}
+                {selectedChargeNotes[charge.id] && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <Label className="text-xs font-medium text-gray-700 mb-2 block">Charge Notes:</Label>
+                    <Textarea
+                      placeholder="Add notes about this specific charge..."
+                      value={chargeNotes[charge.id] || ""}
+                      onChange={(e) => setChargeNotes(prev => ({ 
+                        ...prev, 
+                        [charge.id]: e.target.value 
+                      }))}
+                      className="min-h-[60px] text-sm resize-none mb-2"
+                    />
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => handleSaveChargeNotes(charge.id)}
+                        disabled={updateChargeNotesMutation.isPending}
+                        size="sm"
+                        className="h-7 px-3 text-xs"
+                      >
+                        {updateChargeNotesMutation.isPending ? "Saving..." : "Save"}
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => setSelectedChargeNotes(prev => ({ ...prev, [charge.id]: false }))}
+                        size="sm"
+                        className="h-7 px-3 text-xs"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+          
+          {filteredCharges.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <p>No {showPersonalExpenses ? "personal" : "business"} expenses found</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
