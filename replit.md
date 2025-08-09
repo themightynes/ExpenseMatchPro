@@ -88,3 +88,5 @@ Preferred communication style: Simple, everyday language.
 - **Smart Fallback Logic**: Receipts are renamed with available data using "UNKNOWN_*" fallbacks for missing fields
 - **Automatic Data Completion**: Matching interface now auto-populates missing merchant, amount, and date from charge data
 - **Fixed Receipt-Charge Linking**: Uses correct AMEX 'description' field instead of non-existent 'merchant' field
+- **Receipt Deletion**: Added delete functionality to remove unwanted receipts with automatic charge unlinking
+- **Duplicate Statement Detection**: CSV upload now checks for overlapping statement periods to prevent duplicate imports

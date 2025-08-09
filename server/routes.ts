@@ -33,6 +33,77 @@ import multer from "multer";
 // Configure multer for file uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Function to check for duplicate statements
+async function checkForDuplicateStatements(csvContent: string, existingStatements: any[]): Promise<any[]> {
+  const lines = csvContent.split('\n');
+  if (lines.length < 2) return [];
+  
+  const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
+  const charges = [];
+  
+  // Parse first few rows to get date range
+  for (let i = 1; i < Math.min(lines.length, 10); i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
+    try {
+      const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+      const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
+      
+      const rowData: any = {};
+      headers.forEach((header: string, index: number) => {
+        rowData[header] = cleanValues[index] || '';
+      });
+      
+      if (rowData.Date) {
+        const dateParts = rowData.Date.split('/');
+        if (dateParts.length === 3) {
+          const month = parseInt(dateParts[0]);
+          const day = parseInt(dateParts[1]);
+          const year = parseInt(dateParts[2]);
+          
+          if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+            const chargeDate = new Date(year, month - 1, day);
+            charges.push({
+              date: chargeDate,
+              description: rowData.Description || '',
+              amount: rowData.Amount || ''
+            });
+          }
+        }
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  if (charges.length === 0) return [];
+  
+  // Check for overlapping date ranges and similar charges
+  const duplicates = [];
+  for (const statement of existingStatements) {
+    if (!statement.startDate || !statement.endDate) continue;
+    
+    const statementStart = new Date(statement.startDate);
+    const statementEnd = new Date(statement.endDate);
+    
+    // Check if any charges fall within existing statement period
+    const overlappingCharges = charges.filter(charge => 
+      charge.date >= statementStart && charge.date <= statementEnd
+    );
+    
+    if (overlappingCharges.length > 0) {
+      duplicates.push({
+        existingStatement: statement,
+        overlappingCharges: overlappingCharges.length,
+        periodOverlap: `${statementStart.toLocaleDateString()} - ${statementEnd.toLocaleDateString()}`
+      });
+    }
+  }
+  
+  return duplicates;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const objectStorageService = new ObjectStorageService();
 
@@ -146,6 +217,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating receipt:", error);
       res.status(500).json({ error: "Failed to update receipt" });
+    }
+  });
+
+  // Delete receipt endpoint
+  app.delete("/api/receipts/:id", async (req, res) => {
+    try {
+      const receiptId = req.params.id;
+      
+      // Get receipt details before deletion
+      const receipt = await storage.getReceipt(receiptId);
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+
+      // If receipt was matched, unmark the charge
+      if (receipt.isMatched && receipt.matchedChargeId) {
+        await storage.updateAmexCharge(receipt.matchedChargeId, { 
+          isMatched: false, 
+          receiptId: null 
+        });
+      }
+
+      // Delete receipt from storage
+      const deleted = await storage.deleteReceipt(receiptId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+
+      res.json({ message: "Receipt deleted successfully", deletedReceipt: receipt });
+    } catch (error) {
+      console.error("Error deleting receipt:", error);
+      res.status(500).json({ error: "Failed to delete receipt" });
     }
   });
 
@@ -327,6 +430,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { periodName } = req.body;
       if (!periodName) {
         return res.status(400).json({ error: "Period name is required" });
+      }
+
+      // Check for duplicate statements before processing
+      const existingStatements = await storage.getStatements();
+      const potentialDuplicates = await checkForDuplicateStatements(csvContent, existingStatements);
+      
+      if (potentialDuplicates.length > 0) {
+        return res.status(409).json({ 
+          error: "Duplicate statement detected",
+          duplicates: potentialDuplicates,
+          message: `Found ${potentialDuplicates.length} potential duplicate statement(s). Please review before uploading.`
+        });
       }
 
       // First pass: analyze CSV data to determine date range

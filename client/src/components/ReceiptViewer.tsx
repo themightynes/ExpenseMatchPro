@@ -15,10 +15,12 @@ import {
   Download,
   RotateCw,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useMutation } from '@tanstack/react-query';
 import type { Receipt } from '@shared/schema';
 
 // Import react-image-crop for cropping functionality
@@ -42,6 +44,31 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     amount: '',
     date: '',
     category: '',
+  });
+
+  // Delete receipt mutation
+  const deleteReceiptMutation = useMutation({
+    mutationFn: async (receiptId: string) => {
+      return await apiRequest(`/api/receipts/${receiptId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      toast({
+        title: "Receipt deleted",
+        description: "Receipt has been permanently deleted",
+      });
+      onClose(); // Close the viewer
+    },
+    onError: (error) => {
+      toast({
+        title: "Delete failed",
+        description: "Failed to delete receipt. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
   const [rotation, setRotation] = useState(0);
   const [zoom, setZoom] = useState(1);
@@ -400,6 +427,22 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                 <div>
                   <label className="text-sm font-medium text-gray-500">Upload Date</label>
                   <p className="text-sm">{receipt.createdAt ? new Date(receipt.createdAt).toLocaleString() : 'Unknown'}</p>
+                </div>
+                <div className="pt-3">
+                  <Button 
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('Are you sure you want to delete this receipt? This action cannot be undone.')) {
+                        deleteReceiptMutation.mutate(receipt.id);
+                      }
+                    }}
+                    disabled={deleteReceiptMutation.isPending}
+                    className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    {deleteReceiptMutation.isPending ? 'Deleting...' : 'Delete Receipt'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
