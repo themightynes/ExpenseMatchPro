@@ -1,4 +1,8 @@
 import { 
+  receipts,
+  amexStatements,
+  amexCharges,
+  expenseTemplates,
   type User, 
   type InsertUser,
   type Receipt,
@@ -10,7 +14,8 @@ import {
   type ExpenseTemplate,
   type InsertExpenseTemplate
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, and, isNull, desc, between, count, lte, gte } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -26,7 +31,8 @@ export interface IStorage {
   deleteReceipt(id: string): Promise<boolean>;
   getReceiptsByStatus(status: string): Promise<Receipt[]>;
   getReceiptsByStatement(statementId: string): Promise<Receipt[]>;
-
+  autoAssignReceiptToStatement(receiptId: string): Promise<Receipt | undefined>;
+  
   // AMEX Statement methods
   createAmexStatement(statement: InsertAmexStatement): Promise<AmexStatement>;
   getAmexStatement(id: string): Promise<AmexStatement | undefined>;
@@ -53,332 +59,258 @@ export interface IStorage {
     readyCount: number;
     processingCount: number;
   }>;
+  
+  // File organization
+  getOrganizedPath(receipt: Receipt): string;
+  updateReceiptPath(receiptId: string, organizedPath: string): Promise<Receipt | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private receipts: Map<string, Receipt>;
-  private amexStatements: Map<string, AmexStatement>;
-  private amexCharges: Map<string, AmexCharge>;
-  private expenseTemplates: Map<string, ExpenseTemplate>;
-
+export class DatabaseStorage implements IStorage {
   constructor() {
-    this.users = new Map();
-    this.receipts = new Map();
-    this.amexStatements = new Map();
-    this.amexCharges = new Map();
-    this.expenseTemplates = new Map();
-    
-    // Initialize with sample statement periods
     this.initializeSampleData();
   }
 
   private async initializeSampleData() {
-    // Create sample statement periods
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
+    try {
+      // Check if we already have data
+      const existingStatements = await db.select().from(amexStatements).limit(1);
+      if (existingStatements.length > 0) return;
 
-    // Current statement period
-    const currentStatement = await this.createAmexStatement({
-      periodName: `${currentYear} - ${String(currentMonth + 1).padStart(2, '0')} Statement`,
-      startDate: new Date(currentYear, currentMonth, 1),
-      endDate: new Date(currentYear, currentMonth + 1, 0),
-      isActive: true,
-    });
+      // Create sample statement periods
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth();
+      const currentYear = currentDate.getFullYear();
 
-    // Add sample AMEX charges matching real CSV format
-    await this.createAmexCharge({
-      date: new Date("2025-08-05"),
-      statementId: currentStatement.id,
-      description: "AplPay STARBUCKS STOLOS ANGELES         CA",
-      cardMember: "ERNESTO CHAPA",
-      accountNumber: "-73007",
-      amount: "5.95",
-      extendedDetails: "1F401DEEA7F FAST FOOD RESTAURANT\nAplPay STARBUCKS STORE 2416\nLOS ANGELES\nCA\nFAST FOOD RESTAURANT",
-      statementAs: "AplPay STARBUCKS STOLOS ANGELES         CA",
-      address: "700 WEST 7TH ST",
-      cityState: "LOS ANGELES\nCA",
-      zipCode: "90017",
-      country: "UNITED STATES",
-      reference: "320250980454476712",
-      category: "Restaurant-Bar & Café",
-      isMatched: false,
-      receiptId: null,
-    });
+      // Current statement period
+      const [currentStatement] = await db.insert(amexStatements).values({
+        periodName: `${currentYear} - ${String(currentMonth + 1).padStart(2, '0')} Statement`,
+        startDate: new Date(currentYear, currentMonth, 1),
+        endDate: new Date(currentYear, currentMonth + 1, 0),
+        isActive: true,
+      }).returning();
 
-    await this.createAmexCharge({
-      date: new Date("2025-08-08"),
-      statementId: currentStatement.id,
-      description: "UBER EATS           help.uber.com       CA",
-      cardMember: "ERNESTO CHAPA",
-      accountNumber: "-73007",
-      amount: "160.86",
-      extendedDetails: "RT93WKEN   FK6L7SUN         94103\nUBER EATS\nhelp.uber.com\nCA\nFK6L7SUN         94103",
-      statementAs: "UBER EATS           help.uber.com       CA",
-      address: "1455 MARKET ST\n-",
-      cityState: "SAN FRANCISCO\nCA",
-      zipCode: "94103",
-      country: "UNITED STATES",
-      reference: "320250980453880764",
-      category: "Restaurant-Restaurant",
-      isMatched: false,
-      receiptId: null,
-    });
+      // Add sample receipts
+      await db.insert(receipts).values([
+        {
+          fileName: "starbucks_receipt_080525.jpg",
+          originalFileName: "IMG_4733.JPG",
+          fileUrl: "/objects/uploads/receipt-001",
+          merchant: "Starbucks",
+          amount: "5.95",
+          date: new Date("2025-08-05"),
+          category: "Restaurant-Bar & Café",
+          processingStatus: "completed",
+          statementId: currentStatement.id,
+          isMatched: false,
+        },
+        {
+          fileName: "uber_receipt_080825.pdf", 
+          originalFileName: "Receipt - Cebtro Jardinero Del Sur - Jul 7, 2025.pdf",
+          fileUrl: "/objects/uploads/receipt-002",
+          merchant: "Uber Eats",
+          amount: "23.45",
+          date: new Date("2025-08-08"),
+          category: "Restaurant-Restaurant",
+          processingStatus: "completed",
+          statementId: currentStatement.id,
+          isMatched: false,
+        }
+      ]);
 
-    await this.createAmexCharge({
-      date: new Date("2025-08-10"),
-      statementId: currentStatement.id,
-      description: "CVSExtraCare 8007467800-746-7287        RI",
-      cardMember: "ERNESTO CHAPA",
-      accountNumber: "-73007",
-      amount: "5.49",
-      extendedDetails: "100237289278333202273\nCVSExtraCare 8007467287RI 000002695\n800-746-7287\nRI\n8333202273",
-      statementAs: "CVSExtraCare 8007467800-746-7287        RI",
-      address: "1 CVS DR",
-      cityState: "WOONSOCKET\nRI",
-      zipCode: "02895",
-      country: "UNITED STATES",
-      reference: "320251000528383588",
-      category: "Merchandise & Supplies-Pharmacies",
-      isMatched: false,
-      receiptId: null,
-    });
-
-    // Add sample unmatched receipts for demonstration
-    await this.createReceipt({
-      fileName: "starbucks_receipt_080525.jpg",
-      originalFileName: "IMG_2345.jpg",
-      fileUrl: "/objects/uploads/receipt-001",
-      date: new Date("2025-08-05"),
-      merchant: "Starbucks Coffee",
-      amount: "12.85",
-      category: "Meals & Entertainment",
-      ocrText: "STARBUCKS STORE #12345\nDATE: 08/05/25\nTIME: 9:30 AM\nVenti Latte - $5.45\nCroissant - $3.95\nTax - $0.85\nTotal: $12.85\nCard ending in 1234",
-      extractedData: null,
-      amexStatementId: null,
-      isMatched: false,
-    });
-
-    await this.createReceipt({
-      fileName: "uber_receipt_080725.jpg",
-      originalFileName: "uber_trip.jpg", 
-      fileUrl: "/objects/uploads/receipt-002",
-      date: new Date("2025-08-07"),
-      merchant: "Uber Technologies Inc",
-      amount: "23.45",
-      category: "Transportation",
-      ocrText: "UBER\nTrip Receipt\nDate: Aug 7, 2025\nFrom: Office Building\nTo: Client Meeting\nFare: $20.50\nTip: $2.95\nTotal: $23.45",
-      extractedData: null,
-      amexStatementId: null,
-      isMatched: false,
-    });
-
-    // Previous statement periods
-    for (let i = 1; i <= 3; i++) {
-      const month = currentMonth - i;
-      const year = month < 0 ? currentYear - 1 : currentYear;
-      const adjustedMonth = month < 0 ? month + 12 : month;
-
-      await this.createAmexStatement({
-        periodName: `${year} - ${String(adjustedMonth + 1).padStart(2, '0')} Statement`,
-        startDate: new Date(year, adjustedMonth, 1),
-        endDate: new Date(year, adjustedMonth + 1, 0),
-        isActive: false,
-      });
+      // Add sample AMEX charges
+      await db.insert(amexCharges).values([
+        {
+          date: new Date("2025-08-05"),
+          statementId: currentStatement.id,
+          description: "AplPay STARBUCKS STOLOS ANGELES         CA",
+          cardMember: "ERNESTO CHAPA",
+          accountNumber: "-73007",
+          amount: "5.95",
+          extendedDetails: "1F401DEEA7F FAST FOOD RESTAURANT\nAplPay STARBUCKS STORE 2416\nLOS ANGELES\nCA\nFAST FOOD RESTAURANT",
+          statementAs: "AplPay STARBUCKS STOLOS ANGELES         CA",
+          address: "700 WEST 7TH ST",
+          cityState: "LOS ANGELES\nCA",
+          zipCode: "90017",
+          country: "UNITED STATES",
+          reference: "320250980454476712",
+          category: "Restaurant-Bar & Café",
+          isMatched: false,
+        },
+        {
+          date: new Date("2025-08-08"),
+          statementId: currentStatement.id,
+          description: "UBER EATS           help.uber.com       CA",
+          cardMember: "ERNESTO CHAPA",
+          accountNumber: "-73007",
+          amount: "23.45",
+          extendedDetails: "RT93WKEN   FK6L7SUN         94103\nUBER EATS\nhelp.uber.com\nCA\nFK6L7SUN         94103",
+          statementAs: "UBER EATS           help.uber.com       CA",
+          address: "1455 MARKET ST\n-",
+          cityState: "SAN FRANCISCO\nCA",
+          zipCode: "94103",
+          country: "UNITED STATES",
+          reference: "320250980453880764",
+          category: "Restaurant-Restaurant",
+          isMatched: false,
+        }
+      ]);
+      
+    } catch (error) {
+      console.error("Error initializing sample data:", error);
     }
   }
 
-  // User methods
+  // User methods (not implemented for this receipt management app)
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    return undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    return undefined; // Not implemented for this app
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async createUser(user: InsertUser): Promise<User> {
+    throw new Error("User creation not implemented");
   }
 
   // Receipt methods
-  async createReceipt(insertReceipt: InsertReceipt): Promise<Receipt> {
-    const id = randomUUID();
-    const now = new Date();
-    const receipt: Receipt = {
-      ...insertReceipt,
-      id,
-      createdAt: now,
-      updatedAt: now,
-      date: insertReceipt.date || null,
-      merchant: insertReceipt.merchant || null,
-      amount: insertReceipt.amount || null,
-      category: insertReceipt.category || null,
-      ocrText: insertReceipt.ocrText || null,
-      extractedData: insertReceipt.extractedData || null,
-      amexStatementId: insertReceipt.amexStatementId || null,
-      isMatched: insertReceipt.isMatched || false,
-    };
-    this.receipts.set(id, receipt);
-    return receipt;
+  async createReceipt(receipt: InsertReceipt): Promise<Receipt> {
+    const [newReceipt] = await db.insert(receipts).values(receipt).returning();
+    return newReceipt;
   }
 
   async getReceipt(id: string): Promise<Receipt | undefined> {
-    return this.receipts.get(id);
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, id));
+    return receipt || undefined;
   }
 
   async getAllReceipts(): Promise<Receipt[]> {
-    return Array.from(this.receipts.values()).sort((a, b) => 
-      new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
-    );
+    return await db.select().from(receipts).orderBy(desc(receipts.createdAt));
   }
 
   async updateReceipt(id: string, updates: Partial<Receipt>): Promise<Receipt | undefined> {
-    const receipt = this.receipts.get(id);
-    if (!receipt) return undefined;
-
-    const updatedReceipt = {
-      ...receipt,
-      ...updates,
-      updatedAt: new Date(),
-    };
-    this.receipts.set(id, updatedReceipt);
-    return updatedReceipt;
+    const [updated] = await db.update(receipts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(receipts.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   async deleteReceipt(id: string): Promise<boolean> {
-    return this.receipts.delete(id);
+    const result = await db.delete(receipts).where(eq(receipts.id, id));
+    return (result as any).rowCount > 0;
   }
 
   async getReceiptsByStatus(status: string): Promise<Receipt[]> {
-    return Array.from(this.receipts.values()).filter(
-      receipt => receipt.processingStatus === status
-    );
+    return await db.select().from(receipts)
+      .where(eq(receipts.processingStatus, status))
+      .orderBy(desc(receipts.createdAt));
   }
 
   async getReceiptsByStatement(statementId: string): Promise<Receipt[]> {
-    // For now, return all receipts since we don't have statement assignment logic yet
-    // In a real implementation, receipts would be assigned to statements based on date ranges
-    return Array.from(this.receipts.values());
+    return await db.select().from(receipts)
+      .where(eq(receipts.statementId, statementId))
+      .orderBy(desc(receipts.createdAt));
+  }
+
+  async autoAssignReceiptToStatement(receiptId: string): Promise<Receipt | undefined> {
+    const receipt = await this.getReceipt(receiptId);
+    if (!receipt || !receipt.date) return receipt;
+
+    // Find statement that contains this date
+    const statements = await db.select().from(amexStatements)
+      .where(and(
+        lte(amexStatements.startDate, receipt.date),
+        gte(amexStatements.endDate, receipt.date)
+      ));
+
+    if (statements.length > 0) {
+      return await this.updateReceipt(receiptId, { 
+        statementId: statements[0].id 
+      });
+    }
+
+    return receipt;
   }
 
   // AMEX Statement methods
-  async createAmexStatement(insertStatement: InsertAmexStatement): Promise<AmexStatement> {
-    const id = randomUUID();
-    const statement: AmexStatement = {
-      ...insertStatement,
-      id,
-      createdAt: new Date(),
-      isActive: insertStatement.isActive || false,
-    };
-    this.amexStatements.set(id, statement);
-    return statement;
+  async createAmexStatement(statement: InsertAmexStatement): Promise<AmexStatement> {
+    const [newStatement] = await db.insert(amexStatements).values(statement).returning();
+    return newStatement;
   }
 
   async getAmexStatement(id: string): Promise<AmexStatement | undefined> {
-    return this.amexStatements.get(id);
+    const [statement] = await db.select().from(amexStatements).where(eq(amexStatements.id, id));
+    return statement || undefined;
   }
 
   async getAllAmexStatements(): Promise<AmexStatement[]> {
-    return Array.from(this.amexStatements.values()).sort((a, b) => 
-      new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
-    );
+    return await db.select().from(amexStatements).orderBy(desc(amexStatements.startDate));
   }
 
   async updateAmexStatement(id: string, updates: Partial<AmexStatement>): Promise<AmexStatement | undefined> {
-    const statement = this.amexStatements.get(id);
-    if (!statement) return undefined;
-
-    const updatedStatement = { ...statement, ...updates };
-    this.amexStatements.set(id, updatedStatement);
-    return updatedStatement;
+    const [updated] = await db.update(amexStatements)
+      .set(updates)
+      .where(eq(amexStatements.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   async getActiveStatement(): Promise<AmexStatement | undefined> {
-    return Array.from(this.amexStatements.values()).find(
-      statement => statement.isActive
-    );
+    const [activeStatement] = await db.select().from(amexStatements)
+      .where(eq(amexStatements.isActive, true));
+    return activeStatement || undefined;
   }
 
   // AMEX Charge methods
-  async createAmexCharge(insertCharge: InsertAmexCharge): Promise<AmexCharge> {
-    const id = randomUUID();
-    const charge: AmexCharge = {
-      ...insertCharge,
-      id,
-      createdAt: new Date(),
-      extendedDetails: insertCharge.extendedDetails || null,
-      statementAs: insertCharge.statementAs || null,
-      address: insertCharge.address || null,
-      cityState: insertCharge.cityState || null,
-      zipCode: insertCharge.zipCode || null,
-      country: insertCharge.country || null,
-      category: insertCharge.category || null,
-      isMatched: insertCharge.isMatched || false,
-      reference: insertCharge.reference || null,
-      receiptId: insertCharge.receiptId || null,
-    };
-    this.amexCharges.set(id, charge);
-    return charge;
+  async createAmexCharge(charge: InsertAmexCharge): Promise<AmexCharge> {
+    const [newCharge] = await db.insert(amexCharges).values(charge).returning();
+    return newCharge;
   }
 
   async getAmexCharge(id: string): Promise<AmexCharge | undefined> {
-    return this.amexCharges.get(id);
+    const [charge] = await db.select().from(amexCharges).where(eq(amexCharges.id, id));
+    return charge || undefined;
   }
 
   async getChargesByStatement(statementId: string): Promise<AmexCharge[]> {
-    return Array.from(this.amexCharges.values()).filter(
-      charge => charge.statementId === statementId
-    );
+    return await db.select().from(amexCharges)
+      .where(eq(amexCharges.statementId, statementId))
+      .orderBy(desc(amexCharges.date));
   }
 
   async updateAmexCharge(id: string, updates: Partial<AmexCharge>): Promise<AmexCharge | undefined> {
-    const charge = this.amexCharges.get(id);
-    if (!charge) return undefined;
-
-    const updatedCharge = { ...charge, ...updates };
-    this.amexCharges.set(id, updatedCharge);
-    return updatedCharge;
+    const [updated] = await db.update(amexCharges)
+      .set(updates)
+      .where(eq(amexCharges.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {
-    return Array.from(this.amexCharges.values()).filter(
-      charge => charge.statementId === statementId && !charge.isMatched
-    );
-  }
-
-  async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {
-    return Array.from(this.amexCharges.values()).filter(
-      charge => charge.statementId === statementId && !charge.isMatched
-    );
+    return await db.select().from(amexCharges)
+      .where(and(
+        eq(amexCharges.statementId, statementId),
+        eq(amexCharges.isMatched, false)
+      ))
+      .orderBy(desc(amexCharges.date));
   }
 
   // Expense Template methods
-  async createExpenseTemplate(insertTemplate: InsertExpenseTemplate): Promise<ExpenseTemplate> {
-    const id = randomUUID();
-    const template: ExpenseTemplate = {
-      ...insertTemplate,
-      id,
-      generatedAt: new Date(),
-    };
-    this.expenseTemplates.set(id, template);
-    return template;
+  async createExpenseTemplate(template: InsertExpenseTemplate): Promise<ExpenseTemplate> {
+    const [newTemplate] = await db.insert(expenseTemplates).values(template).returning();
+    return newTemplate;
   }
 
   async getExpenseTemplate(id: string): Promise<ExpenseTemplate | undefined> {
-    return this.expenseTemplates.get(id);
+    const [template] = await db.select().from(expenseTemplates).where(eq(expenseTemplates.id, id));
+    return template || undefined;
   }
 
   async getTemplatesByStatement(statementId: string): Promise<ExpenseTemplate[]> {
-    return Array.from(this.expenseTemplates.values()).filter(
-      template => template.statementId === statementId
-    );
+    return await db.select().from(expenseTemplates)
+      .where(eq(expenseTemplates.statementId, statementId))
+      .orderBy(desc(expenseTemplates.generatedAt));
   }
 
   // Dashboard stats
@@ -388,15 +320,54 @@ export class MemStorage implements IStorage {
     readyCount: number;
     processingCount: number;
   }> {
-    const receipts = Array.from(this.receipts.values());
-    
+    const [processedResult] = await db.select({ count: count() })
+      .from(receipts)
+      .where(eq(receipts.processingStatus, "completed"));
+
+    const [pendingResult] = await db.select({ count: count() })
+      .from(receipts)
+      .where(eq(receipts.processingStatus, "pending"));
+
+    const [processingResult] = await db.select({ count: count() })
+      .from(receipts)
+      .where(eq(receipts.processingStatus, "processing"));
+
+    const [readyResult] = await db.select({ count: count() })
+      .from(receipts)
+      .where(and(
+        eq(receipts.processingStatus, "completed"),
+        eq(receipts.isMatched, false)
+      ));
+
     return {
-      processedCount: receipts.filter(r => r.processingStatus === 'completed').length,
-      pendingCount: receipts.filter(r => r.processingStatus === 'pending' || !r.isMatched).length,
-      readyCount: receipts.filter(r => r.processingStatus === 'completed' && r.isMatched).length,
-      processingCount: receipts.filter(r => r.processingStatus === 'processing').length,
+      processedCount: processedResult.count,
+      pendingCount: pendingResult.count,
+      readyCount: readyResult.count,
+      processingCount: processingResult.count,
     };
+  }
+
+  // File organization
+  getOrganizedPath(receipt: Receipt): string {
+    if (!receipt.statementId || !receipt.date || !receipt.merchant || !receipt.amount) {
+      return `/Inbox_New/${receipt.fileName}`;
+    }
+
+    const statement = receipt.statementId;
+    const dateStr = receipt.date.toISOString().split('T')[0]; // YYYY-MM-DD
+    const merchant = receipt.merchant.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+    const amount = receipt.amount.replace('.', '_');
+    const ext = receipt.fileName.split('.').pop();
+    
+    const newFileName = `${dateStr}_${merchant}_$${amount}.${ext}`;
+    const folder = receipt.isMatched ? 'matched' : 'unmatched';
+    
+    return `/objects/${statement}/${folder}/${newFileName}`;
+  }
+
+  async updateReceiptPath(receiptId: string, organizedPath: string): Promise<Receipt | undefined> {
+    return await this.updateReceipt(receiptId, { organizedPath });
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

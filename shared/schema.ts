@@ -21,8 +21,10 @@ export const receipts = pgTable("receipts", {
   ocrText: text("ocr_text"),
   extractedData: jsonb("extracted_data"),
   processingStatus: text("processing_status").notNull().default("pending"), // pending, processing, completed, failed
-  amexStatementId: varchar("amex_statement_id"),
+  statementId: varchar("statement_id").references(() => amexStatements.id),
   isMatched: boolean("is_matched").default(false),
+  matchedChargeId: varchar("matched_charge_id").references(() => amexCharges.id),
+  organizedPath: text("organized_path"), // Path after file reorganization
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });

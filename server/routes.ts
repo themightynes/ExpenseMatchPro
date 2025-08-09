@@ -10,6 +10,7 @@ import {
   EXPENSE_CATEGORIES 
 } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { fileOrganizer } from "./fileOrganizer";
 import multer from "multer";
 
 // Configure multer for file uploads
@@ -302,6 +303,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Receipt or charge not found" });
       }
 
+      // Reorganize file after matching
+      if (receipt) {
+        await fileOrganizer.organizeReceipt(receipt);
+      }
+
       res.json({ receipt, charge });
     } catch (error) {
       console.error("Error matching receipt to charge:", error);
@@ -382,6 +388,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting categories:", error);
       res.status(500).json({ error: "Failed to get categories" });
+    }
+  });
+
+  // Auto-assignment and intelligent matching
+  app.post("/api/receipts/:id/auto-assign", async (req, res) => {
+    try {
+      const receipt = await fileOrganizer.autoAssignToStatement(req.params.id);
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+      res.json(receipt);
+    } catch (error) {
+      console.error("Error auto-assigning receipt:", error);
+      res.status(500).json({ error: "Failed to auto-assign receipt" });
+    }
+  });
+
+  app.get("/api/receipts/:id/suggestions", async (req, res) => {
+    try {
+      const suggestions = await fileOrganizer.suggestMatching(req.params.id);
+      res.json(suggestions);
+    } catch (error) {
+      console.error("Error getting matching suggestions:", error);
+      res.status(500).json({ error: "Failed to get matching suggestions" });
     }
   });
 
