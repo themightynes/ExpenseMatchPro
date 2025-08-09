@@ -1237,6 +1237,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update statement
+  app.put("/api/statements/:id", async (req, res) => {
+    try {
+      const statementId = req.params.id;
+      const updateData = req.body;
+      
+      // Update the statement
+      const updatedStatement = await storage.updateAmexStatement(statementId, updateData);
+      
+      if (updatedStatement) {
+        res.json(updatedStatement);
+      } else {
+        res.status(404).json({ error: "Statement not found" });
+      }
+    } catch (error) {
+      console.error("Error updating statement:", error);
+      res.status(500).json({ error: "Failed to update statement" });
+    }
+  });
+
   // Delete statement and all its charges
   app.delete("/api/statements/:id", async (req, res) => {
     try {

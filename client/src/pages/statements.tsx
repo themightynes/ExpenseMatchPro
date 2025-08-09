@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import CsvUploadModal from "@/components/CsvUploadModal";
 import StatementChargesDialog from "@/components/StatementChargesDialog";
 import type { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
-import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List, Trash2 } from "lucide-react";
+import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List, Trash2, Edit2, Check, X } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -15,6 +16,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 export default function StatementsPage() {
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [selectedStatement, setSelectedStatement] = useState<AmexStatement | null>(null);
+  const [editingStatement, setEditingStatement] = useState<string | null>(null);
+  const [editedName, setEditedName] = useState("");
 
   const { data: statements = [], isLoading: statementsLoading } = useQuery<AmexStatement[]>({
     queryKey: ["/api/statements"],
@@ -54,6 +57,49 @@ export default function StatementsPage() {
       });
     },
   });
+
+  const updateStatementMutation = useMutation({
+    mutationFn: async ({ id, periodName }: { id: string; periodName: string }) => {
+      const response = await apiRequest("PUT", `/api/statements/${id}`, {
+        periodName: periodName.trim(),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/statements"] });
+      setEditingStatement(null);
+      toast({
+        title: "Statement Updated",
+        description: "Statement title has been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating statement:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update statement title. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleStartEdit = (statement: AmexStatement) => {
+    setEditingStatement(statement.id);
+    setEditedName(statement.periodName);
+  };
+
+  const handleSaveEdit = (statementId: string) => {
+    if (editedName.trim()) {
+      updateStatementMutation.mutate({ id: statementId, periodName: editedName.trim() });
+    } else {
+      setEditingStatement(null);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingStatement(null);
+    setEditedName("");
+  };
 
   const getStatementStats = (statementId: string) => {
     const charges = allCharges.filter(charge => charge.statementId === statementId);
@@ -199,8 +245,50 @@ export default function StatementsPage() {
                   <Card key={statement.id} className="hover:shadow-lg transition-shadow">
                     <CardHeader>
                       <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle className="text-lg">{statement.periodName}</CardTitle>
+                        <div className="flex-1">
+                          {editingStatement === statement.id ? (
+                            <div className="flex items-center gap-2 mb-2">
+                              <Input
+                                value={editedName}
+                                onChange={(e) => setEditedName(e.target.value)}
+                                className="text-lg font-semibold"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveEdit(statement.id);
+                                  if (e.key === 'Escape') handleCancelEdit();
+                                }}
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveEdit(statement.id)}
+                                disabled={updateStatementMutation.isPending}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleCancelEdit}
+                                disabled={updateStatementMutation.isPending}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 mb-2 group">
+                              <CardTitle className="text-lg cursor-pointer hover:text-blue-600 transition-colors">
+                                {statement.periodName}
+                              </CardTitle>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6"
+                                onClick={() => handleStartEdit(statement)}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                           <p className="text-sm text-gray-600">
                             {new Date(statement.startDate).toLocaleDateString()} - {new Date(statement.endDate).toLocaleDateString()}
                           </p>
