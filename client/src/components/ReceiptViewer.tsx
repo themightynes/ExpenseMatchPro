@@ -489,7 +489,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                           <Loader2 className="w-3 h-3 animate-spin" />
                           Processing OCR
                         </Badge>
-                      ) : receipt.ocrText === 'Manual entry required' || receipt.ocrText === 'OCR failed - manual entry required' ? (
+                      ) : receipt.ocrText === 'Manual entry required' || receipt.ocrText === 'OCR failed - manual entry required' || (receipt.ocrText && receipt.ocrText.includes('PDF receipt detected')) ? (
                         <Button
                           variant="outline"
                           size="sm"

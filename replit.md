@@ -76,7 +76,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (August 9, 2025)
 - **Fixed CSV Import**: Resolved date parsing errors for AMEX statement imports (MM/DD/YYYY format now working)
-- **Disabled OCR Processing**: Removed slow OCR (30+ minutes per receipt) in favor of instant manual entry
+- **Enhanced OCR Processing**: Implemented comprehensive OCR system using Tesseract.js for image processing
+- **Manual OCR Trigger**: Added "Extract Text" button for manual OCR processing of existing receipts
+- **PDF Handling**: PDF files provide helpful guidance for manual entry instead of attempting complex OCR conversion
+- **Image OCR Support**: JPEG, PNG, and other image formats processed automatically with Tesseract.js
+- **OCR Status Indicators**: Clear visual feedback showing processing status, completion, and manual entry options
 - **Multi-File Upload**: Added support for uploading multiple receipts simultaneously with progress tracking
 - **Enhanced UI Feedback**: Clear status indicators for receipts requiring manual data entry
 - **Automatic Organization**: Statement folders created automatically when CSV files are imported

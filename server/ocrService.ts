@@ -65,6 +65,14 @@ export class OCRService {
    * Parse receipt information from OCR text
    */
   private parseReceiptData(text: string): ExtractedReceiptData {
+    // Handle PDF guidance message - don't try to parse it
+    if (text.includes("PDF receipt detected") || text.includes("manual entry")) {
+      return {
+        items: []
+        // Don't set merchant or other fields for PDF guidance messages
+      };
+    }
+
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
     const data: ExtractedReceiptData = {

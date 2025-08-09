@@ -340,8 +340,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             processingStatus: 'completed'
           };
 
-          // If we extracted useful data, populate the fields (but don't overwrite existing data)
-          if (extractedData.merchant && !receipt.merchant) updates.merchant = extractedData.merchant;
+          // For PDF guidance messages, clear any extracted merchant data
+          if (ocrText.includes("PDF receipt detected")) {
+            updates.extractedData = { items: [] }; // Clear extracted data for PDFs
+            // If the merchant field was set to the guidance text, clear it
+            if (receipt.merchant && receipt.merchant.includes("PDF receipt detected")) {
+              updates.merchant = null;
+            }
+          } else {
+            // If we extracted useful data, populate the fields (but don't overwrite existing data)
+            if (extractedData.merchant && !receipt.merchant) {
+              updates.merchant = extractedData.merchant;
+            }
+          }
           if (extractedData.amount && !receipt.amount) updates.amount = extractedData.amount;
           if (extractedData.date && !receipt.date) updates.date = extractedData.date;
           if (extractedData.category && !receipt.category) updates.category = extractedData.category;
