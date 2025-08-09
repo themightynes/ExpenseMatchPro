@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Folder, FolderOpen, File, Search, Eye, ChevronRight, ChevronDown } from "lucide-react";
+import { Folder, FolderOpen, File, Search, Eye, ChevronRight, ChevronDown, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 import ReceiptViewer from "@/components/ReceiptViewer";
 import type { Receipt, AmexStatement } from "@shared/schema";
 
@@ -187,6 +188,12 @@ export default function ReceiptsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
+              <Link href="/">
+                <Button variant="ghost" size="sm" className="mr-3">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+              </Link>
               <Folder className="text-primary text-2xl mr-3" />
               <h1 className="text-xl font-semibold text-gray-900">All Receipts</h1>
             </div>
