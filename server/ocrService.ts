@@ -45,12 +45,12 @@ export class OCRService {
       
       // Convert PDF to images (first page only for performance)
       const convert = fromBuffer(buffer, {
-        density: 150,           // Lower DPI for better compatibility
+        density: 200,           // Higher DPI for better text quality
         saveFilename: "receipt",
         savePath: "/tmp",
-        format: "jpeg",         // Use JPEG instead of PNG for better compatibility
-        width: 1200,           // Reasonable resolution
-        height: 1600
+        format: "png",          // PNG for better text quality
+        quality: 100,           // Maximum quality
+        preserveAspectRatio: true
       });
       
       console.log('Converting PDF page 1 to image...');
@@ -64,10 +64,31 @@ export class OCRService {
       console.log('PDF converted to image, starting text extraction...');
       
       // Validate the image buffer before processing
-      if (result.buffer.length < 1000) {
-        console.log('Converted image appears to be too small or corrupted');
-        return "PDF processing: Converted image appears corrupted. This might be a complex PDF format. Please enter the receipt details manually.";
+      if (result.buffer.length < 5000) { // Increased threshold for better validation
+        console.log('Converted image appears to be too small or corrupted, buffer size:', result.buffer.length);
+        
+        // Try alternative conversion settings
+        console.log('Attempting PDF conversion with alternative settings...');
+        try {
+          const fallbackConvert = fromBuffer(buffer, {
+            density: 150,
+            format: "jpeg",
+            quality: 90
+          });
+          const fallbackResult = await fallbackConvert(1, { responseType: "buffer" });
+          
+          if (fallbackResult?.buffer && fallbackResult.buffer.length > 5000) {
+            console.log('Fallback conversion successful, buffer size:', fallbackResult.buffer.length, 'bytes');
+            return await this.extractImageText(fallbackResult.buffer);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback conversion also failed:', fallbackError);
+        }
+        
+        return "PDF processing: Unable to convert PDF to readable image. This might be a password-protected, scanned, or complex PDF format. Please enter the receipt details manually for accurate AMEX matching.";
       }
+      
+      console.log('PDF conversion successful, image buffer size:', result.buffer.length, 'bytes');
       
       // Use existing image OCR processing with error handling
       try {
@@ -107,7 +128,8 @@ export class OCRService {
       return text || '';
     } catch (error) {
       console.error('Error with text extraction:', error);
-      throw new Error(`Failed to extract text from image: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to extract text from image: ${errorMessage}`);
     }
   }
 
