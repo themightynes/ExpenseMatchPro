@@ -1,0 +1,74 @@
+Here’s a rewritten prompt you can paste into the Replit Agent. It avoids stack assumptions and keeps your app safe.
+
+⸻
+
+Task: Inline PDF viewer on the same screen as the editable Receipt form (mobile‑first)
+
+Primary goal: Let the user view a receipt PDF and edit its fields simultaneously (no popup/new tab). Do not change OCR/back‑end. Only surface the existing “Extract Text” action if present.
+
+Guardrails (do not break the app)
+	•	Do not rename/move existing files or routes.
+	•	Do not change schemas, env vars, auth, or OCR logic.
+	•	Make this feature opt‑in behind a small, local feature flag (e.g., ENABLE_INLINE_PDF_VIEWER) so we can revert quickly.
+	•	Prefer progressive enhancement: if inline rendering fails, fall back to the current “Open in new tab / Download” actions.
+
+Discover & integrate (no assumptions)
+	1.	Locate the receipt detail screen (where “Open PDF in New Tab” currently exists). Note its route and component names.
+	2.	Detect how the PDF URL is obtained (prop, state, or fetch). Reuse the existing URL/path.
+	3.	Detect the receipt edit form component that shows Merchant/Date/Amount/Category/Status. Reuse it without changing its contract.
+
+Implementation (keep tech neutral)
+
+Add a self‑contained viewer component next to/below the form:
+	•	Create InlinePdfViewer.(tsx|jsx) in the same area as the receipt components.
+	•	The viewer should accept a single prop: src (string URL to the PDF).
+	•	Rendering order:
+	•	Mobile: PDF on top, form below.
+	•	Tablet/Desktop: Two panes (PDF left, form right).
+	•	Controls: page prev/next, page indicator, zoom in/out, and a button to open in full tab (existing behavior).
+	•	Fallback: if inline render errors or src missing, show the current “Open / Download” buttons.
+
+Rendering options (pick the safest that fits the current codebase)
+	•	If the project already has a PDF component, reuse it.
+	•	If not, prefer the simplest native approach first:
+	•	Try <embed src={pdfUrl} type="application/pdf"> or <iframe> for a minimal, low‑risk inline view.
+	•	Only if native fallback is blocked (e.g., CORS or browser limitations), you may add a single lightweight dependency for client‑side rendering. If you add anything:
+	•	Keep it scoped to the new component.
+	•	No global config, no app‑wide providers.
+	•	Add it to package.json without upgrading existing packages.
+	•	Ensure pinch‑to‑zoom works on mobile (native viewers handle this; if not, provide zoom buttons).
+
+Layout specifics
+	•	Mobile (<768px): stacked sections with a sticky mini‑toolbar at the top of the PDF (prev/next, zoom, page x/y). The form sits directly below and is immediately reachable—no modal.
+	•	Desktop (≥768px): split layout using existing utilities (grid/flex already used in the project). Left pane: PDF with its own scroll; right pane: form with independent scroll.
+	•	Preserve current theme: same typography scale, border radius, shadows, and primary color for buttons.
+
+Wire to existing actions (no API changes)
+	•	Keep Extract Text exactly as is (call the current action/endpoint). Show a non‑blocking toast when it completes.
+	•	Keep Save behavior identical; do not alter validation.
+	•	Maintain the current status chip (“Needs Entry”, etc.).
+
+Feature flag + fallback
+	•	Wrap the new viewer with a flag check (e.g., from a local config file or env var).
+	•	If disabled or failing, render the existing buttons (Open/Download) so nothing regresses.
+
+A11y & keyboard
+	•	Buttons have aria‑labels; page indicator is announced.
+	•	Desktop shortcuts (optional): [/] for page nav, +/- for zoom.
+	•	Respect focus outlines.
+
+Acceptance criteria
+	•	On mobile, I can scroll/zoom the PDF and then edit fields on the same screen—no popup.
+	•	On desktop, I see PDF (left) and form (right) at the same time, scrolling independently.
+	•	If the inline viewer can’t render, I still see Open in new tab/Download exactly like before.
+	•	No changes to OCR, data schema, or routes. Build passes, no type errors, no broken imports.
+
+What to deliver
+	•	New component InlinePdfViewer.(tsx|jsx) and minimal wiring to the receipt detail screen.
+	•	A small config/flag to toggle the inline viewer.
+	•	Zero or one new dependency (only if strictly needed).
+	•	Screenshots (mobile & desktop) and a short note of files touched.
+
+⸻
+
+Start by: finding the receipt detail component with “Open PDF in New Tab”, then add InlinePdfViewer and a responsive wrapper that slots it above/beside the existing form, guarded by the feature flag.

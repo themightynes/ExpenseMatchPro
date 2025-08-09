@@ -24,6 +24,8 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useMutation } from '@tanstack/react-query';
 import type { Receipt } from '@shared/schema';
+import InlinePdfViewer from '@/components/InlinePdfViewer';
+import { features } from '@/config/features';
 
 // Import react-image-crop for cropping functionality
 import ReactCrop from 'react-image-crop';
@@ -413,23 +415,21 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Receipt Image/PDF Viewer */}
         <div className="flex-1 bg-gray-100 overflow-auto relative">
-          <div 
-            ref={imageContainerRef}
-            className="flex justify-center items-center min-h-full p-4 overflow-hidden"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            style={{ cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
-          >
-            {imageUrl ? (
-              isPDF ? (
+          {imageUrl ? (
+            isPDF && features.inlinePdfViewer ? (
+              // Inline PDF Viewer
+              <InlinePdfViewer 
+                src={imageUrl} 
+                fileName={receipt.originalFileName} 
+              />
+            ) : isPDF ? (
+              // Fallback PDF display
+              <div 
+                className="flex justify-center items-center min-h-full p-4"
+              >
                 <div className="w-full max-w-sm">
                   <Card className="text-center">
                     <CardContent className="p-6">
@@ -467,7 +467,21 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                     </CardContent>
                   </Card>
                 </div>
-              ) : (
+              </div>
+            ) : (
+              // Image viewer with zoom controls
+              <div 
+                ref={imageContainerRef}
+                className="flex justify-center items-center min-h-full p-4 overflow-hidden"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                style={{ cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+              >
                 <div className="w-full max-w-4xl">
                   <img
                     ref={imgRef}
@@ -489,66 +503,66 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                     }}
                   />
                 </div>
-              )
-            ) : (
-              <div className="text-center text-gray-500">
+
+                {/* Zoom Controls - Only show for images, not PDFs */}
+                <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={zoomIn}
+                    className="p-2 h-8 w-8"
+                    disabled={zoom >= 3}
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={zoomOut}
+                    className="p-2 h-8 w-8"
+                    disabled={zoom <= 0.5}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={resetZoom}
+                    className="p-2 h-8 w-8"
+                    disabled={zoom === 1 && rotation === 0}
+                  >
+                    <span className="text-xs font-mono">1:1</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={rotate}
+                    className="p-2 h-8 w-8"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Zoom indicator */}
+                {zoom !== 1 && (
+                  <div className="absolute bottom-4 left-4 bg-black/70 text-white px-2 py-1 rounded text-sm">
+                    {Math.round(zoom * 100)}%
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            <div className="flex justify-center items-center min-h-full text-center text-gray-500">
+              <div>
                 <FileText className="h-16 w-16 mx-auto mb-4" />
                 <p>Unable to load receipt image</p>
               </div>
-            )}
-          </div>
-          
-          {/* Zoom Controls - Only show for images, not PDFs */}
-          {imageUrl && !isPDF && (
-            <div className="absolute top-4 right-4 flex flex-col gap-2 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={zoomIn}
-                className="p-2 h-8 w-8"
-                disabled={zoom >= 3}
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={zoomOut}
-                className="p-2 h-8 w-8"
-                disabled={zoom <= 0.5}
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetZoom}
-                className="p-2 h-8 w-8"
-                disabled={zoom === 1 && rotation === 0}
-              >
-                <span className="text-xs font-mono">1:1</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={rotate}
-                className="p-2 h-8 w-8"
-              >
-                <RotateCw className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-          
-          {/* Zoom indicator */}
-          {imageUrl && !isPDF && zoom !== 1 && (
-            <div className="absolute bottom-4 left-4 bg-black/70 text-white px-2 py-1 rounded text-sm">
-              {Math.round(zoom * 100)}%
             </div>
           )}
         </div>
 
-        {/* Mobile Bottom Panel - Receipt Details */}
-        <div className="bg-white border-t border-gray-200 max-h-[50vh] overflow-y-auto">
+        {/* Receipt Details Panel - Side panel on desktop, bottom panel on mobile */}
+        <div className="bg-white border-t md:border-t-0 md:border-l border-gray-200 w-full md:w-96 md:flex-shrink-0 max-h-[50vh] md:max-h-none overflow-y-auto">
           <div className="p-4 space-y-4">
             {/* Edit Form */}
             {isEditing ? (
