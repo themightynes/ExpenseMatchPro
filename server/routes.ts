@@ -270,8 +270,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // First pass: analyze CSV data to determine date range
       const charges = [];
-      let minDate = new Date();
-      let maxDate = new Date(0);
+      let minDate: Date | null = null; // Will be set to first valid date
+      let maxDate: Date | null = null; // Will be set to first valid date
       let imported = 0;
       let errors = 0;
 
@@ -297,11 +297,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          const chargeDate = new Date(validatedRow.Date);
+          // Parse MM/DD/YYYY format properly
+          const dateParts = validatedRow.Date.split('/');
+          if (dateParts.length !== 3) {
+            console.error(`Invalid date format: ${validatedRow.Date}`);
+            continue;
+          }
+          
+          const month = parseInt(dateParts[0]);
+          const day = parseInt(dateParts[1]);
+          const year = parseInt(dateParts[2]);
+          
+          // Validate date components
+          if (isNaN(month) || isNaN(day) || isNaN(year) || month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+            console.error(`Invalid date components: ${validatedRow.Date} -> month:${month}, day:${day}, year:${year}`);
+            continue;
+          }
+          
+          const chargeDate = new Date(year, month - 1, day);
+          
+          // Validate that the date was created correctly
+          if (isNaN(chargeDate.getTime())) {
+            console.error(`Failed to create valid date from: ${validatedRow.Date}`);
+            continue;
+          }
           
           // Track date range for statement period
-          if (chargeDate < minDate) minDate = chargeDate;
-          if (chargeDate > maxDate) maxDate = chargeDate;
+          if (!minDate || chargeDate < minDate) minDate = chargeDate;
+          if (!maxDate || chargeDate > maxDate) maxDate = chargeDate;
 
           // Store charge data for later insertion
           charges.push({
@@ -324,6 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         } catch (error) {
           console.error(`Error processing row ${i}:`, error);
+          console.error("Row data:", line);
           errors++;
         }
       }
@@ -331,6 +355,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (charges.length === 0) {
         return res.status(400).json({ error: "No valid charges found in CSV file" });
       }
+
+      // Validate date range before creating statement
+      if (!minDate || !maxDate) {
+        console.error("No valid dates found in CSV");
+        return res.status(400).json({ error: "No valid dates found in CSV file" });
+      }
+
+      if (minDate > maxDate) {
+        console.error("Invalid date range:", { minDate, maxDate });
+        return res.status(400).json({ error: "Invalid date range detected in CSV" });
+      }
+
+      console.log("Creating statement with date range:", { minDate, maxDate, periodName: periodName.trim() });
 
       // Create new statement period with detected date range
       const statement = await storage.createAmexStatement({
