@@ -205,27 +205,27 @@ export default function Dashboard() {
                     style={{ width: `${financialStats.matchingPercentage}%` }}
                   ></div>
                 </div>
-                <div className="flex justify-between text-sm text-gray-600">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-2 text-sm text-gray-600">
                   <span>Matched: ${financialStats.totalMatchedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   <span>Remaining: ${(financialStats.totalStatementAmount - financialStats.totalMatchedAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 {financialStats.matchingPercentage < 100 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-orange-600">⚠️</span>
-                      <span>Complete your matching to get 100% expense tracking accuracy</span>
+                      <span className="break-words">Complete your matching to get 100% expense tracking accuracy</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       {financialStats.unmatchedReceiptCount > 0 && (
                         <Link to="/matching">
-                          <Button size="sm" variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-50">
+                          <Button size="sm" variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-50 whitespace-nowrap">
                             Match {financialStats.unmatchedReceiptCount} Receipts
                           </Button>
                         </Link>
                       )}
                       {financialStats.missingReceiptCount > 0 && (
                         <Link to="/receipts">
-                          <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+                          <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 whitespace-nowrap">
                             Upload {financialStats.missingReceiptCount} Missing Receipts
                           </Button>
                         </Link>
@@ -234,13 +234,13 @@ export default function Dashboard() {
                   </div>
                 )}
                 {financialStats.matchingPercentage === 100 && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm text-green-600">
                       <span>✅</span>
-                      <span>Perfect! All expenses are matched and ready for reporting</span>
+                      <span className="break-words">Perfect! All expenses are matched and ready for reporting</span>
                     </div>
                     <Link to="/templates">
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700 whitespace-nowrap">
                         Generate Expense Report
                       </Button>
                     </Link>
@@ -299,7 +299,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <CardTitle>Recent Uploads</CardTitle>
                   <Link to="/receipts">
-                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                    <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80 px-2">
                       View All
                     </Button>
                   </Link>
@@ -369,7 +369,7 @@ export default function Dashboard() {
                   )}
                 </div>
                 <Link to="/statements">
-                  <Button variant="outline" className="w-full mt-4">
+                  <Button variant="outline" size="sm" className="w-full mt-3">
                     View All Periods
                   </Button>
                 </Link>
