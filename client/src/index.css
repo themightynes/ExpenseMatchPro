@@ -248,3 +248,50 @@
     border-color: hsl(207 90% 64%);
   }
 }
+
+/* Mobile touch improvements */
+@media (max-width: 768px) {
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  /* Uppy modal mobile fixes */
+  .uppy-Dashboard {
+    max-height: 85vh !important;
+    margin: 1rem !important;
+    border-radius: 0.5rem !important;
+  }
+  
+  .uppy-Dashboard-inner {
+    border-radius: 0.5rem !important;
+  }
+  
+  .uppy-DashboardContent-bar {
+    padding: 0.5rem !important;
+  }
+  
+  .uppy-Dashboard-Item {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  /* Fix modal positioning on mobile */
+  .uppy-Dashboard.uppy-Dashboard--modal {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: calc(100vw - 2rem) !important;
+    max-width: none !important;
+    z-index: 9999 !important;
+  }
+  
+  .uppy-Dashboard-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 9998 !important;
+  }
+}
