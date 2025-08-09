@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, ZoomIn, ZoomOut, RotateCw, Save, Edit, Lock, Download, FileText } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Receipt } from "@shared/schema";
 
@@ -44,16 +44,18 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
   const { toast } = useToast();
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch(`/api/receipts/${receipt.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error('Failed to update receipt');
+    mutationFn: async (updates: any) => {
+      console.log("Updating receipt with data:", updates);
+      const response = await apiRequest("PATCH", `/api/receipts/${receipt.id}`, updates);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Update failed:", response.status, errorText);
+        throw new Error(`Update failed: ${response.status}`);
+      }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Receipt updated successfully:", data);
       toast({
         title: "Receipt Updated",
         description: "Receipt data has been saved successfully.",
@@ -61,7 +63,8 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
       queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
       setIsEditing(false);
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("Update mutation error:", error);
       toast({
         title: "Update Failed",
         description: "Failed to save receipt data. Please try again.",
@@ -80,10 +83,10 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
 
   const handleSave = () => {
     const updates = {
-      merchant: editedData.merchant,
-      amount: editedData.amount,
-      date: editedData.date ? new Date(editedData.date) : null,
-      category: editedData.category,
+      merchant: editedData.merchant || null,
+      amount: editedData.amount || null,
+      date: editedData.date || null,
+      category: editedData.category || null,
     };
     updateMutation.mutate(updates);
   };
