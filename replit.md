@@ -90,3 +90,4 @@ Preferred communication style: Simple, everyday language.
 - **Fixed Receipt-Charge Linking**: Uses correct AMEX 'description' field instead of non-existent 'merchant' field
 - **Receipt Deletion**: Added delete functionality to remove unwanted receipts with automatic charge unlinking
 - **Duplicate Statement Detection**: CSV upload now checks for overlapping statement periods to prevent duplicate imports
+- **Comprehensive Documentation**: Created complete documentation system with feature guides, API reference, changelog, and roadmap
