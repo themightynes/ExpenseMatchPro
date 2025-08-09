@@ -113,3 +113,7 @@ Preferred communication style: Simple, everyday language.
 - **Email Navigation**: Added email import page to main navigation with user-friendly interface
 - **Corporate Email Support**: Alternative methods for secure email environments including forwarding and EML file options
 - **Comprehensive Documentation**: Created complete documentation system with changelog, features guide, API reference, and user manual
+- **Inline PDF Viewer**: Implemented inline PDF viewing with responsive layout - mobile shows PDF above form, desktop shows side-by-side panels
+- **PDF Controls**: Added zoom, page navigation, and external link buttons for enhanced PDF interaction
+- **Progressive Enhancement**: Feature flag system allows fallback to "Open in New Tab" if inline rendering fails
+- **Responsive Receipt Viewer**: Enhanced ReceiptViewer with proper desktop/mobile layouts for simultaneous PDF viewing and form editing
