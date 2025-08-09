@@ -38,6 +38,27 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     queryKey: ["/api/matching/candidates", statementId],
   });
 
+  // Extract data from candidates (must be called before any early returns)
+  const pairs = (candidates as any)?.pairs || [];
+  const allReceipts: Receipt[] = (candidates as any)?.receipts || [];
+  const allCharges: AmexCharge[] = (candidates as any)?.charges || [];
+
+  // Apply filters to receipts (useMemo must be called before early returns)
+  const filteredReceipts = useMemo(() => {
+    return allReceipts.filter(receipt => {
+      const amount = parseFloat(receipt.amount || '0');
+      const date = receipt.date ? new Date(receipt.date) : null;
+      
+      if (filters.minAmount && amount < parseFloat(filters.minAmount)) return false;
+      if (filters.maxAmount && amount > parseFloat(filters.maxAmount)) return false;
+      if (filters.startDate && date && date < new Date(filters.startDate)) return false;
+      if (filters.endDate && date && date > new Date(filters.endDate)) return false;
+      if (filters.merchant && !receipt.merchant?.toLowerCase().includes(filters.merchant.toLowerCase())) return false;
+      
+      return true;
+    });
+  }, [allReceipts, filters]);
+
   const matchMutation = useMutation({
     mutationFn: async ({ receiptId, chargeId }: { receiptId: string; chargeId: string }) => {
       const response = await apiRequest("POST", "/api/matching/match", { receiptId, chargeId });
@@ -75,6 +96,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     });
   };
 
+  // Early returns after all hooks have been called
   if (isLoading) {
     return (
       <div className="text-center py-12">
@@ -84,32 +106,9 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
-  const pairs = (candidates as any)?.pairs || [];
-  const allReceipts: Receipt[] = (candidates as any)?.receipts || [];
-  const allCharges: AmexCharge[] = (candidates as any)?.charges || [];
+  console.log("Matching candidates:", { pairs, receipts: filteredReceipts, charges: allCharges });
 
-  // Apply filters to receipts
-  const filteredReceipts = useMemo(() => {
-    return allReceipts.filter(receipt => {
-      const amount = parseFloat(receipt.amount);
-      const date = receipt.date ? new Date(receipt.date) : null;
-      
-      if (filters.minAmount && amount < parseFloat(filters.minAmount)) return false;
-      if (filters.maxAmount && amount > parseFloat(filters.maxAmount)) return false;
-      if (filters.startDate && date && date < new Date(filters.startDate)) return false;
-      if (filters.endDate && date && date > new Date(filters.endDate)) return false;
-      if (filters.merchant && !receipt.merchant?.toLowerCase().includes(filters.merchant.toLowerCase())) return false;
-      
-      return true;
-    });
-  }, [allReceipts, filters]);
-
-  const receipts = filteredReceipts;
-  const charges: AmexCharge[] = allCharges;
-
-  console.log("Matching candidates:", { pairs, receipts, charges });
-
-  if (pairs.length === 0 && receipts.length === 0) {
+  if (pairs.length === 0 && filteredReceipts.length === 0) {
     return (
       <Card className="max-w-2xl mx-auto">
         <CardContent className="pt-6 text-center">
@@ -126,7 +125,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
-  if (charges.length === 0) {
+  if (allCharges.length === 0) {
     return (
       <Card className="max-w-2xl mx-auto">
         <CardContent className="pt-6 text-center">
@@ -144,10 +143,10 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
   }
 
   // Use intelligent pairs if available, otherwise fall back to first charge
-  const totalItems = Math.max(pairs.length, receipts.length);
+  const totalItems = Math.max(pairs.length, filteredReceipts.length);
   const currentPair = pairs[currentIndex];
-  const currentReceipt = currentPair?.receipt || receipts[currentIndex];
-  const currentCharge = currentPair?.charge || charges[0]; // Use suggested charge or first available
+  const currentReceipt = currentPair?.receipt || filteredReceipts[currentIndex];
+  const currentCharge = currentPair?.charge || allCharges[0]; // Use suggested charge or first available
 
   if (currentIndex >= totalItems) {
     return (
@@ -274,9 +273,9 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
           {showFilters ? "Hide Filters" : "Show Filters"}
         </Button>
         <div className="text-sm text-gray-600">
-          {receipts.length !== allReceipts.length && (
+          {filteredReceipts.length !== allReceipts.length && (
             <Badge variant="secondary" className="text-xs mr-2">
-              {receipts.length} of {allReceipts.length} receipts shown
+              {filteredReceipts.length} of {allReceipts.length} receipts shown
             </Badge>
           )}
         </div>
