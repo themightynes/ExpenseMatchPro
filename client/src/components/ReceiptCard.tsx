@@ -35,9 +35,9 @@ export default function ReceiptCard({ receipt }: ReceiptCardProps) {
 
     if (status === "processing") {
       return (
-        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-          <i className="fas fa-spinner mr-1"></i>
-          Processing
+        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+          <i className="fas fa-edit mr-1"></i>
+          Manual Entry Needed
         </Badge>
       );
     }
