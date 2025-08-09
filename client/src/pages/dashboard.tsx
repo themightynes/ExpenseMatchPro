@@ -10,7 +10,12 @@ import { Link } from "wouter";
 import type { Receipt, AmexStatement } from "@shared/schema";
 
 export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery<{
+    processedCount: number;
+    pendingCount: number;
+    readyCount: number;
+    processingCount: number;
+  }>({
     queryKey: ["/api/dashboard/stats"],
   });
 

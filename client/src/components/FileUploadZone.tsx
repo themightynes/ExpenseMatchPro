@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Upload, Mail, FileText, Image, Check, Zap } from "lucide-react";
 import type { UploadResult } from "@uppy/core";
 
 export default function FileUploadZone() {
@@ -52,9 +54,9 @@ export default function FileUploadZone() {
       const file = result.successful[0];
       
       await processReceiptMutation.mutateAsync({
-        fileUrl: file.uploadURL!,
-        fileName: file.name,
-        originalFileName: file.name,
+        fileUrl: file.uploadURL || '',
+        fileName: file.name || 'unknown',
+        originalFileName: file.name || 'unknown',
       });
     }
   };
@@ -65,44 +67,87 @@ export default function FileUploadZone() {
         <CardTitle>Upload Receipts</CardTitle>
       </CardHeader>
       <CardContent>
-        {/* File Upload Drag Zone */}
-        <ObjectUploader
-          maxNumberOfFiles={10}
-          maxFileSize={10485760} // 10MB
-          onGetUploadParameters={handleGetUploadParameters}
-          onComplete={handleUploadComplete}
-          buttonClassName="w-full"
-        >
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary transition-colors duration-200">
-            <i className="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
-            <p className="text-lg font-medium text-gray-900 mb-2">Drop files here or click to browse</p>
-            <p className="text-sm text-gray-500 mb-4">Supports PDF, JPG, PNG files and Outlook emails</p>
-            
-            {isProcessing && (
-              <div className="mb-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-sm text-gray-600 mt-2">Processing your receipt...</p>
-              </div>
-            )}
-          </div>
-        </ObjectUploader>
-
-        {/* Email Ingestion Options */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-medium text-gray-900 mb-2">Email Integration Options</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center p-3 bg-white rounded-lg border">
-              <i className="fas fa-paper-plane text-primary mr-3"></i>
-              <div>
-                <p className="font-medium text-gray-900">Forward Emails</p>
-                <p className="text-sm text-gray-500">receipts@yourcompany.com</p>
+        {/* Modern File Upload Zone */}
+        <div className="space-y-4">
+          <ObjectUploader
+            maxNumberOfFiles={10}
+            maxFileSize={10485760}
+            onGetUploadParameters={handleGetUploadParameters}
+            onComplete={handleUploadComplete}
+            buttonClassName="w-full group"
+          >
+            <div className="relative border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all duration-300 group-hover:shadow-lg">
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              
+              <div className="relative z-10">
+                <div className="mb-4">
+                  <Upload className="h-12 w-12 text-gray-400 group-hover:text-blue-500 mx-auto transition-colors duration-300" />
+                </div>
+                
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  Drop receipts here or click to upload
+                </h3>
+                
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Supports PDF, JPG, PNG files and Outlook emails
+                </p>
+                
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <Badge variant="secondary" className="text-xs">
+                    <FileText className="h-3 w-3 mr-1" />
+                    PDF
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    <Image className="h-3 w-3 mr-1" />
+                    JPG/PNG
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    <Mail className="h-3 w-3 mr-1" />
+                    Email
+                  </Badge>
+                </div>
+                
+                {isProcessing && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent"></div>
+                      <span className="text-sm text-blue-600 font-medium">Processing receipt...</span>
+                    </div>
+                    <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full h-2 overflow-hidden">
+                      <div className="bg-blue-500 h-full animate-pulse"></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="flex items-center p-3 bg-white rounded-lg border">
-              <i className="fab fa-microsoft text-primary mr-3"></i>
+          </ObjectUploader>
+        </div>
+
+        {/* Email Integration Options */}
+        <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl border border-blue-100 dark:border-blue-800">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="h-5 w-5 text-blue-600" />
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Automated Email Integration</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="group flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md transition-all duration-200">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg mr-3 group-hover:bg-blue-200 dark:group-hover:bg-blue-800/50 transition-colors">
+                <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
               <div>
-                <p className="font-medium text-gray-900">Outlook Plugin</p>
-                <p className="text-sm text-gray-500">Drag & drop from Outlook</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">Forward Emails</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">receipts@yourcompany.com</p>
+              </div>
+            </div>
+            
+            <div className="group flex items-center p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md transition-all duration-200">
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg mr-3 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors">
+                <FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900 dark:text-gray-100">Outlook Plugin</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Drag & drop from Outlook</p>
               </div>
             </div>
           </div>

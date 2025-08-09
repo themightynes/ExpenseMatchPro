@@ -66,8 +66,8 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
-  const receipts: Receipt[] = candidates?.receipts || [];
-  const charges: AmexCharge[] = candidates?.charges || [];
+  const receipts: Receipt[] = (candidates as any)?.receipts || [];
+  const charges: AmexCharge[] = (candidates as any)?.charges || [];
 
   if (receipts.length === 0 || charges.length === 0) {
     return (

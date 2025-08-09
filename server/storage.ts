@@ -87,6 +87,69 @@ export class MemStorage implements IStorage {
       isActive: true,
     });
 
+    // Add sample AMEX charges for demonstration
+    await this.createAmexCharge({
+      date: new Date("2025-08-05"),
+      statementId: currentStatement.id,
+      merchant: "STARBUCKS #12345",
+      amount: "12.85",
+      category: "Meals & Entertainment",
+      isMatched: false,
+      reference: "REF123456",
+      receiptId: null,
+    });
+
+    await this.createAmexCharge({
+      date: new Date("2025-08-07"),
+      statementId: currentStatement.id,
+      merchant: "UBER TECHNOLOGIES",
+      amount: "23.45",
+      category: "Transportation",
+      isMatched: false,
+      reference: "REF123457",
+      receiptId: null,
+    });
+
+    await this.createAmexCharge({
+      date: new Date("2025-08-08"),
+      statementId: currentStatement.id,
+      merchant: "OFFICE DEPOT #8901",
+      amount: "89.99",
+      category: "Office Supplies",
+      isMatched: false,
+      reference: "REF123458",
+      receiptId: null,
+    });
+
+    // Add sample unmatched receipts for demonstration
+    await this.createReceipt({
+      fileName: "starbucks_receipt_080525.jpg",
+      originalFileName: "IMG_2345.jpg",
+      fileUrl: "/objects/uploads/receipt-001",
+      date: new Date("2025-08-05"),
+      merchant: "Starbucks Coffee",
+      amount: "12.85",
+      category: "Meals & Entertainment",
+      ocrText: "STARBUCKS STORE #12345\nDATE: 08/05/25\nTIME: 9:30 AM\nVenti Latte - $5.45\nCroissant - $3.95\nTax - $0.85\nTotal: $12.85\nCard ending in 1234",
+      extractedData: null,
+      amexStatementId: null,
+      isMatched: false,
+    });
+
+    await this.createReceipt({
+      fileName: "uber_receipt_080725.jpg",
+      originalFileName: "uber_trip.jpg", 
+      fileUrl: "/objects/uploads/receipt-002",
+      date: new Date("2025-08-07"),
+      merchant: "Uber Technologies Inc",
+      amount: "23.45",
+      category: "Transportation",
+      ocrText: "UBER\nTrip Receipt\nDate: Aug 7, 2025\nFrom: Office Building\nTo: Client Meeting\nFare: $20.50\nTip: $2.95\nTotal: $23.45",
+      extractedData: null,
+      amexStatementId: null,
+      isMatched: false,
+    });
+
     // Previous statement periods
     for (let i = 1; i <= 3; i++) {
       const month = currentMonth - i;
@@ -129,6 +192,14 @@ export class MemStorage implements IStorage {
       id,
       createdAt: now,
       updatedAt: now,
+      date: insertReceipt.date || null,
+      merchant: insertReceipt.merchant || null,
+      amount: insertReceipt.amount || null,
+      category: insertReceipt.category || null,
+      ocrText: insertReceipt.ocrText || null,
+      extractedData: insertReceipt.extractedData || null,
+      amexStatementId: insertReceipt.amexStatementId || null,
+      isMatched: insertReceipt.isMatched || false,
     };
     this.receipts.set(id, receipt);
     return receipt;
@@ -180,6 +251,7 @@ export class MemStorage implements IStorage {
       ...insertStatement,
       id,
       createdAt: new Date(),
+      isActive: insertStatement.isActive || false,
     };
     this.amexStatements.set(id, statement);
     return statement;
@@ -217,6 +289,10 @@ export class MemStorage implements IStorage {
       ...insertCharge,
       id,
       createdAt: new Date(),
+      category: insertCharge.category || null,
+      isMatched: insertCharge.isMatched || false,
+      reference: insertCharge.reference || null,
+      receiptId: insertCharge.receiptId || null,
     };
     this.amexCharges.set(id, charge);
     return charge;
