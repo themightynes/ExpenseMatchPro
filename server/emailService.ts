@@ -206,7 +206,7 @@ export class EmailService {
   /**
    * Extract receipt information from email body
    */
-  private extractReceiptFromEmailBody(emailBody: string): {
+  extractReceiptFromEmailBody(emailBody: string, subject?: string, sender?: string): {
     merchant?: string;
     amount?: string;
     date?: string;

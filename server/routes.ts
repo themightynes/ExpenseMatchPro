@@ -547,7 +547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check for duplicate statements before processing
-      const existingStatements = await storage.getStatements();
+      const existingStatements = await storage.getAllAmexStatements();
       const potentialDuplicates = await checkForDuplicateStatements(csvContent, existingStatements);
       
       if (potentialDuplicates.length > 0) {
@@ -813,9 +813,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 needsUpdate = true;
               }
               
-              if (!receipt.merchant && charge.merchant) {
-                updateData.merchant = charge.merchant;
-                receipt.merchant = charge.merchant;
+              if (!receipt.merchant && charge.description) {
+                updateData.merchant = charge.description;
+                receipt.merchant = charge.description;
                 needsUpdate = true;
               }
               
@@ -1328,6 +1328,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error searching email receipts:", error);
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to search email receipts" 
+      });
+    }
+  });
+
+  // Process email content manually (copy-paste method)
+  app.post("/api/email/process-content", async (req, res) => {
+    try {
+      const { subject, sender, body, receivedDate } = req.body;
+      
+      if (!subject || !body) {
+        return res.status(400).json({ error: "subject and body are required" });
+      }
+
+      // Extract receipt information from email content
+      const extractedData = emailService.extractReceiptFromEmailBody(body, subject, sender);
+      
+      if (!extractedData) {
+        return res.status(400).json({ error: "No receipt information found in email content" });
+      }
+
+      // Create receipt with extracted data
+      const receiptData = {
+        fileName: `Email Receipt - ${subject}`,
+        originalFileName: `Email Receipt - ${subject}`,
+        fileUrl: `/email-receipts/${Date.now()}-${subject.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        merchant: extractedData.merchant || '',
+        amount: extractedData.amount || '',
+        date: extractedData.date ? new Date(extractedData.date) : (receivedDate ? new Date(receivedDate) : new Date()),
+        category: '',
+        ocrText: `Email from: ${sender}\nSubject: ${subject}\n\n${body}`,
+        extractedData: extractedData,
+        processingStatus: 'completed' as const,
+      };
+
+      const receipt = await storage.createReceipt(receiptData);
+      
+      res.json({
+        receipt,
+        extractedData,
+        message: "Email content processed successfully"
+      });
+    } catch (error) {
+      console.error("Error processing email content:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to process email content" 
       });
     }
   });
