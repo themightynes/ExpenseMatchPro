@@ -321,31 +321,37 @@ export default function ReceiptViewer({ receipt, isOpen, onClose }: ReceiptViewe
                       <p className="text-sm text-gray-600 mb-3 truncate" title={receipt.originalFileName}>
                         {receipt.originalFileName}
                       </p>
-                      <div className="flex gap-2 justify-center">
+                      <div className="flex flex-col gap-2">
                         <Button 
-                          size="sm"
-                          onClick={() => window.open(imageUrl, '_blank')}
-                          className="flex items-center gap-1"
+                          onClick={() => {
+                            console.log("Opening PDF:", imageUrl);
+                            window.open(imageUrl, '_blank');
+                          }}
+                          className="flex items-center gap-2"
                         >
-                          <FileText className="h-3 w-3" />
-                          View
+                          <FileText className="h-4 w-4" />
+                          Open PDF in New Tab
                         </Button>
                         <Button 
-                          size="sm"
                           variant="outline"
                           onClick={() => {
+                            console.log("Downloading PDF:", imageUrl);
                             const link = document.createElement('a');
                             link.href = imageUrl;
                             link.download = receipt.originalFileName || 'receipt.pdf';
+                            link.target = '_blank';
                             document.body.appendChild(link);
                             link.click();
                             document.body.removeChild(link);
                           }}
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-2"
                         >
-                          <Download className="h-3 w-3" />
-                          Save
+                          <Download className="h-4 w-4" />
+                          Download PDF
                         </Button>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Click "Open PDF in New Tab" to view the document
+                        </p>
                       </div>
                     </div>
                   </div>
