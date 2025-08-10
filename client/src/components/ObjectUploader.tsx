@@ -71,6 +71,7 @@ export function ObjectUploader({
       .use(AwsS3, {
         shouldUseMultipart: false,
         getUploadParameters: onGetUploadParameters,
+
       })
       .on("upload-success", (file, response) => {
         console.log("Upload success for file:", file?.name, "Response:", response);

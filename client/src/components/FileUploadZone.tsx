@@ -56,108 +56,114 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
     },
   });
 
-  const handleGetUploadParameters = async (file: any) => {
-    console.log("Getting upload parameters for file:", file.name);
+  const uploadFileDirectly = async (file: File): Promise<string> => {
+    console.log("Starting direct upload for:", file.name);
+    
+    // Get presigned URL
     const response = await apiRequest("POST", "/api/objects/upload");
     const data = await response.json();
     console.log("Received upload URL:", data.uploadURL);
     
-    // Store the file path for later processing
-    const fileUrl = data.uploadURL.split('?')[0]; // Remove query parameters to get the actual file URL
-    file.meta = { ...file.meta, fileUrl };
-    
-    return {
-      method: "PUT" as const,
-      url: data.uploadURL,
+    // Upload file directly to GCS
+    const uploadResponse = await fetch(data.uploadURL, {
+      method: 'PUT',
+      body: file,
       headers: {
         'Content-Type': file.type || 'application/octet-stream',
       },
-    };
+    });
+    
+    if (!uploadResponse.ok) {
+      throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
+    }
+    
+    console.log("Upload successful for:", file.name);
+    return data.uploadURL.split('?')[0]; // Return clean URL without query params
   };
 
-  const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
-    console.log("Upload complete, result:", result);
+  const handleFilesSelected = async (files: FileList | File[]) => {
     setIsProcessing(true);
     
-    if (result.successful && result.successful.length > 0) {
-      // Check authentication status before processing
+    // Check authentication status before processing
+    try {
+      const authResponse = await fetch('/api/auth/status', { credentials: 'include' });
+      const authData = await authResponse.json();
+      if (!authData.authenticated) {
+        toast({
+          title: "Session Expired",
+          description: "Please refresh the page and log in again to continue uploading.",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to check authentication status:", error);
+      toast({
+        title: "Authentication Check Failed",
+        description: "Please refresh the page and try again.",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+      return;
+    }
+    
+    const fileArray = Array.from(files);
+    const totalFiles = fileArray.length;
+    setUploadProgress({ current: 0, total: totalFiles });
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Upload and process all files
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      console.log("Processing file:", file.name);
+      setUploadProgress({ current: i + 1, total: totalFiles });
+      
       try {
-        const authResponse = await fetch('/api/auth/status', { credentials: 'include' });
-        const authData = await authResponse.json();
-        if (!authData.authenticated) {
+        // Upload file directly
+        const fileUrl = await uploadFileDirectly(file);
+        
+        // Process the uploaded file
+        const processData = {
+          fileUrl: fileUrl,
+          fileName: file.name,
+          originalFileName: file.name,
+        };
+        console.log("Sending to process endpoint:", processData);
+        await processReceiptMutation.mutateAsync(processData);
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to upload/process ${file.name}:`, error);
+        
+        // Check if it's an authentication error
+        if (error instanceof Error && (error.message.includes('401') || error.message.includes('Authentication required'))) {
           toast({
             title: "Session Expired",
             description: "Please refresh the page and log in again to continue uploading.",
             variant: "destructive",
           });
           setIsProcessing(false);
-          return;
+          return; // Stop processing more files
         }
-      } catch (error) {
-        console.error("Failed to check authentication status:", error);
-        toast({
-          title: "Authentication Check Failed",
-          description: "Please refresh the page and try again.",
-          variant: "destructive",
-        });
-        setIsProcessing(false);
-        return;
-      }
-      
-      const totalFiles = result.successful.length;
-      setUploadProgress({ current: 0, total: totalFiles });
-      
-      let successCount = 0;
-      let failCount = 0;
-      
-      // Process all uploaded files
-      for (let i = 0; i < result.successful.length; i++) {
-        const file = result.successful[i];
-        console.log("Processing file:", file.name, "with uploadURL:", file.uploadURL);
-        setUploadProgress({ current: i + 1, total: totalFiles });
         
-        try {
-          // Use the file URL from meta data (without query params)
-          const fileUrl = file.meta?.fileUrl || file.uploadURL || '';
-          const processData = {
-            fileUrl: fileUrl,
-            fileName: file.name || 'unknown',
-            originalFileName: file.name || 'unknown',
-          };
-          console.log("Sending to process endpoint:", processData);
-          await processReceiptMutation.mutateAsync(processData);
-          successCount++;
-        } catch (error) {
-          console.error(`Failed to process ${file.name}:`, error);
-          
-          // Check if it's an authentication error
-          if (error instanceof Error && (error.message.includes('401') || error.message.includes('Authentication required'))) {
-            toast({
-              title: "Session Expired",
-              description: "Please refresh the page and log in again to continue uploading.",
-              variant: "destructive",
-            });
-            setIsProcessing(false);
-            return; // Stop processing more files
-          }
-          
-          failCount++;
-        }
+        failCount++;
       }
-      
-      // Reset progress
-      setUploadProgress({ current: 0, total: 0 });
-      setIsProcessing(false);
-      
-      // Show summary toast
-      toast({
-        title: `Upload Complete`,
-        description: `${successCount} receipt${successCount !== 1 ? 's' : ''} uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ''}. Click on them to add details.`,
-      });
-      
-      // Call the completion callback if provided
-      onUploadComplete?.();
     }
+    
+    // Reset progress
+    setUploadProgress({ current: 0, total: 0 });
+    setIsProcessing(false);
+    
+    // Show summary toast
+    toast({
+      title: `Upload Complete`,
+      description: `${successCount} receipt${successCount !== 1 ? 's' : ''} uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ''}. Click on them to add details.`,
+    });
+    
+    // Call the completion callback if provided
+    onUploadComplete?.();
   };
 
   return (
@@ -168,49 +174,39 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
       <CardContent>
         {/* Modern File Upload Zone */}
         <div className="space-y-4">
-          {isMobile ? (
-            <MobileFileUploader onUploadComplete={onUploadComplete}>
-              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center active:scale-95 transform duration-75">
-                <Upload className="h-6 w-6 text-gray-400 mx-auto mb-2" />
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1 text-xs">
-                  Tap to upload receipts
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  PDF, JPG, PNG files • Up to 10 files, 10MB each
-                </p>
-              </div>
-            </MobileFileUploader>
-          ) : (
-            <ObjectUploader
-              maxNumberOfFiles={10}
-              maxFileSize={10485760}
-              onGetUploadParameters={handleGetUploadParameters}
-              onComplete={handleUploadComplete}
-              buttonClassName="w-full group touch-manipulation"
+          <div className="w-full">
+            <input
+              type="file"
+              multiple
+              accept=".jpg,.jpeg,.png,.pdf"
+              onChange={(e) => e.target.files && handleFilesSelected(e.target.files)}
+              className="hidden"
+              id="file-upload"
+            />
+            <label
+              htmlFor="file-upload"
+              className="w-full border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center"
             >
-              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center">
-                
-                <Upload className="h-8 w-8 text-gray-400 mx-auto mb-3" />
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-base">
-                  Drop receipts here or click to upload
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                  PDF, JPG, PNG files • Up to 10 files, 10MB each
-                </p>
-                
-                {isProcessing && (
-                  <div className="flex items-center justify-center gap-2 mt-3">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
-                    <span className="text-sm text-blue-600">
-                      {uploadProgress.total > 1 
-                        ? `Processing ${uploadProgress.current} of ${uploadProgress.total} receipts...`
-                        : "Processing..."}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </ObjectUploader>
-          )}
+              <Upload className="h-8 w-8 text-gray-400 mx-auto mb-3" />
+              <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2 text-base">
+                Drop receipts here or click to upload
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                PDF, JPG, PNG files • Up to 10 files, 10MB each
+              </p>
+              
+              {isProcessing && (
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                  <span className="text-sm text-blue-600">
+                    {uploadProgress.total > 1 
+                      ? `Processing ${uploadProgress.current} of ${uploadProgress.total} receipts...`
+                      : "Processing..."}
+                  </span>
+                </div>
+              )}
+            </label>
+          </div>
         </div>
 
         {/* Compact Email Integration */}
