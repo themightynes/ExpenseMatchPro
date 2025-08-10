@@ -46,6 +46,10 @@ export function setupGoogleAuth(app: Express) {
     ? "https://ernestochapa-expense.replit.app/auth/google/callback"
     : `https://${process.env.REPLIT_DEV_DOMAIN}/auth/google/callback`;
     
+  console.log(`OAuth callback URL configured: ${callbackURL}`);
+  console.log(`Environment: ${process.env.NODE_ENV}`);
+  console.log(`Dev domain: ${process.env.REPLIT_DEV_DOMAIN}`);
+    
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -124,10 +128,21 @@ export function setupGoogleAuth(app: Express) {
     }
   });
 
+  // Debug route to check OAuth configuration
+  app.get('/auth/debug', (req, res) => {
+    res.json({
+      callbackURL,
+      environment: process.env.NODE_ENV,
+      devDomain: process.env.REPLIT_DEV_DOMAIN,
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // Auth routes
-  app.get('/auth/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
-  );
+  app.get('/auth/google', (req, res, next) => {
+    console.log('Starting Google OAuth flow...');
+    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+  });
 
   app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/login' }),
