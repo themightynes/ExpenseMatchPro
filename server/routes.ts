@@ -132,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get upload URL for object storage
-  app.post("/api/objects/upload", async (req, res) => {
+  app.post("/api/objects/upload", requireAuth, async (req, res) => {
     try {
       console.log("Getting upload URL...");
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
@@ -393,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Process uploaded receipt file
-  app.post("/api/receipts/process", async (req, res) => {
+  app.post("/api/receipts/process", requireAuth, async (req, res) => {
     try {
       if (!req.body.fileUrl) {
         return res.status(400).json({ error: "fileUrl is required" });
