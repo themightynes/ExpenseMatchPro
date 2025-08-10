@@ -411,6 +411,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ocrText: 'Processing...', // Indicate OCR is in progress
       });
 
+      // Return success immediately and process OCR in background
+      res.status(201).json(receipt);
+      
       // Start OCR processing asynchronously
       ocrService.processReceipt(objectPath, req.body.originalFileName || req.body.fileName)
         .then(async ({ ocrText, extractedData }) => {

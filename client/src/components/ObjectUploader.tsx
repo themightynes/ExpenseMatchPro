@@ -72,7 +72,18 @@ export function ObjectUploader({
         shouldUseMultipart: false,
         getUploadParameters: onGetUploadParameters,
       })
+      .on("upload-success", (file, response) => {
+        console.log("Upload success for file:", file?.name, "Response:", response);
+        // Store the actual upload URL for processing
+        if (file) {
+          file.uploadURL = response.uploadURL;
+        }
+      })
+      .on("upload-error", (file, error, response) => {
+        console.error("Upload error for file:", file?.name, "Error:", error, "Response:", response);
+      })
       .on("complete", (result) => {
+        console.log("All uploads complete, result:", result);
         onComplete?.(result);
       })
   );

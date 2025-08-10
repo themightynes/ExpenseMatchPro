@@ -56,16 +56,27 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
     },
   });
 
-  const handleGetUploadParameters = async () => {
+  const handleGetUploadParameters = async (file: any) => {
+    console.log("Getting upload parameters for file:", file.name);
     const response = await apiRequest("POST", "/api/objects/upload");
     const data = await response.json();
+    console.log("Received upload URL:", data.uploadURL);
+    
+    // Store the file path for later processing
+    const fileUrl = data.uploadURL.split('?')[0]; // Remove query parameters to get the actual file URL
+    file.meta = { ...file.meta, fileUrl };
+    
     return {
       method: "PUT" as const,
       url: data.uploadURL,
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+      },
     };
   };
 
   const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    console.log("Upload complete, result:", result);
     setIsProcessing(true);
     
     if (result.successful && result.successful.length > 0) {
@@ -102,14 +113,19 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
       // Process all uploaded files
       for (let i = 0; i < result.successful.length; i++) {
         const file = result.successful[i];
+        console.log("Processing file:", file.name, "with uploadURL:", file.uploadURL);
         setUploadProgress({ current: i + 1, total: totalFiles });
         
         try {
-          await processReceiptMutation.mutateAsync({
-            fileUrl: file.uploadURL || '',
+          // Use the file URL from meta data (without query params)
+          const fileUrl = file.meta?.fileUrl || file.uploadURL || '';
+          const processData = {
+            fileUrl: fileUrl,
             fileName: file.name || 'unknown',
             originalFileName: file.name || 'unknown',
-          });
+          };
+          console.log("Sending to process endpoint:", processData);
+          await processReceiptMutation.mutateAsync(processData);
           successCount++;
         } catch (error) {
           console.error(`Failed to process ${file.name}:`, error);
