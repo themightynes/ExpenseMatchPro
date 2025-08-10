@@ -11,7 +11,7 @@ import {
   amexCsvRowSchema,
   EXPENSE_CATEGORIES 
 } from "@shared/schema";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, objectStorageClient, parseObjectPath } from "./objectStorage";
 import { ocrService } from "./ocrService";
 import { EmailService } from "./emailService";
 
@@ -132,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Direct file upload to object storage (bypasses problematic presigned URLs)
+  // Direct file upload to object storage using configured Replit authentication
   app.post("/api/objects/upload", requireAuth, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
@@ -153,15 +153,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const objectPath = `${privateObjectDir}/uploads/${objectId}`;
       
-      // Parse the object path to get bucket and object names
-      const pathParts = objectPath.split('/');
-      const bucketName = pathParts[1]; // Remove leading slash and get bucket name
-      const objectName = pathParts.slice(2).join('/'); // Get object path within bucket
+      // Use the existing parseObjectPath utility and configured storage client
+      const { bucketName, objectName } = parseObjectPath(objectPath);
       
-      // Upload file to Google Cloud Storage through our server
-      const { Storage } = await import('@google-cloud/storage');
-      const gcs = new Storage();
-      const bucket = gcs.bucket(bucketName);
+      // Use the pre-configured objectStorageClient with Replit authentication
+      const bucket = objectStorageClient.bucket(bucketName);
       const file = bucket.file(objectName);
       
       // Upload the file buffer
