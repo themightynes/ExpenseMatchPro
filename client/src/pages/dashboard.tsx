@@ -170,14 +170,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Upload Section */}
           <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Receipt Management</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <FileUploadZone />
-              </CardContent>
-            </Card>
+            <FileUploadZone />
 
             {/* Recent Uploads */}
             <Card className="mt-6">
