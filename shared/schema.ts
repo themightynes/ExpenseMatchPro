@@ -5,8 +5,13 @@ import { z } from "zod";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  googleId: text("google_id").unique(),
+  profilePicture: text("profile_picture"),
+  isAuthorized: boolean("is_authorized").default(false), // Only authorized user can access
+  createdAt: timestamp("created_at").default(sql`now()`),
+  lastLoginAt: timestamp("last_login_at"),
 });
 
 export const receipts = pgTable("receipts", {
@@ -121,9 +126,10 @@ export type ExpenseTemplate = typeof expenseTemplates.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const insertUserSchema = createInsertSchema(users).omit({ 
+  id: true,
+  createdAt: true,
+  lastLoginAt: true
 });
 
 // Expense categories from the uploaded images

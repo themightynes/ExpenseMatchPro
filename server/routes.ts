@@ -1,6 +1,7 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupGoogleAuth, requireAuth } from "./googleAuth";
 import { 
   insertReceiptSchema, 
   insertAmexStatementSchema, 
@@ -108,6 +109,9 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup Google authentication first
+  setupGoogleAuth(app);
+  
   const objectStorageService = new ObjectStorageService();
   const emailService = new EmailService();
 
@@ -154,8 +158,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Dashboard stats
-  app.get("/api/dashboard/stats", async (req, res) => {
+  // Dashboard stats (protected)
+  app.get("/api/dashboard/stats", requireAuth, async (req, res) => {
     try {
       const stats = await storage.getProcessingStats();
       res.json(stats);
@@ -165,8 +169,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get comprehensive financial stats
-  app.get("/api/dashboard/financial-stats", async (req, res) => {
+  // Get comprehensive financial stats (protected)
+  app.get("/api/dashboard/financial-stats", requireAuth, async (req, res) => {
     try {
       const financialStats = await storage.getFinancialStats();
       res.json(financialStats);
@@ -176,8 +180,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Receipt endpoints
-  app.post("/api/receipts", async (req, res) => {
+  // Receipt endpoints (protected)
+  app.post("/api/receipts", requireAuth, async (req, res) => {
     try {
       const validatedData = insertReceiptSchema.parse(req.body);
       const receipt = await storage.createReceipt(validatedData);
@@ -188,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/receipts", async (req, res) => {
+  app.get("/api/receipts", requireAuth, async (req, res) => {
     try {
       const receipts = await storage.getAllReceipts();
       res.json(receipts);
@@ -198,7 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/receipts/:id", async (req, res) => {
+  app.get("/api/receipts/:id", requireAuth, async (req, res) => {
     try {
       const receipt = await storage.getReceipt(req.params.id);
       if (!receipt) {
@@ -211,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/receipts/:id", async (req, res) => {
+  app.put("/api/receipts/:id", requireAuth, async (req, res) => {
     try {
       const receipt = await storage.updateReceipt(req.params.id, req.body);
       if (!receipt) {
@@ -225,7 +229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete receipt endpoint
-  app.delete("/api/receipts/:id", async (req, res) => {
+  app.delete("/api/receipts/:id", requireAuth, async (req, res) => {
     try {
       const receiptId = req.params.id;
 
@@ -482,7 +486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AMEX Statement endpoints
-  app.get("/api/statements", async (req, res) => {
+  app.get("/api/statements", requireAuth, async (req, res) => {
     try {
       const statements = await storage.getAllAmexStatements();
 
@@ -508,7 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single AMEX statement
-  app.get("/api/statements/:id", async (req, res) => {
+  app.get("/api/statements/:id", requireAuth, async (req, res) => {
     try {
       const statementId = req.params.id;
       const statement = await storage.getAmexStatement(statementId);
@@ -524,7 +528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/statements", async (req, res) => {
+  app.post("/api/statements", requireAuth, async (req, res) => {
     try {
       const validatedData = insertAmexStatementSchema.parse(req.body);
       const statement = await storage.createAmexStatement(validatedData);

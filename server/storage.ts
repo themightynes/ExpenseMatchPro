@@ -3,6 +3,7 @@ import {
   amexStatements,
   amexCharges,
   expenseTemplates,
+  users,
   type User, 
   type InsertUser,
   type Receipt,
@@ -20,8 +21,10 @@ import { eq, and, isNull, isNotNull, desc, between, count, lte, gte } from "driz
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
 
   // Receipt methods
   createReceipt(receipt: InsertReceipt): Promise<Receipt>;
@@ -168,15 +171,31 @@ export class DatabaseStorage implements IStorage {
 
   // User methods (not implemented for this receipt management app)
   async getUser(id: string): Promise<User | undefined> {
-    return undefined;
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return undefined; // Not implemented for this app
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
+    return user || undefined;
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    throw new Error("User creation not implemented");
+    const [newUser] = await db.insert(users).values(user).returning();
+    return newUser;
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const [updated] = await db.update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   // Receipt methods
