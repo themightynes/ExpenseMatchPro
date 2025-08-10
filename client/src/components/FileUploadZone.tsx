@@ -69,6 +69,30 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
     setIsProcessing(true);
     
     if (result.successful && result.successful.length > 0) {
+      // Check authentication status before processing
+      try {
+        const authResponse = await fetch('/api/auth/status', { credentials: 'include' });
+        const authData = await authResponse.json();
+        if (!authData.authenticated) {
+          toast({
+            title: "Session Expired",
+            description: "Please refresh the page and log in again to continue uploading.",
+            variant: "destructive",
+          });
+          setIsProcessing(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to check authentication status:", error);
+        toast({
+          title: "Authentication Check Failed",
+          description: "Please refresh the page and try again.",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
+      }
+      
       const totalFiles = result.successful.length;
       setUploadProgress({ current: 0, total: totalFiles });
       
@@ -89,6 +113,18 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
           successCount++;
         } catch (error) {
           console.error(`Failed to process ${file.name}:`, error);
+          
+          // Check if it's an authentication error
+          if (error instanceof Error && (error.message.includes('401') || error.message.includes('Authentication required'))) {
+            toast({
+              title: "Session Expired",
+              description: "Please refresh the page and log in again to continue uploading.",
+              variant: "destructive",
+            });
+            setIsProcessing(false);
+            return; // Stop processing more files
+          }
+          
           failCount++;
         }
       }

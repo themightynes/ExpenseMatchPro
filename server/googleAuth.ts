@@ -1,6 +1,7 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import session from "express-session";
+import ConnectPgSimple from "connect-pg-simple";
 import type { Express, RequestHandler } from "express";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
@@ -23,16 +24,24 @@ export function setupGoogleAuth(app: Express) {
     throw new Error("AUTHORIZED_EMAIL environment variable is required");
   }
 
-  // Session configuration with production-ready settings
+  // Session configuration with persistent storage
   const isProduction = process.env.NODE_ENV === 'production';
+  const PgSession = ConnectPgSimple(session);
+  
   app.use(session({
+    store: new PgSession({
+      conString: process.env.DATABASE_URL,
+      tableName: 'session', // Use a specific table for sessions
+      createTableIfMissing: true
+    }),
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    rolling: true, // Reset expiration on each request
     cookie: {
       secure: isProduction, // Use secure cookies in production
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 6 * 60 * 60 * 1000, // 6 hours (longer for upload workflows)
       sameSite: isProduction ? 'strict' : 'lax'
     },
     name: 'expense.session' // Custom session name

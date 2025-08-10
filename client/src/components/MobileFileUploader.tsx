@@ -35,6 +35,28 @@ export function MobileFileUploader({ onUploadComplete, className, children }: Mo
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    // Check authentication status before starting upload
+    try {
+      const authResponse = await fetch('/api/auth/status', { credentials: 'include' });
+      const authData = await authResponse.json();
+      if (!authData.authenticated) {
+        toast({
+          title: "Session Expired",
+          description: "Please refresh the page and log in again to continue uploading.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to check authentication status:", error);
+      toast({
+        title: "Authentication Check Failed",
+        description: "Please refresh the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
     setUploadProgress({ current: 0, total: files.length });
     
@@ -72,6 +94,18 @@ export function MobileFileUploader({ onUploadComplete, className, children }: Mo
         }
       } catch (error) {
         console.error(`Failed to process ${file.name}:`, error);
+        
+        // Check if it's an authentication error
+        if (error instanceof Error && (error.message.includes('401') || error.message.includes('Authentication required'))) {
+          toast({
+            title: "Session Expired",
+            description: "Please refresh the page and log in again to continue uploading.",
+            variant: "destructive",
+          });
+          setIsProcessing(false);
+          return; // Stop processing more files
+        }
+        
         failCount++;
       }
     }
