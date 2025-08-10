@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { DollarSign, Receipt as ReceiptIcon, CreditCard, TrendingUp, Upload, FileText, BarChart3, PlusCircle } from "lucide-react";
+import { DollarSign, Receipt as ReceiptIcon, CreditCard, TrendingUp, Upload, PlusCircle } from "lucide-react";
 import type { Receipt, AmexStatement } from "@shared/schema";
 
 export default function Dashboard() {
@@ -172,45 +172,7 @@ export default function Dashboard() {
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Receipt Management</CardTitle>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => {
-                        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-                        if (fileInput) fileInput.click();
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      <Upload className="w-4 h-4 mr-1" />
-                      UPLOAD
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => setShowCsvModal(true)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      <FileText className="w-4 h-4 mr-1" />
-                      IMPORT
-                    </Button>
-                    <Link to="/matching">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        <BarChart3 className="w-4 h-4 mr-1" />
-                        EXPORT
-                        <Badge className="ml-2 bg-green-100 text-green-800">
-                          {stats?.readyCount || 0} ready
-                        </Badge>
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
+                <CardTitle>Receipt Management</CardTitle>
               </CardHeader>
               <CardContent>
                 <FileUploadZone />
