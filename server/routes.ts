@@ -491,23 +491,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue even if ACL fails
       }
 
-      // Try to auto-assign to statement and organize
-      try {
-        const organizedReceipt = await storage.autoAssignReceiptToStatement(receipt.id);
-        if (organizedReceipt && organizedReceipt.statementId) {
-          // Create organized folder structure when receipt gets assigned
-          await createStatementFolder(organizedReceipt.statementId);
+      // Try to auto-assign to statement and organize (in background)
+      Promise.resolve().then(async () => {
+        try {
+          const organizedReceipt = await storage.autoAssignReceiptToStatement(receipt.id);
+          if (organizedReceipt && organizedReceipt.statementId) {
+            // Create organized folder structure when receipt gets assigned
+            await createStatementFolder(organizedReceipt.statementId);
 
-          // Update receipt with organized path
-          const organizedPath = storage.getOrganizedPath(organizedReceipt);
-          await storage.updateReceiptPath(receipt.id, organizedPath);
+            // Update receipt with organized path
+            const organizedPath = storage.getOrganizedPath(organizedReceipt);
+            await storage.updateReceiptPath(receipt.id, organizedPath);
+          }
+        } catch (orgError) {
+          console.error("Error organizing receipt:", orgError);
+          // Continue even if organization fails
         }
-      } catch (orgError) {
-        console.error("Error organizing receipt:", orgError);
-        // Continue even if organization fails
-      }
-
-      res.status(201).json(receipt);
+      });
     } catch (error) {
       console.error("Error processing receipt:", error);
       res.status(500).json({ error: "Failed to process receipt" });
