@@ -1,7 +1,5 @@
-import { Bell, User, Menu } from "lucide-react";
+import { User, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 
 interface MobileHeaderProps {
   title?: string;
@@ -45,17 +43,6 @@ export default function MobileHeader({
         {/* Right side */}
         <div className="flex items-center space-x-2">
           {actions}
-          <Button variant="ghost" size="sm" className="relative p-1 h-8 w-8">
-            <Bell className="w-4 h-4 text-gray-600" />
-            <Badge className="absolute -top-1 -right-1 w-4 h-4 p-0 text-xs bg-red-500 hover:bg-red-500">
-              3
-            </Badge>
-          </Button>
-          <Avatar className="w-8 h-8">
-            <AvatarFallback className="bg-primary text-white text-sm">
-              JD
-            </AvatarFallback>
-          </Avatar>
         </div>
       </div>
     </header>

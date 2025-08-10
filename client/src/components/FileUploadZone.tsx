@@ -120,7 +120,7 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
             <MobileFileUploader onUploadComplete={onUploadComplete}>
               <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 transition-all cursor-pointer min-h-[120px] flex flex-col justify-center active:scale-95 transform duration-75">
                 <Upload className="h-6 w-6 text-gray-400 mx-auto mb-2" />
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1 text-sm">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1 text-xs">
                   Tap to upload receipts
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">

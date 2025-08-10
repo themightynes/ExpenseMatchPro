@@ -1,0 +1,54 @@
+/* Custom styles for Uppy file upload component */
+
+/* Make filename text smaller */
+.uppy-Dashboard-Item-name {
+  font-size: 12px !important;
+  line-height: 1.3 !important;
+}
+
+/* Center percentage text in progress indicators */
+.uppy-Dashboard-Item-progress {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.uppy-Dashboard-Item-progressIndicator {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+/* Style the percentage text specifically */
+.uppy-Dashboard-Item-progress .uppy-Dashboard-Item-progressIndicator {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: white !important;
+}
+
+/* Ensure the progress bar background is visible */
+.uppy-Dashboard-Item-progress {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  border-radius: 4px !important;
+}
+
+/* Make file information more compact */
+.uppy-Dashboard-Item-fileInfo {
+  padding: 8px !important;
+}
+
+.uppy-Dashboard-Item-fileInfoAndButtons {
+  padding: 4px 8px !important;
+}
+
+/* Smaller font for file info details */
+.uppy-Dashboard-Item-fileInfo-name {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.uppy-Dashboard-Item-fileInfo-type,
+.uppy-Dashboard-Item-fileInfo-size {
+  font-size: 11px !important;
+}
