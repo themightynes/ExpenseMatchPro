@@ -38,17 +38,10 @@ export default function ReceiptsPage() {
     const urlParams = new URLSearchParams(location.split('?')[1] || '');
     const selectedReceiptId = urlParams.get('selected');
     
-    console.log('URL location:', location);
-    console.log('Selected receipt ID from URL:', selectedReceiptId);
-    console.log('Available receipts:', receipts.length);
-    
     if (selectedReceiptId && receipts.length > 0) {
       const receipt = receipts.find(r => r.id === selectedReceiptId);
-      console.log('Found receipt:', receipt);
       if (receipt) {
         setSelectedReceipt(receipt);
-      } else {
-        console.log('Receipt not found with ID:', selectedReceiptId);
       }
     }
   }, [location, receipts]);
