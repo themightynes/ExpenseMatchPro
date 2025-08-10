@@ -60,12 +60,12 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(errorData.error || `OCR failed with status ${response.status}`);
       }
-      
+
       return await response.json();
     },
     onSuccess: () => {
@@ -94,12 +94,12 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(errorData.error || `Delete failed with status ${response.status}`);
       }
-      
+
       return await response.json();
     },
     onSuccess: () => {
@@ -129,7 +129,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const imgRef = useRef<HTMLImageElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
-  
+
   // Touch handling for pinch-to-zoom and panning
   const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
   const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
@@ -151,7 +151,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (!isOpen) return;
-      
+
       switch(e.key) {
         case 'ArrowLeft':
           e.preventDefault();
@@ -218,14 +218,14 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       const touch = e.touches[0];
       const deltaX = touch.clientX - dragStart.x;
       const deltaY = touch.clientY - dragStart.y;
-      
+
       // Calculate pan constraints based on actual container and zoom level
       const container = imageContainerRef.current;
       if (container) {
         const containerRect = container.getBoundingClientRect();
-        const maxPanX = (zoom - 1) * containerRect.width * 0.3;
-        const maxPanY = (zoom - 1) * containerRect.height * 0.3;
-        
+        const maxPanX = (zoom - 1) * containerRect.width * 0.8;
+        const maxPanY = (zoom - 1) * containerRect.height * 0.8;
+
         setPanPosition({
           x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
           y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
@@ -260,14 +260,14 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       e.stopPropagation();
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
-      
+
       // Calculate pan constraints based on actual container and zoom level
       const container = imageContainerRef.current;
       if (container) {
         const containerRect = container.getBoundingClientRect();
-        const maxPanX = (zoom - 1) * containerRect.width * 0.3;
-        const maxPanY = (zoom - 1) * containerRect.height * 0.3;
-        
+        const maxPanX = (zoom - 1) * containerRect.width * 0.8;
+        const maxPanY = (zoom - 1) * containerRect.height * 0.8;
+
         setPanPosition({
           x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
           y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
@@ -333,7 +333,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       }
 
       console.log('Saving receipt data:', editedData);
-      
+
       const response = await fetch(`/api/receipts/${receipt.id}`, {
         method: 'PATCH',
         credentials: 'include',
@@ -415,7 +415,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
             </div>
           </div>
         </div>
-        
+
         {receipts.length > 1 && (
           <div className="flex items-center gap-1 flex-shrink-0">
             <Button 
@@ -700,7 +700,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       <p className="text-base">{receipt.category || 'Not set'}</p>
                     </div>
                   </div>
-                  
+
                   <div className="pt-2">
                     <label className="text-sm font-medium text-gray-500">Status</label>
                     <div className="flex items-center gap-2 mt-1">
@@ -708,7 +708,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                         {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
                       </Badge>
                       {receipt.isMatched && <Badge variant="default">Matched to AMEX</Badge>}
-                      
+
                       {/* Text Extraction Status and Control */}
                       {receipt.processingStatus === 'processing' ? (
                         <Badge variant="secondary" className="flex items-center gap-1">
