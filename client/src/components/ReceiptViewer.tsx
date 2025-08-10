@@ -203,6 +203,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     if (e.touches.length === 2 && lastTouchDistance) {
       // Handle pinch zoom
       e.preventDefault();
+      e.stopPropagation();
       const currentDistance = getTouchDistance(e.touches);
       if (currentDistance) {
         const scale = currentDistance / lastTouchDistance;
@@ -213,13 +214,18 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     } else if (e.touches.length === 1 && isDragging && zoom > 1) {
       // Handle pan
       e.preventDefault();
+      e.stopPropagation();
       const touch = e.touches[0];
       const deltaX = touch.clientX - dragStart.x;
       const deltaY = touch.clientY - dragStart.y;
       
+      // Apply constraints to prevent panning too far
+      const maxPanX = (zoom - 1) * 200;
+      const maxPanY = (zoom - 1) * 200;
+      
       setPanPosition({
-        x: lastPanPosition.x + deltaX,
-        y: lastPanPosition.y + deltaY
+        x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
+        y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
       });
     }
   }, [lastTouchDistance, zoom, isDragging, dragStart, lastPanPosition]);
@@ -237,6 +243,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (zoom > 1) {
       e.preventDefault();
+      e.stopPropagation();
       setIsDragging(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       setLastPanPosition(panPosition);
@@ -246,17 +253,26 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isDragging && zoom > 1) {
       e.preventDefault();
+      e.stopPropagation();
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       
+      // Apply constraints to prevent panning too far
+      const maxPanX = (zoom - 1) * 200;
+      const maxPanY = (zoom - 1) * 200;
+      
       setPanPosition({
-        x: lastPanPosition.x + deltaX,
-        y: lastPanPosition.y + deltaY
+        x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
+        y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
       });
     }
   }, [isDragging, zoom, dragStart, lastPanPosition]);
 
   const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
     setIsDragging(false);
   }, []);
 
@@ -267,6 +283,8 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     setZoom(1);
     setPanPosition({ x: 0, y: 0 });
     setRotation(0);
+    setIsDragging(false);
+    setLastTouchDistance(null);
   };
   const rotate = () => setRotation(prev => (prev + 90) % 360);
 
@@ -479,8 +497,11 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                style={{ cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+                onMouseLeave={handleMouseLeave}
+                style={{ 
+                  cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                  touchAction: zoom > 1 ? 'none' : 'auto'
+                }}
               >
                 <div className="w-full max-w-4xl">
                   <img
