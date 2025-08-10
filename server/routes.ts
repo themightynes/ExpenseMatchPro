@@ -1,5 +1,6 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
+import { randomUUID } from "crypto";
 import { storage } from "./storage";
 import { setupGoogleAuth, requireAuth } from "./googleAuth";
 import { 
@@ -131,30 +132,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get upload URL for object storage
-  app.post("/api/objects/upload", requireAuth, async (req, res) => {
+  // Direct file upload to object storage (bypasses problematic presigned URLs)
+  app.post("/api/objects/upload", requireAuth, upload.single('file'), async (req, res) => {
     try {
-      console.log("Getting upload URL...");
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      console.log("Generated upload URL:", uploadURL);
-      res.json({ uploadURL });
-    } catch (error) {
-      console.error("Error getting upload URL:", error);
-
-      // Check if object storage is properly configured
-      try {
-        const privateDir = process.env.PRIVATE_OBJECT_DIR;
-        console.log("PRIVATE_OBJECT_DIR:", privateDir);
-        if (!privateDir) {
-          return res.status(500).json({ 
-            error: "Object storage not configured. Please set PRIVATE_OBJECT_DIR environment variable." 
-          });
-        }
-      } catch (envError) {
-        console.error("Environment check error:", envError);
+      if (!req.file) {
+        return res.status(400).json({ error: "No file provided" });
       }
 
-      res.status(500).json({ error: "Failed to get upload URL. Object storage may not be configured." });
+      console.log("Uploading file directly:", req.file.originalname);
+      
+      // Generate a unique object path
+      const objectId = randomUUID();
+      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+      
+      if (!privateObjectDir) {
+        return res.status(500).json({ 
+          error: "Object storage not configured. Please set PRIVATE_OBJECT_DIR environment variable." 
+        });
+      }
+      
+      const objectPath = `${privateObjectDir}/uploads/${objectId}`;
+      
+      // Parse the object path to get bucket and object names
+      const pathParts = objectPath.split('/');
+      const bucketName = pathParts[1]; // Remove leading slash and get bucket name
+      const objectName = pathParts.slice(2).join('/'); // Get object path within bucket
+      
+      // Upload file to Google Cloud Storage through our server
+      const { Storage } = await import('@google-cloud/storage');
+      const gcs = new Storage();
+      const bucket = gcs.bucket(bucketName);
+      const file = bucket.file(objectName);
+      
+      // Upload the file buffer
+      await file.save(req.file.buffer, {
+        metadata: {
+          contentType: req.file.mimetype,
+        },
+      });
+      
+      console.log(`File uploaded successfully to: ${objectPath}`);
+      
+      // Return the object path for processing
+      res.json({ 
+        success: true, 
+        objectPath: `/objects/uploads/${objectId}`,
+        fileName: req.file.originalname 
+      });
+      
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: "Failed to upload file: " + errorMessage });
     }
   });
 

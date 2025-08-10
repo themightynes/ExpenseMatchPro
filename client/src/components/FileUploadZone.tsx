@@ -58,58 +58,41 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
   });
 
   const uploadFileDirectly = async (file: File): Promise<string> => {
-    console.log("Starting direct upload for:", file.name);
-    setCurrentStatus(`Getting upload URL for ${file.name}...`);
+    console.log("Starting server upload for:", file.name);
+    setCurrentStatus(`Uploading ${file.name} through server...`);
     
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        // Get fresh presigned URL
-        const response = await apiRequest("POST", "/api/objects/upload");
-        const data = await response.json();
-        console.log("Received upload URL:", data.uploadURL);
-        
-        setCurrentStatus(`Uploading ${file.name} to cloud storage...`);
-        
-        // Upload file directly to GCS
-        const uploadResponse = await fetch(data.uploadURL, {
-          method: 'PUT',
-          body: file,
-          headers: {
-            'Content-Type': file.type || 'application/octet-stream',
-          },
-        });
-        
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          console.error("Upload failed. Status:", uploadResponse.status, "Response:", errorText);
-          
-          // If expired token, retry with fresh URL
-          if (uploadResponse.status === 400 && errorText.includes('ExpiredToken')) {
-            retries--;
-            if (retries > 0) {
-              console.log(`Token expired, retrying... (${retries} attempts left)`);
-              setCurrentStatus(`Upload URL expired, getting new one for ${file.name}...`);
-              continue;
-            }
-          }
-          
-          throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}. ${errorText}`);
-        }
-        
-        console.log("Upload successful for:", file.name);
-        setCurrentStatus(`${file.name} uploaded successfully, starting processing...`);
-        return data.uploadURL.split('?')[0]; // Return clean URL without query params
-        
-      } catch (error) {
-        if (retries <= 1) throw error;
-        retries--;
-        console.log(`Upload failed, retrying... (${retries} attempts left)`, error);
-        setCurrentStatus(`Upload failed, retrying ${file.name}...`);
+    // Create form data to send file to server
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      // Upload file to our server which handles GCS upload
+      const response = await fetch('/api/objects/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include', // Important for authentication
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}. ${errorData.error || ''}`);
       }
+      
+      const data = await response.json();
+      
+      if (!data.success || !data.objectPath) {
+        throw new Error(`Upload failed: Invalid response from server`);
+      }
+      
+      console.log("Upload successful for:", file.name, "at path:", data.objectPath);
+      setCurrentStatus(`${file.name} uploaded successfully, starting processing...`);
+      
+      return data.objectPath; // Return the object path for processing
+      
+    } catch (error) {
+      console.error(`Upload failed for ${file.name}:`, error);
+      throw error;
     }
-    
-    throw new Error(`Failed to upload ${file.name} after 3 attempts`);
   };
 
   const handleFilesSelected = async (files: FileList | File[]) => {
