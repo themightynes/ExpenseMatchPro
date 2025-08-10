@@ -12,6 +12,7 @@ import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, Li
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import MobileHeader from "@/components/MobileHeader";
 
 export default function StatementsPage() {
   const [showCsvModal, setShowCsvModal] = useState(false);
@@ -205,32 +206,24 @@ export default function StatementsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-inter">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Link href="/" className="flex items-center text-gray-600 hover:text-gray-900 mr-4">
-                ← Back to Dashboard
-              </Link>
-              <div className="flex items-center">
-                <CreditCard className="text-primary text-2xl mr-3" />
-                <h1 className="text-xl font-semibold text-gray-900">AMEX Statements</h1>
-              </div>
-            </div>
-            <Button 
-              onClick={() => setShowCsvModal(true)}
-              className="flex items-center gap-2"
-            >
-              <Upload className="h-4 w-4" />
-              Import CSV
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50">
+      <MobileHeader 
+        title="AMEX Statements" 
+        showBack={true}
+        onBack={() => window.history.back()}
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowCsvModal(true)}
+            className="p-1 h-8 w-8 min-h-[44px] min-w-[44px]"
+          >
+            <Upload className="w-4 h-4" />
+          </Button>
+        }
+      />
+      
+      <div className="px-4 py-6">
         {/* Summary Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>

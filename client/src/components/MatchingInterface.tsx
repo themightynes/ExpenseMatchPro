@@ -100,9 +100,10 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
   // Early returns after all hooks have been called
   if (isLoading) {
     return (
-      <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading matching candidates...</p>
+      <div className="flex flex-col items-center justify-center py-12 min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600 text-center">Loading matching candidates...</p>
+        <p className="mt-2 text-sm text-gray-400 text-center">Finding receipts to match with charges</p>
       </div>
     );
   }

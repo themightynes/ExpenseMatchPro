@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useMutation } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { Mail, Forward, Copy, Upload, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
+import MobileHeader from '@/components/MobileHeader';
 
 interface EmailData {
   subject: string;
@@ -59,15 +60,15 @@ export default function EmailImport() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Email Receipt Import</h1>
-        <p className="text-gray-600">
-          Import receipts from emails using manual forwarding or copy-paste methods that work with secure corporate email systems.
-        </p>
-      </div>
-
-      <Tabs defaultValue="manual" className="w-full">
+    <div className="min-h-screen bg-gray-50">
+      <MobileHeader 
+        title="Email Receipt Import"
+        showBack={true}
+        onBack={() => window.history.back()}
+      />
+      
+      <div className="px-4 py-6">
+        <Tabs defaultValue="manual" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="manual">Manual Import</TabsTrigger>
           <TabsTrigger value="forward">Email Forwarding</TabsTrigger>
@@ -244,6 +245,7 @@ export default function EmailImport() {
           </Card>
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }

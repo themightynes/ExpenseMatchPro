@@ -22,16 +22,33 @@ export default function Matching() {
   return (
     <div className="min-h-screen bg-gray-50">
       <MobileHeader 
-        title="Match Receipts"
+        title="Matching"
         showBack={true}
         onBack={() => window.history.back()}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-gray-600 hidden sm:block">
+              3 ready to match
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-1 h-8 w-8 min-h-[44px] min-w-[44px]"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+            </Button>
+          </div>
+        }
       />
 
       <div className="px-4 py-6">
         {statementsLoading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading statements...</p>
+          <div className="flex flex-col items-center justify-center py-12 min-h-[400px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600 text-center">Loading statements...</p>
+            <p className="mt-2 text-sm text-gray-400 text-center">Preparing statement periods for matching</p>
           </div>
         ) : statements.length === 0 ? (
           <Card className="max-w-2xl mx-auto">
@@ -78,33 +95,38 @@ export default function Matching() {
           </Card>
         ) : (
           <div>
-            {/* Mode Selection */}
-            <div className="max-w-4xl mx-auto mb-6">
-              <div className="flex items-center justify-center gap-4 bg-white rounded-lg p-4 shadow-sm">
-                <span className="text-sm font-medium text-gray-700">Matching Mode:</span>
-                <div className="flex bg-gray-100 rounded-lg p-1">
+            {/* Mode Selection - Mobile Optimized */}
+            <div className="mb-6">
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-700">Matching Mode:</span>
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <span className="hidden sm:inline">Swipe through matches one by one</span>
+                    <span className="sm:hidden">1 of 3 reviewed</span>
+                  </div>
+                </div>
+                <div className="flex bg-gray-100 rounded-lg p-1 w-full">
                   <Button
                     variant={matchingMode === "tinder" ? "default" : "ghost"}
                     size="sm"
                     onClick={() => setMatchingMode("tinder")}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 flex-1 justify-center"
                   >
-                    <i className="fas fa-heart text-sm"></i>
-                    Tinder Style
+                    <span className="text-blue-600">💙</span>
+                    <span className="hidden sm:inline">Tinder Style</span>
+                    <span className="sm:hidden text-xs">Tinder</span>
                   </Button>
                   <Button
                     variant={matchingMode === "drag" ? "default" : "ghost"}
                     size="sm"
                     onClick={() => setMatchingMode("drag")}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 flex-1 justify-center"
                   >
-                    <i className="fas fa-arrows-alt text-sm"></i>
-                    Drag & Drop
+                    <span>⚡</span>
+                    <span className="hidden sm:inline">Drag & Drop</span>
+                    <span className="sm:hidden text-xs">Drag</span>
                   </Button>
                 </div>
-                <Badge variant="outline" className="text-xs">
-                  {matchingMode === "tinder" ? "Swipe through matches one by one" : "Drag receipts to charges directly"}
-                </Badge>
               </div>
             </div>
 
