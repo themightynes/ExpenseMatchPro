@@ -78,7 +78,7 @@ Preferred communication style: Simple, everyday language.
 - **AMEX Integration**: Processes AMEX statement CSV files with automatic date range detection and folder organization
 - **Oracle iExpense**: Generates compatible templates for enterprise expense reporting
 
-## Recent Changes (August 9, 2025)
+## Recent Changes (August 9-10, 2025)
 - **Individual Statement Pages**: Replaced popup dialogs with dedicated statement detail pages (/statements/:id) for comprehensive data viewing
 - **Financial Dashboard Design**: Implemented modern financial app-inspired UI with color-coded metrics and visual statistics
 - **Advanced Data Tables**: Interactive sortable tables displaying complete CSV data including merchant details, amounts, categories, card members, and locations
@@ -130,3 +130,4 @@ Preferred communication style: Simple, everyday language.
 - **Google OAuth Authentication**: Implemented secure single-user authentication system with Google OAuth 2.0 integration restricting access to authorized email only
 - **Protected API Routes**: All sensitive endpoints now require authentication with proper session management and production-ready security settings
 - **User Profile Management**: Added user profile dropdown in mobile navigation with logout functionality and profile picture display
+- **Critical Bug Fix (August 10, 2025)**: Resolved application crash caused by duplicate HTTP responses in receipt processing endpoint. Fixed "Cannot set headers after they are sent to the client" error that prevented server startup. Receipt upload functionality now works reliably with proper background processing and error handling.

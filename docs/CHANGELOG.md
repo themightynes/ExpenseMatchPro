@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Critical Application Crash (August 10, 2025)**: Resolved fatal "Cannot set headers after they are sent to the client" error that prevented server startup
+- **Receipt Processing Reliability**: Fixed duplicate HTTP response issue in receipt upload endpoint, ensuring stable file upload functionality
+- **Server Stability**: Application now runs consistently without crashes during receipt processing operations
+
 ### Added
 - Individual statement detail pages with comprehensive CSV data display
 - Modern financial app-inspired dashboard design with color-coded metrics
@@ -30,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimized charge management interface for mobile and desktop viewing
 
 ### Technical
+- **Critical Bug Resolution**: Fixed receipt processing endpoint to prevent duplicate HTTP responses and ensure proper background processing
+- **Error Handling Improvements**: Enhanced error handling in receipt upload workflow with proper async processing patterns
 - Added `/statements/:id` route for individual statement pages
 - Implemented new API endpoint for single statement retrieval
 - Enhanced React Query integration for statement detail data fetching
@@ -47,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added comprehensive UI design guide with component standards and accessibility guidelines
 - Enhanced feature documentation with detailed descriptions of new statement management capabilities
 - Documented modern financial app design patterns and responsive design principles
+- **Updated Technical Documentation**: Added debugging and stability improvements to system documentation
 
 ## [1.0.0] - 2025-08-09
 
