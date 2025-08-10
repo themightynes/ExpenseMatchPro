@@ -18,6 +18,7 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [currentStatus, setCurrentStatus] = useState("");
   const [isMobile, setIsMobile] = useState(true); // Start with mobile as default for better compatibility
 
   useEffect(() => {
@@ -58,27 +59,57 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
 
   const uploadFileDirectly = async (file: File): Promise<string> => {
     console.log("Starting direct upload for:", file.name);
+    setCurrentStatus(`Getting upload URL for ${file.name}...`);
     
-    // Get presigned URL
-    const response = await apiRequest("POST", "/api/objects/upload");
-    const data = await response.json();
-    console.log("Received upload URL:", data.uploadURL);
-    
-    // Upload file directly to GCS
-    const uploadResponse = await fetch(data.uploadURL, {
-      method: 'PUT',
-      body: file,
-      headers: {
-        'Content-Type': file.type || 'application/octet-stream',
-      },
-    });
-    
-    if (!uploadResponse.ok) {
-      throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        // Get fresh presigned URL
+        const response = await apiRequest("POST", "/api/objects/upload");
+        const data = await response.json();
+        console.log("Received upload URL:", data.uploadURL);
+        
+        setCurrentStatus(`Uploading ${file.name} to cloud storage...`);
+        
+        // Upload file directly to GCS
+        const uploadResponse = await fetch(data.uploadURL, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+        });
+        
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          console.error("Upload failed. Status:", uploadResponse.status, "Response:", errorText);
+          
+          // If expired token, retry with fresh URL
+          if (uploadResponse.status === 400 && errorText.includes('ExpiredToken')) {
+            retries--;
+            if (retries > 0) {
+              console.log(`Token expired, retrying... (${retries} attempts left)`);
+              setCurrentStatus(`Upload URL expired, getting new one for ${file.name}...`);
+              continue;
+            }
+          }
+          
+          throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}. ${errorText}`);
+        }
+        
+        console.log("Upload successful for:", file.name);
+        setCurrentStatus(`${file.name} uploaded successfully, starting processing...`);
+        return data.uploadURL.split('?')[0]; // Return clean URL without query params
+        
+      } catch (error) {
+        if (retries <= 1) throw error;
+        retries--;
+        console.log(`Upload failed, retrying... (${retries} attempts left)`, error);
+        setCurrentStatus(`Upload failed, retrying ${file.name}...`);
+      }
     }
     
-    console.log("Upload successful for:", file.name);
-    return data.uploadURL.split('?')[0]; // Return clean URL without query params
+    throw new Error(`Failed to upload ${file.name} after 3 attempts`);
   };
 
   const handleFilesSelected = async (files: FileList | File[]) => {
@@ -125,6 +156,8 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
         // Upload file directly
         const fileUrl = await uploadFileDirectly(file);
         
+        setCurrentStatus(`Processing ${file.name} - extracting text and data...`);
+        
         // Process the uploaded file
         const processData = {
           fileUrl: fileUrl,
@@ -133,6 +166,7 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
         };
         console.log("Sending to process endpoint:", processData);
         await processReceiptMutation.mutateAsync(processData);
+        setCurrentStatus(`${file.name} processed successfully!`);
         successCount++;
       } catch (error) {
         console.error(`Failed to upload/process ${file.name}:`, error);
@@ -196,13 +230,18 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
               </p>
               
               {isProcessing && (
-                <div className="flex items-center justify-center gap-2 mt-3">
+                <div className="flex flex-col items-center justify-center gap-2 mt-3">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
-                  <span className="text-sm text-blue-600">
+                  <span className="text-sm text-blue-600 text-center">
                     {uploadProgress.total > 1 
                       ? `Processing ${uploadProgress.current} of ${uploadProgress.total} receipts...`
                       : "Processing..."}
                   </span>
+                  {currentStatus && (
+                    <span className="text-xs text-gray-500 text-center max-w-sm">
+                      {currentStatus}
+                    </span>
+                  )}
                 </div>
               )}
             </label>
