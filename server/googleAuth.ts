@@ -148,7 +148,17 @@ export function setupGoogleAuth(app: Express) {
     passport.authenticate('google', { failureRedirect: '/login' }),
     (req, res) => {
       // Successful authentication, redirect to dashboard
-      res.redirect('/');
+      // Use script to ensure redirect happens in parent window if in popup
+      res.send(`
+        <script>
+          if (window.opener) {
+            window.opener.location.href = '/';
+            window.close();
+          } else {
+            window.location.href = '/';
+          }
+        </script>
+      `);
     }
   );
 
