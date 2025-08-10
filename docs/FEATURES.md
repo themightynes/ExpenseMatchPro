@@ -68,11 +68,16 @@ This document provides detailed information about all features available in the 
 - Real-time form validation
 
 ### Receipt Viewer
-**Purpose**: Comprehensive receipt viewing with multiple display options.
+**Purpose**: Comprehensive receipt viewing with advanced zoom, pan, and navigation capabilities.
 
 **Image Display**:
-- Full-size image viewer with zoom capabilities
+- Full-size image viewer with advanced zoom capabilities (0.5x to 3x)
+- Pan functionality when zoomed in for detailed inspection
+- Touch gestures: pinch-to-zoom and drag-to-pan on mobile devices
+- Mouse controls: click and drag to pan when zoomed, scroll wheel zoom
 - Rotation controls for poorly oriented images
+- Visual zoom percentage indicator
+- Reset controls to return to original view
 - Download original file option
 - Thumbnail preview in lists
 

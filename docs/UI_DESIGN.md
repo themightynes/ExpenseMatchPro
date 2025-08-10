@@ -103,6 +103,14 @@ The Receipt Manager application features a modern, financial app-inspired interf
 - Swipe gestures for secondary actions where appropriate
 - Long-press for contextual menus
 
+**Receipt Viewer Interactions**:
+- **Pinch-to-zoom**: Two-finger pinch gesture for smooth zoom control
+- **Pan when zoomed**: Single-finger drag to navigate around zoomed images
+- **Mouse support**: Click and drag panning with visual cursor feedback
+- **Keyboard navigation**: Arrow keys for receipt navigation, +/- for zoom
+- **Touch constraints**: Intelligent pan limits to prevent over-scrolling
+- **Smooth transitions**: Animated zoom and pan state changes
+
 ## Accessibility Standards
 
 ### Visual Accessibility

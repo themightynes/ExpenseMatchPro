@@ -19,6 +19,14 @@ A modern web application that automates receipt processing, AMEX statement integ
 - **Duplicate Prevention**: Smart detection of overlapping statement imports
 - **Charge Matching**: Intelligent algorithm matches receipts to AMEX charges
 
+### Advanced Receipt Viewer
+- **Zoom & Pan Controls**: 0.5x to 3x zoom with smooth pan functionality
+- **Multi-Platform Gestures**: Touch pinch-to-zoom and mouse drag support
+- **Keyboard Navigation**: Arrow keys for receipt browsing, +/- for zoom control
+- **Visual Indicators**: Real-time zoom percentage and intuitive UI controls
+- **Rotation Support**: 90-degree rotation controls for image orientation
+- **Mobile Optimized**: Touch-friendly gestures with pan constraints
+
 ### Smart Organization
 - **Oracle Naming**: Automatic renaming using DATE_MERCHANT_$AMOUNT_RECEIPT.ext format
 - **Cross-Statement Matching**: Receipts can match charges across all statement periods
@@ -197,6 +205,12 @@ Adjust OCR processing in `server/ocrService.ts`:
 - Verify all required fields are filled
 - Check email content contains receipt information
 - Try alternative import methods
+
+**Receipt Viewer Issues**
+- If panning feels sluggish, try resetting zoom with the 1:1 button
+- On mobile, use two fingers for pinch-to-zoom, one finger for panning
+- Pan constraints prevent over-scrolling - this is intentional behavior
+- Keyboard users can use +/- keys for zoom, arrow keys for navigation
 
 ### Getting Help
 
