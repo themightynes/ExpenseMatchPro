@@ -117,10 +117,12 @@ Preferred communication style: Simple, everyday language.
 - **Email Navigation**: Added email import page to main navigation with user-friendly interface
 - **Corporate Email Support**: Alternative methods for secure email environments including forwarding and EML file options
 - **Comprehensive Documentation**: Created complete documentation system with changelog, features guide, API reference, and user manual
-- **Inline PDF Viewer**: Implemented inline PDF viewing with responsive layout - mobile shows PDF above form, desktop shows side-by-side panels
-- **PDF Controls**: Added zoom, page navigation, and external link buttons for enhanced PDF interaction
-- **Progressive Enhancement**: Feature flag system allows fallback to "Open in New Tab" if inline rendering fails
-- **Responsive Receipt Viewer**: Enhanced ReceiptViewer with proper desktop/mobile layouts for simultaneous PDF viewing and form editing
+- **Advanced PDF Viewer**: Completely revamped PDF viewer using PDF.js for true interactive viewing with full pan and zoom capabilities
+- **Interactive Pan & Zoom**: Implemented proper mouse and touch-based panning with zoom controls (0.5x to 3x) that actually work within PDFs
+- **Multi-Page PDF Support**: Fixed page navigation to properly detect and display all pages in multi-page PDFs (previously limited to page 1)
+- **High-Quality Rendering**: Canvas-based rendering with device pixel ratio support for crisp display on all screen types
+- **Touch Gestures**: Full mobile support with drag-to-pan when zoomed, preventing the broken functionality reported by users
+- **Fallback System**: Intelligent fallback to iframe method if PDF.js fails, ensuring PDFs always display
 - **Advanced PDF Text Extraction**: Implemented PDF-to-image conversion with OCR for comprehensive text extraction from PDF receipts
 - **Enhanced User Experience**: Improved progress indicators, processing time feedback, and real-time status updates for text extraction
 - **Smart Receipt Processing**: PDF receipts now automatically extract merchant, amount, date, and category information for seamless AMEX matching

@@ -82,10 +82,14 @@ This document provides detailed information about all features available in the 
 - Thumbnail preview in lists
 
 **PDF Preview**:
-- Compact inline PDF viewer
-- "Open in New Tab" for full document view
-- Page navigation for multi-page documents
-- Download functionality
+- Advanced inline PDF viewer powered by PDF.js
+- Interactive zoom controls (0.5x to 3x) with smooth scaling
+- True pan functionality - click and drag to navigate zoomed PDFs
+- Full multi-page support with accurate page detection and navigation
+- Touch gestures: drag to pan, pinch-to-zoom on mobile devices
+- Canvas-based rendering for high-quality display
+- "Open in New Tab" and download functionality
+- Intelligent fallback system for compatibility
 
 **Data Summary**:
 - Key information display (merchant, amount, date)

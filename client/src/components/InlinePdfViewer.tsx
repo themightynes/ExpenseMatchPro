@@ -16,24 +16,136 @@ interface InlinePdfViewerProps {
   fileName?: string;
 }
 
+interface PDFPageRendererProps {
+  pdfDoc: any;
+  pageNumber: number;
+  zoom: number;
+  panPosition: { x: number; y: number };
+  isDragging: boolean;
+}
+
+function PDFPageRenderer({ pdfDoc, pageNumber, zoom, panPosition, isDragging }: PDFPageRendererProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const renderPage = async () => {
+      if (!pdfDoc || !canvasRef.current) return;
+
+      try {
+        setPageLoading(true);
+        
+        const page = await pdfDoc.getPage(pageNumber);
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+
+        if (!context) return;
+
+        // Calculate scale for high-DPI displays
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const scale = zoom * devicePixelRatio;
+
+        // Get viewport
+        const viewport = page.getViewport({ scale });
+        
+        // Set canvas size
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = `${viewport.width / devicePixelRatio}px`;
+        canvas.style.height = `${viewport.height / devicePixelRatio}px`;
+
+        // Render PDF page
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        await page.render(renderContext).promise;
+        setPageLoading(false);
+        
+      } catch (error) {
+        console.error('Error rendering PDF page:', error);
+        setPageLoading(false);
+      }
+    };
+
+    renderPage();
+  }, [pdfDoc, pageNumber, zoom]);
+
+  return (
+    <div className="relative">
+      {pageLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-200 rounded">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <p className="text-sm text-gray-600">Rendering page {pageNumber}...</p>
+          </div>
+        </div>
+      )}
+      <canvas 
+        ref={canvasRef}
+        className="max-w-full h-auto rounded-lg shadow-lg bg-white"
+        style={{
+          transform: `translate(${panPosition.x}px, ${panPosition.y}px)`,
+          transition: !isDragging ? 'transform 0.1s ease-out' : 'none',
+          cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+        }}
+      />
+    </div>
+  );
+}
+
 export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [renderError, setRenderError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const embedRef = useRef<HTMLEmbedElement>(null);
   const [useIframe, setUseIframe] = useState(false);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
 
-  // Reset state when src changes
+  // Load PDF.js and initialize PDF
   useEffect(() => {
-    setCurrentPage(1);
-    setTotalPages(1);
-    setZoom(1);
-    setRenderError(false);
-    setLoading(true);
-    setUseIframe(false);
+    const loadPdf = async () => {
+      try {
+        setLoading(true);
+        setRenderError(false);
+        
+        // Dynamic import of PDF.js
+        const pdfjsLib = await import('pdfjs-dist');
+        
+        // Set worker path
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        
+        // Load PDF document
+        const loadingTask = pdfjsLib.getDocument(src);
+        const pdf = await loadingTask.promise;
+        
+        setPdfDoc(pdf);
+        setTotalPages(pdf.numPages);
+        setCurrentPage(1);
+        setZoom(1);
+        setPanPosition({ x: 0, y: 0 });
+        setLoading(false);
+        
+        console.log(`PDF loaded: ${pdf.numPages} pages`);
+        
+      } catch (error) {
+        console.error('Failed to load PDF with PDF.js:', error);
+        // Fallback to iframe/embed approach
+        setUseIframe(true);
+        setLoading(false);
+      }
+    };
+
+    if (src) {
+      loadPdf();
+    }
   }, [src]);
 
   const handlePrevPage = () => {
@@ -55,6 +167,70 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
   const handleZoomOut = () => {
     setZoom(prev => Math.max(prev - 0.25, 0.5));
   };
+
+  // Pan functionality
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoom > 1) {
+      setIsDragging(true);
+      setLastPanPoint({ x: e.clientX, y: e.clientY });
+      e.preventDefault();
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging && zoom > 1) {
+      const deltaX = e.clientX - lastPanPoint.x;
+      const deltaY = e.clientY - lastPanPoint.y;
+      
+      setPanPosition(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }));
+      
+      setLastPanPoint({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Touch events for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (zoom > 1 && e.touches.length === 1) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setLastPanPoint({ x: touch.clientX, y: touch.clientY });
+      e.preventDefault();
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isDragging && zoom > 1 && e.touches.length === 1) {
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - lastPanPoint.x;
+      const deltaY = touch.clientY - lastPanPoint.y;
+      
+      setPanPosition(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }));
+      
+      setLastPanPoint({ x: touch.clientX, y: touch.clientY });
+      e.preventDefault();
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  // Reset pan when zoom changes
+  useEffect(() => {
+    if (zoom === 1) {
+      setPanPosition({ x: 0, y: 0 });
+    }
+  }, [zoom]);
 
   const handleOpenInNewTab = () => {
     window.open(src, '_blank');
@@ -208,25 +384,52 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
             <div className="text-center">
               <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400 animate-pulse" />
               <p className="text-sm text-gray-600">Loading PDF...</p>
+              <p className="text-xs text-gray-500 mt-2">Initializing advanced viewer...</p>
             </div>
           </div>
         )}
 
-        {!useIframe ? (
-          <embed
-            ref={embedRef}
-            src={`${src}#page=${currentPage}&zoom=${Math.round(zoom * 100)}`}
-            type="application/pdf"
-            className="w-full h-full"
-            onLoad={handleEmbedLoad}
-            onError={handleEmbedError}
+        {pdfDoc && !loading ? (
+          <div 
+            className="flex justify-center items-center min-h-full p-4"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             style={{ 
-              minHeight: '500px',
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top left'
+              cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+              touchAction: zoom > 1 ? 'none' : 'auto'
             }}
-          />
-        ) : (
+          >
+            <div className="relative">
+              <PDFPageRenderer 
+                pdfDoc={pdfDoc}
+                pageNumber={currentPage}
+                zoom={zoom}
+                panPosition={panPosition}
+                isDragging={isDragging}
+              />
+              
+              {/* Zoom indicator */}
+              {zoom !== 1 && (
+                <div className="absolute bottom-4 left-4 bg-black/70 text-white px-2 py-1 rounded text-sm">
+                  {Math.round(zoom * 100)}%
+                </div>
+              )}
+              
+              {/* Page indicator for multi-page PDFs */}
+              {totalPages > 1 && (
+                <div className="absolute bottom-4 right-4 bg-black/70 text-white px-2 py-1 rounded text-sm">
+                  Page {currentPage} of {totalPages}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : useIframe && !pdfDoc ? (
+          // Fallback to iframe if PDF.js fails
           <iframe
             ref={iframeRef}
             src={`${src}#page=${currentPage}&zoom=${Math.round(zoom * 100)}`}
@@ -238,7 +441,7 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
             }}
             title={`PDF Viewer - ${fileName}`}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );
