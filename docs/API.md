@@ -78,27 +78,81 @@ GET /api/receipts
 ]
 ```
 
-### Create Receipt
+### Upload File to Object Storage
 ```http
-POST /api/receipts
+POST /api/objects/upload
 Content-Type: multipart/form-data
+Authorization: Required (session-based)
 
 FormData:
 - file: [receipt file]
-- merchant: "Starbucks" (optional)
-- amount: "4.75" (optional)
-- date: "2025-08-09" (optional)
-- category: "Meals" (optional)
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "objectPath": "/objects/uploads/unique-id",
+  "fileName": "receipt.pdf"
+}
+```
+
+### Process Receipt
+```http
+POST /api/receipts/process
+Content-Type: application/json
+Authorization: Required (session-based)
+
+{
+  "fileUrl": "/objects/uploads/unique-id",
+  "fileName": "receipt.pdf",
+  "originalFileName": "receipt.pdf"
+}
+```
+
+**Response (Immediate):**
+```json
+{
+  "id": "receipt-id",
+  "fileName": "receipt.pdf",
+  "fileUrl": "/objects/uploads/receipt-id", 
+  "processingStatus": "processing",
+  "ocrText": "Processing...",
+  "createdAt": "2025-08-10T00:00:00.000Z"
+}
+```
+
+**Background Processing:**
+- OCR text extraction using Tesseract.js
+- Data parsing for merchant, amount, date, category
+- Automatic statement assignment when possible
+- Smart matching with AMEX charges
+- File organization and ACL policy setup
+
+### Create Receipt (Manual)
+```http
+POST /api/receipts
+Content-Type: application/json
+Authorization: Required (session-based)
+
+{
+  "fileName": "manual-entry.txt",
+  "merchant": "Starbucks",
+  "amount": "4.75",
+  "date": "2025-08-09",
+  "category": "Meals"
+}
 ```
 
 **Response:**
 ```json
 {
   "id": "receipt-id",
-  "fileName": "receipt.pdf",
-  "fileUrl": "/objects/uploads/receipt-id",
-  "processingStatus": "processing",
-  "message": "Receipt uploaded successfully"
+  "fileName": "manual-entry.txt",
+  "merchant": "Starbucks",
+  "amount": "4.75",
+  "processingStatus": "completed",
+  "message": "Receipt created successfully"
 }
 ```
 

@@ -5,10 +5,12 @@ A modern web application that automates receipt processing, AMEX statement integ
 ## 🌟 Key Features
 
 ### Receipt Processing
-- **Multi-File Upload**: Upload up to 10 receipts simultaneously with progress tracking
-- **OCR Technology**: Automatic text extraction from images using Tesseract.js
+- **Smart Multi-Device Upload**: Intelligent upload system with device-specific optimization (Uppy for desktop, server upload for mobile)
+- **Authentication-Protected**: All uploads require secure user authentication with pre-upload verification
+- **Multi-File Support**: Upload up to 10 receipts simultaneously with real-time progress tracking
+- **Background OCR Processing**: Automatic text extraction using Tesseract.js with immediate response and async processing
 - **Manual Entry Support**: Quick manual data entry when OCR processing isn't needed
-- **PDF Handling**: Smart PDF guidance with manual entry recommendations
+- **PDF Text Extraction**: Advanced PDF-to-image conversion with OCR for comprehensive text extraction
 - **Email Integration**: Import receipts from email content with copy-paste functionality
 
 ### AMEX Integration

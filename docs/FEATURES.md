@@ -16,24 +16,40 @@ This document provides detailed information about all features available in the 
 ## 📄 Receipt Management
 
 ### Multi-File Upload
-**Purpose**: Upload multiple receipts simultaneously for efficient batch processing.
+**Purpose**: Upload multiple receipts simultaneously for efficient batch processing with intelligent device-specific optimization.
+
+**Smart Upload Architecture**:
+- **Desktop Devices**: Advanced Uppy-based interface with direct-to-storage uploads using presigned URLs
+- **Mobile Devices**: Streamlined server-upload interface optimized for touch interactions
+- **Automatic Detection**: System automatically detects device capabilities and chooses optimal upload method
+- **Authentication Integration**: All uploads require authentication with pre-upload verification
 
 **Features**:
 - Support for up to 10 files per upload session
-- Drag-and-drop interface with progress tracking
-- File validation and size limits
+- Drag-and-drop interface with progress tracking (desktop)
+- File validation and size limits (10MB per file)
 - Real-time upload status indicators
+- Background processing with immediate feedback
+- Comprehensive error handling and recovery
 
 **Supported Formats**:
 - **Images**: JPEG, PNG, GIF, BMP, TIFF
-- **Documents**: PDF files
+- **Documents**: PDF files (with automatic OCR processing)
 - **Maximum Size**: 10MB per file
+- **Processing**: Automatic OCR extraction for all supported formats
 
-**How to Use**:
-1. Navigate to the Upload page
-2. Drag files into the upload area or click to select
-3. Monitor upload progress in real-time
-4. Review uploaded receipts in the confirmation dialog
+**Upload Workflow**:
+1. **File Selection**: Drag-and-drop (desktop) or file picker (mobile)
+2. **Authentication Check**: System verifies user session before upload
+3. **Immediate Upload**: Files uploaded with real-time progress tracking
+4. **Background Processing**: OCR and data extraction runs asynchronously
+5. **Auto-Organization**: Receipts automatically assigned to statements when possible
+6. **Smart Matching**: System attempts automatic matching to AMEX charges
+
+**Device-Specific Features**:
+- **Desktop**: Modal upload interface with file management dashboard
+- **Mobile**: Inline progress tracking with optimized touch interface
+- **Cross-Platform**: Consistent experience across all devices
 
 ### Manual Data Entry
 **Purpose**: Quick receipt data entry when automatic processing isn't needed.
