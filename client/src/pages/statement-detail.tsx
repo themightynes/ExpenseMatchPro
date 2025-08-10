@@ -490,10 +490,10 @@ export default function StatementDetailPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Match Status with Receipt Link */}
                     <div className="flex items-center gap-1">
-                      <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
-                        {charge.isMatched ? "Matched" : "Unmatched"}
+                      <Badge variant={charge.receiptId ? "default" : "secondary"} className="text-xs">
+                        {charge.receiptId ? "Matched" : "Unmatched"}
                       </Badge>
-                      {charge.isMatched && charge.receiptId ? (
+                      {charge.receiptId ? (
                         <Link href={`/receipts?selected=${charge.receiptId}`}>
                           <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
                             <FileText className="h-3 w-3 sm:mr-1" />
