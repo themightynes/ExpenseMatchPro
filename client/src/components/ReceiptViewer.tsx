@@ -219,14 +219,18 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       const deltaX = touch.clientX - dragStart.x;
       const deltaY = touch.clientY - dragStart.y;
       
-      // Apply constraints to prevent panning too far
-      const maxPanX = (zoom - 1) * 200;
-      const maxPanY = (zoom - 1) * 200;
-      
-      setPanPosition({
-        x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
-        y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
-      });
+      // Calculate pan constraints based on actual container and zoom level
+      const container = imageContainerRef.current;
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        const maxPanX = (zoom - 1) * containerRect.width * 0.3;
+        const maxPanY = (zoom - 1) * containerRect.height * 0.3;
+        
+        setPanPosition({
+          x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
+          y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
+        });
+      }
     }
   }, [lastTouchDistance, zoom, isDragging, dragStart, lastPanPosition]);
 
@@ -257,14 +261,18 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       
-      // Apply constraints to prevent panning too far
-      const maxPanX = (zoom - 1) * 200;
-      const maxPanY = (zoom - 1) * 200;
-      
-      setPanPosition({
-        x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
-        y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
-      });
+      // Calculate pan constraints based on actual container and zoom level
+      const container = imageContainerRef.current;
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        const maxPanX = (zoom - 1) * containerRect.width * 0.3;
+        const maxPanY = (zoom - 1) * containerRect.height * 0.3;
+        
+        setPanPosition({
+          x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
+          y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
+        });
+      }
     }
   }, [isDragging, zoom, dragStart, lastPanPosition]);
 
