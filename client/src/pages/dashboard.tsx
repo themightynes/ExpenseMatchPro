@@ -105,44 +105,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Quick Actions</h3>
-          {/* MOBILE: Improved grid layout for small screens */}
-          <div className="grid grid-cols-2 gap-3">
-            <QuickAction
-              icon={<PlusCircle className="w-5 h-5" />}
-              label="Upload Receipt"
-              variant="primary"
-              onClick={() => {/* Handle upload */}}
-            />
-            <QuickAction
-              icon={<Upload className="w-5 h-5" />}
-              label="Import CSV"
-              variant="default"
-              onClick={() => setShowCsvModal(true)}
-            />
-            <Link href="/matching">
-              <QuickAction
-                icon={<BarChart3 className="w-5 h-5" />}
-                label="Match Receipts"
-                variant="default"
-                badge={stats?.readyCount}
-                onClick={() => {}}
-                className="w-full"
-              />
-            </Link>
-            <Link href="/statements">
-              <QuickAction
-                icon={<FileText className="w-5 h-5" />}
-                label="View Statements"
-                variant="default"
-                onClick={() => {}}
-                className="w-full"
-              />
-            </Link>
-          </div>
-        </div>
+
 
         {/* Legacy Stats Grid - Hidden on Mobile */}
         <div className="hidden md:grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
@@ -293,7 +256,46 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Upload Section */}
           <div className="lg:col-span-2">
-            <FileUploadZone />
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Receipt Management</CardTitle>
+                  <div className="flex gap-2">
+                    <QuickAction
+                      icon={<PlusCircle className="w-4 h-4" />}
+                      label="Upload"
+                      variant="primary"
+                      onClick={() => {
+                        // Trigger file input or open upload modal
+                        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+                        if (fileInput) fileInput.click();
+                      }}
+                      className="px-3 py-2 h-auto text-xs"
+                    />
+                    <QuickAction
+                      icon={<Upload className="w-4 h-4" />}
+                      label="CSV"
+                      variant="default"
+                      onClick={() => setShowCsvModal(true)}
+                      className="px-3 py-2 h-auto text-xs"
+                    />
+                    <Link href="/matching">
+                      <QuickAction
+                        icon={<BarChart3 className="w-4 h-4" />}
+                        label="Match"
+                        variant="default"
+                        badge={stats?.readyCount}
+                        onClick={() => {}}
+                        className="px-3 py-2 h-auto text-xs"
+                      />
+                    </Link>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <FileUploadZone />
+              </CardContent>
+            </Card>
 
             {/* Recent Uploads */}
             <Card className="mt-6">
@@ -360,10 +362,13 @@ export default function Dashboard() {
                         </div>
                         <div className="text-right">
                           <p className={`text-sm font-medium ${statement.isActive ? "text-primary" : "text-gray-900"}`}>
-                            {statement.receiptCount || 0} receipts
+                            ${(statement.totalAmount - (statement.personalExpensesAmount || 0)).toLocaleString()}
                           </p>
                           <p className={`text-xs ${statement.isActive ? "text-primary/70" : "text-gray-500"}`}>
-                            {statement.matchedCount || 0} matched
+                            business expenses
+                          </p>
+                          <p className={`text-xs ${statement.isActive ? "text-primary/70" : "text-gray-500"}`}>
+                            {statement.matchedCount || 0}/{statement.totalCharges || 0} matched
                           </p>
                         </div>
                       </div>
@@ -385,10 +390,22 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start bg-primary/5 border-primary/20 text-primary hover:bg-primary/10"
+                    onClick={() => {
+                      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+                      if (fileInput) fileInput.click();
+                    }}
+                  >
+                    <PlusCircle className="w-4 h-4 mr-3" />
+                    <span className="font-medium">Upload Receipt</span>
+                  </Button>
+
                   <Link href="/matching">
                     <Button variant="outline" className="w-full justify-between bg-warning-50 border-warning-200 text-warning-700 hover:bg-warning-100">
                       <div className="flex items-center">
-                        <i className="fas fa-heart mr-3"></i>
+                        <BarChart3 className="w-4 h-4 mr-3" />
                         <span className="font-medium">Match Receipts</span>
                       </div>
                       <Badge variant="secondary" className="bg-warning-100 text-warning-800">
@@ -400,7 +417,7 @@ export default function Dashboard() {
                   <Link href="/templates">
                     <Button variant="outline" className="w-full justify-between">
                       <div className="flex items-center">
-                        <i className="fas fa-download mr-3"></i>
+                        <FileText className="w-4 h-4 mr-3" />
                         <span className="font-medium">Export to Oracle</span>
                       </div>
                       <Badge variant="secondary" className="bg-green-100 text-green-800">
@@ -409,19 +426,12 @@ export default function Dashboard() {
                     </Button>
                   </Link>
 
-                  <Link href="/statements" className="w-full">
-                    <Button variant="outline" className="w-full justify-start">
-                      <i className="fas fa-chart-line mr-3"></i>
-                      <span className="font-medium">View Statements</span>
-                    </Button>
-                  </Link>
-
                   <Button 
                     variant="outline" 
                     className="w-full justify-start"
                     onClick={() => setShowCsvModal(true)}
                   >
-                    <i className="fas fa-upload mr-3"></i>
+                    <Upload className="w-4 h-4 mr-3" />
                     <span className="font-medium">Import AMEX CSV</span>
                   </Button>
                 </div>
