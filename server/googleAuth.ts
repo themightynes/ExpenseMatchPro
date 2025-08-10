@@ -43,7 +43,7 @@ export function setupGoogleAuth(app: Express) {
 
   // Google OAuth Strategy with dynamic callback URL
   const baseURL = process.env.NODE_ENV === 'production' 
-    ? `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'your-app.replit.app'}`
+    ? `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'ernestochapa-expense.replit.app'}`
     : 'http://localhost:5000';
     
   passport.use(new GoogleStrategy({
