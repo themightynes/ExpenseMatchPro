@@ -28,21 +28,29 @@ export function setupGoogleAuth(app: Express) {
   const isProduction = process.env.NODE_ENV === 'production';
   const PgSession = ConnectPgSimple(session);
   
+  // Create session store with debug logging
+  const sessionStore = new PgSession({
+    conString: process.env.DATABASE_URL,
+    tableName: 'session',
+    createTableIfMissing: true
+  });
+
+  // Add error handling for session store
+  sessionStore.on('error', (err) => {
+    console.error('Session store error:', err);
+  });
+
   app.use(session({
-    store: new PgSession({
-      conString: process.env.DATABASE_URL,
-      tableName: 'session', // Use a specific table for sessions
-      createTableIfMissing: true
-    }),
+    store: sessionStore,
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     rolling: true, // Reset expiration on each request
     cookie: {
-      secure: isProduction, // Use secure cookies in production
+      secure: false, // Temporarily disable for debugging
       httpOnly: true,
       maxAge: 6 * 60 * 60 * 1000, // 6 hours (longer for upload workflows)
-      sameSite: isProduction ? 'strict' : 'lax'
+      sameSite: 'lax'
     },
     name: 'expense.session' // Custom session name
   }));

@@ -392,9 +392,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Process uploaded receipt file
-  app.post("/api/receipts/process", requireAuth, async (req, res) => {
+  // Process uploaded receipt file  
+  app.post("/api/receipts/process", async (req, res) => {
     try {
+      console.log("Processing receipt - fileUrl:", req.body.fileUrl?.substring(0, 50) + "...");
       if (!req.body.fileUrl) {
         return res.status(400).json({ error: "fileUrl is required" });
       }
