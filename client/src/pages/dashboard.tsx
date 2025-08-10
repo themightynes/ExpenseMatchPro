@@ -76,8 +76,8 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-gray-900 mb-3">Financial Overview</h2>
           <div className="grid grid-cols-2 gap-3">
             <FinancialCard
-              title="Total Expenses"
-              amount={financialStats?.totalStatementAmount || 0}
+              title="Business Expenses"
+              amount={(financialStats?.totalStatementAmount || 0) - (financialStats?.personalExpensesAmount || 0)}
               icon={<DollarSign className="w-4 h-4 text-blue-600" />}
               variant="default"
             />
@@ -107,149 +107,63 @@ export default function Dashboard() {
 
 
 
-        {/* Legacy Stats Grid - Hidden on Mobile */}
-        <div className="hidden md:grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <StatsCard
-            icon="fas fa-credit-card"
-            iconColor="text-blue-600"
-            iconBg="bg-blue-50"
-            title="Total Statement Amount"
-            value={financialStatsLoading ? "..." : `$${financialStats?.totalStatementAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
-            subtitle={`${financialStats?.totalCharges || 0} charges`}
-          />
-          <StatsCard
-            icon="fas fa-check-circle"
-            iconColor="text-green-600"
-            iconBg="bg-green-50"
-            title="Matched Amount"
-            value={financialStatsLoading ? "..." : `$${financialStats?.totalMatchedAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
-            subtitle={`${financialStats?.matchedCount || 0} receipts matched`}
-          />
-          <StatsCard
-            icon="fas fa-receipt"
-            iconColor="text-orange-600"
-            iconBg="bg-orange-50"
-            title="Unmatched Receipts"
-            value={financialStatsLoading ? "..." : `$${financialStats?.totalUnmatchedReceiptAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
-            subtitle={`${financialStats?.unmatchedReceiptCount || 0} need matching`}
-          />
-          <StatsCard
-            icon="fas fa-exclamation-triangle"
-            iconColor="text-red-600"
-            iconBg="bg-red-50"
-            title="Missing Receipts"
-            value={financialStatsLoading ? "..." : `$${financialStats?.totalMissingReceiptAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
-            subtitle={`${financialStats?.missingReceiptCount || 0} charges without receipts`}
-          />
-          <StatsCard
-            icon="fas fa-user"
-            iconColor="text-purple-600"
-            iconBg="bg-purple-50"
-            title="Personal Expenses"
-            value={financialStatsLoading ? "..." : `$${financialStats?.personalExpensesAmount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0.00"}`}
-            subtitle={`${financialStats?.personalExpensesCount || 0} charges flagged`}
-          />
-        </div>
 
-        {/* Matching Progress */}
-        {!financialStatsLoading && financialStats && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Matching Progress</span>
-                <Badge variant={financialStats.matchingPercentage === 100 ? "default" : "secondary"} className="text-lg px-3 py-1">
-                  {financialStats.matchingPercentage.toFixed(1)}% Complete
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div 
-                    className="bg-gradient-to-r from-green-400 to-green-600 h-3 rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${financialStats.matchingPercentage}%` }}
-                  ></div>
-                </div>
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-2 text-sm text-gray-600">
-                  <span>Matched: ${financialStats.totalMatchedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <span>Remaining: ${(financialStats.totalStatementAmount - financialStats.totalMatchedAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-                {financialStats.matchingPercentage < 100 && (
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-orange-600">⚠️</span>
-                      <span className="break-words">Complete your matching to get 100% expense tracking accuracy</span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      {financialStats.unmatchedReceiptCount > 0 && (
-                        <Link to="/matching">
-                          <Button size="sm" variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-50 whitespace-nowrap">
-                            Match {financialStats.unmatchedReceiptCount} Receipts
-                          </Button>
-                        </Link>
-                      )}
-                      {financialStats.missingReceiptCount > 0 && (
-                        <Link to="/receipts">
-                          <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 whitespace-nowrap">
-                            Upload {financialStats.missingReceiptCount} Missing Receipts
-                          </Button>
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {financialStats.matchingPercentage === 100 && (
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm text-green-600">
-                      <span>✅</span>
-                      <span className="break-words">Perfect! All expenses are matched and ready for reporting</span>
-                    </div>
-                    <Link to="/templates">
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700 whitespace-nowrap">
-                        Generate Expense Report
-                      </Button>
-                    </Link>
-                  </div>
-                )}
+
+
+
+        {/* Processing Stats - Mobile Card Grid */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Receipts</p>
+                <p className="text-2xl font-bold text-blue-600">{statsLoading ? "..." : stats?.processedCount || "0"}</p>
+                <p className="text-xs text-gray-500">uploaded this period</p>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Processing Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <StatsCard
-            icon="fas fa-upload"
-            iconColor="text-primary"
-            iconBg="bg-primary/10"
-            title="Total Receipts"
-            value={statsLoading ? "..." : stats?.processedCount.toString() || "0"}
-            subtitle="uploaded this period"
-          />
-          <StatsCard
-            icon="fas fa-check-circle"
-            iconColor="text-green-500"
-            iconBg="bg-green-50"
-            title="Ready for Oracle"
-            value={statsLoading ? "..." : stats?.readyCount.toString() || "0"}
-            subtitle="with complete data"
-          />
-          <StatsCard
-            icon="fas fa-clock"
-            iconColor="text-yellow-500"
-            iconBg="bg-yellow-50"
-            title="Processing"
-            value={statsLoading ? "..." : stats?.processingCount.toString() || "0"}
-            subtitle="being processed"
-          />
-          <StatsCard
-            icon="fas fa-exclamation-triangle"
-            iconColor="text-orange-500"
-            iconBg="bg-orange-50"
-            title="Need Attention"
-            value={statsLoading ? "..." : stats?.pendingCount.toString() || "0"}
-            subtitle="require manual entry"
-          />
+              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                <Upload className="w-4 h-4 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Ready for Oracle</p>
+                <p className="text-2xl font-bold text-green-600">{statsLoading ? "..." : stats?.readyCount || "0"}</p>
+                <p className="text-xs text-gray-500">with complete data</p>
+              </div>
+              <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
+                <Badge className="bg-green-100 text-green-800 text-xs">{stats?.readyCount || "0"}</Badge>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Processing</p>
+                <p className="text-2xl font-bold text-yellow-600">{statsLoading ? "..." : stats?.processingCount || "0"}</p>
+                <p className="text-xs text-gray-500">being processed</p>
+              </div>
+              <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center">
+                <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Need Attention</p>
+                <p className="text-2xl font-bold text-orange-600">{statsLoading ? "..." : stats?.pendingCount || "0"}</p>
+                <p className="text-xs text-gray-500">require manual entry</p>
+              </div>
+              <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
+                <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Main Content Grid */}
@@ -261,33 +175,39 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <CardTitle>Receipt Management</CardTitle>
                   <div className="flex gap-2">
-                    <QuickAction
-                      icon={<PlusCircle className="w-4 h-4" />}
-                      label="Upload"
-                      variant="primary"
+                    <Button
+                      size="sm"
+                      variant="default"
                       onClick={() => {
-                        // Trigger file input or open upload modal
                         const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
                         if (fileInput) fileInput.click();
                       }}
-                      className="px-3 py-2 h-auto text-xs"
-                    />
-                    <QuickAction
-                      icon={<Upload className="w-4 h-4" />}
-                      label="CSV"
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Upload className="w-4 h-4 mr-1" />
+                      UPLOAD
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="default"
                       onClick={() => setShowCsvModal(true)}
-                      className="px-3 py-2 h-auto text-xs"
-                    />
-                    <Link href="/matching">
-                      <QuickAction
-                        icon={<BarChart3 className="w-4 h-4" />}
-                        label="Match"
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <FileText className="w-4 h-4 mr-1" />
+                      IMPORT
+                    </Button>
+                    <Link to="/matching">
+                      <Button
+                        size="sm"
                         variant="default"
-                        badge={stats?.readyCount}
-                        onClick={() => {}}
-                        className="px-3 py-2 h-auto text-xs"
-                      />
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <BarChart3 className="w-4 h-4 mr-1" />
+                        EXPORT
+                        <Badge className="ml-2 bg-green-100 text-green-800">
+                          {stats?.readyCount || 0} ready
+                        </Badge>
+                      </Button>
                     </Link>
                   </div>
                 </div>
@@ -362,7 +282,7 @@ export default function Dashboard() {
                         </div>
                         <div className="text-right">
                           <p className={`text-sm font-medium ${statement.isActive ? "text-primary" : "text-gray-900"}`}>
-                            ${(statement.totalAmount - (statement.personalExpensesAmount || 0)).toLocaleString()}
+                            ${((statement.totalAmount || 0) - (statement.personalExpensesAmount || 0)).toLocaleString()}
                           </p>
                           <p className={`text-xs ${statement.isActive ? "text-primary/70" : "text-gray-500"}`}>
                             business expenses
@@ -380,61 +300,6 @@ export default function Dashboard() {
                     View All Periods
                   </Button>
                 </Link>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start bg-primary/5 border-primary/20 text-primary hover:bg-primary/10"
-                    onClick={() => {
-                      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-                      if (fileInput) fileInput.click();
-                    }}
-                  >
-                    <PlusCircle className="w-4 h-4 mr-3" />
-                    <span className="font-medium">Upload Receipt</span>
-                  </Button>
-
-                  <Link href="/matching">
-                    <Button variant="outline" className="w-full justify-between bg-warning-50 border-warning-200 text-warning-700 hover:bg-warning-100">
-                      <div className="flex items-center">
-                        <BarChart3 className="w-4 h-4 mr-3" />
-                        <span className="font-medium">Match Receipts</span>
-                      </div>
-                      <Badge variant="secondary" className="bg-warning-100 text-warning-800">
-                        {financialStats?.unmatchedReceiptCount || 0} unmatched
-                      </Badge>
-                    </Button>
-                  </Link>
-
-                  <Link href="/templates">
-                    <Button variant="outline" className="w-full justify-between">
-                      <div className="flex items-center">
-                        <FileText className="w-4 h-4 mr-3" />
-                        <span className="font-medium">Export to Oracle</span>
-                      </div>
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
-                        {financialStats?.matchedCount || 0} ready
-                      </Badge>
-                    </Button>
-                  </Link>
-
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start"
-                    onClick={() => setShowCsvModal(true)}
-                  >
-                    <Upload className="w-4 h-4 mr-3" />
-                    <span className="font-medium">Import AMEX CSV</span>
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </div>
