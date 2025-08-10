@@ -47,8 +47,11 @@ Preferred communication style: Simple, everyday language.
 - **Template Generation**: Oracle iExpense CSV/XML template creation for seamless integration
 
 ## Authentication & Authorization
-- **User System**: Simple username/password authentication
-- **Session Management**: Cookie-based sessions with secure defaults
+- **Google OAuth 2.0**: Single-user authentication system with Google account integration
+- **Authorized Access**: Only specified email address (AUTHORIZED_EMAIL environment variable) can access the system
+- **Session Management**: Production-ready session configuration with secure cookies and proper expiration
+- **Protected Routes**: All API endpoints require authentication with automatic redirection for unauthorized access
+- **User Profile**: Displays user information including name, email, and profile picture from Google account
 - **Object-Level Security**: Custom ACL policies for file access control
 
 # External Dependencies
@@ -124,3 +127,6 @@ Preferred communication style: Simple, everyday language.
 - **Direct Receipt Upload to Charges**: Implemented one-click receipt upload functionality directly from statement line items with automatic charge matching
 - **Mobile-Optimized Interface**: Compact responsive button layout with icon-only display on mobile devices and full text labels on desktop
 - **Streamlined Upload Workflow**: Upload button integration in statement detail view enables instant receipt-to-charge linking with pre-filled data
+- **Google OAuth Authentication**: Implemented secure single-user authentication system with Google OAuth 2.0 integration restricting access to authorized email only
+- **Protected API Routes**: All sensitive endpoints now require authentication with proper session management and production-ready security settings
+- **User Profile Management**: Added user profile dropdown in mobile navigation with logout functionality and profile picture display

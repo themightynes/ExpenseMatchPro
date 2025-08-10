@@ -6,18 +6,36 @@ import { storage } from "./storage";
 import type { User } from "@shared/schema";
 
 // Single authorized email - you should set this in environment variables
-const AUTHORIZED_EMAIL = process.env.AUTHORIZED_EMAIL || "your-email@gmail.com";
+const AUTHORIZED_EMAIL = process.env.AUTHORIZED_EMAIL;
 
 export function setupGoogleAuth(app: Express) {
-  // Session configuration
+  // Check required environment variables
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    throw new Error("GOOGLE_CLIENT_ID environment variable is required");
+  }
+  if (!process.env.GOOGLE_CLIENT_SECRET) {
+    throw new Error("GOOGLE_CLIENT_SECRET environment variable is required");
+  }
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET environment variable is required");
+  }
+  if (!AUTHORIZED_EMAIL) {
+    throw new Error("AUTHORIZED_EMAIL environment variable is required");
+  }
+
+  // Session configuration with production-ready settings
+  const isProduction = process.env.NODE_ENV === 'production';
   app.use(session({
-    secret: process.env.SESSION_SECRET || 'your-session-secret-change-this',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, // Set to true in production with HTTPS
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+      secure: isProduction, // Use secure cookies in production
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: isProduction ? 'strict' : 'lax'
+    },
+    name: 'expense.session' // Custom session name
   }));
 
   app.use(passport.initialize());
@@ -25,8 +43,8 @@ export function setupGoogleAuth(app: Express) {
 
   // Google OAuth Strategy
   passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID!,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: "/auth/google/callback"
   }, async (accessToken, refreshToken, profile, done) => {
     try {
