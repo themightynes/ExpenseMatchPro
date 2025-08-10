@@ -493,8 +493,8 @@ export default function StatementDetailPage() {
                       <Badge variant={charge.isMatched ? "default" : "secondary"} className="text-xs">
                         {charge.isMatched ? "Matched" : "Unmatched"}
                       </Badge>
-                      {charge.isMatched ? (
-                        <Link href={`/receipts/${charge.id}`}>
+                      {charge.isMatched && charge.receiptId ? (
+                        <Link href={`/receipts?selected=${charge.receiptId}`}>
                           <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
                             <FileText className="h-3 w-3 sm:mr-1" />
                             <span className="hidden sm:inline">View</span>

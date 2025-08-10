@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Folder, FolderOpen, File, Search, Eye, ChevronRight, ChevronDown, ArrowLeft, Upload, Plus } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import MobileHeader from "@/components/MobileHeader";
 import FileUploadZone from "@/components/FileUploadZone";
 import ReceiptViewer from "@/components/ReceiptViewer";
@@ -19,6 +19,7 @@ interface FolderStructure {
 }
 
 export default function ReceiptsPage() {
+  const [location] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["root"]));
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
@@ -31,6 +32,19 @@ export default function ReceiptsPage() {
   const { data: statements = [] } = useQuery<AmexStatement[]>({
     queryKey: ["/api/statements"],
   });
+
+  // Handle URL parameter for selected receipt
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.split('?')[1] || '');
+    const selectedReceiptId = urlParams.get('selected');
+    
+    if (selectedReceiptId && receipts.length > 0) {
+      const receipt = receipts.find(r => r.id === selectedReceiptId);
+      if (receipt) {
+        setSelectedReceipt(receipt);
+      }
+    }
+  }, [location, receipts]);
 
   // Build folder structure based on receipt organization
   const buildFolderStructure = (receipts: Receipt[], statements: AmexStatement[]): FolderStructure => {
