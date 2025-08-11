@@ -55,7 +55,7 @@ export default function ManualChargeModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...chargeData,
-          date: chargeData.date.toISOString(),
+          date: chargeData.date, // Send Date object directly, not as ISO string
           isMatched: false,
           receiptId: null,
         }),

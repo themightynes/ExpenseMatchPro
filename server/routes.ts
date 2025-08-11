@@ -977,7 +977,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/charges", async (req, res) => {
     try {
-      const validatedData = insertAmexChargeSchema.parse(req.body);
+      // Convert date string to Date object if needed
+      const requestData = { ...req.body };
+      if (requestData.date && typeof requestData.date === 'string') {
+        requestData.date = new Date(requestData.date);
+      }
+      
+      const validatedData = insertAmexChargeSchema.parse(requestData);
       const charge = await storage.createAmexCharge(validatedData);
       res.status(201).json(charge);
     } catch (error) {
