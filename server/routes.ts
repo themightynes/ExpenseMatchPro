@@ -112,7 +112,7 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Google authentication first
   setupGoogleAuth(app);
-  
+
   const objectStorageService = new ObjectStorageService();
   const emailService = new EmailService();
 
@@ -140,42 +140,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log("Uploading file directly:", req.file.originalname);
-      
+
       // Generate a unique object path
       const objectId = randomUUID();
       const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
-      
+
       if (!privateObjectDir) {
         return res.status(500).json({ 
           error: "Object storage not configured. Please set PRIVATE_OBJECT_DIR environment variable." 
         });
       }
-      
+
       const objectPath = `${privateObjectDir}/uploads/${objectId}`;
-      
+
       // Use the existing parseObjectPath utility and configured storage client
       const { bucketName, objectName } = parseObjectPath(objectPath);
-      
+
       // Use the pre-configured objectStorageClient with Replit authentication
       const bucket = objectStorageClient.bucket(bucketName);
       const file = bucket.file(objectName);
-      
+
       // Upload the file buffer
       await file.save(req.file.buffer, {
         metadata: {
           contentType: req.file.mimetype,
         },
       });
-      
+
       console.log(`File uploaded successfully to: ${objectPath}`);
-      
+
       // Return the object path for processing
       res.json({ 
         success: true, 
         objectPath: `/objects/uploads/${objectId}`,
         fileName: req.file.originalname 
       });
-      
+
     } catch (error) {
       console.error("Error uploading file:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -438,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Return success immediately and process OCR in background
       res.status(201).json(receipt);
-      
+
       // Start OCR processing asynchronously
       ocrService.processReceipt(objectPath, req.body.originalFileName || req.body.fileName)
         .then(async ({ ocrText, extractedData }) => {
@@ -545,11 +545,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const statementId = req.params.id;
       const statement = await storage.getAmexStatement(statementId);
-      
+
       if (!statement) {
         return res.status(404).json({ error: "Statement not found" });
       }
-      
+
       res.json(statement);
     } catch (error) {
       console.error("Error getting statement:", error);
@@ -1322,10 +1322,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const statementId = req.params.id;
       const updateData = req.body;
-      
+
       // Update the statement
       const updatedStatement = await storage.updateAmexStatement(statementId, updateData);
-      
+
       if (updatedStatement) {
         res.json(updatedStatement);
       } else {
@@ -1383,7 +1383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/statements/:id/unmatched-receipts", async (req, res) => {
     try {
       const statementId = req.params.id;
-      
+
       // Get statement to determine date range
       const statement = await storage.getAmexStatement(statementId);
       if (!statement) {
@@ -1395,7 +1395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         statement.startDate, 
         statement.endDate
       );
-      
+
       res.json(unmatchedReceipts);
     } catch (error) {
       console.error("Error getting unmatched receipts for statement:", error);
@@ -1451,7 +1451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Upload file to object storage using signed URL pattern
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      
+
       // Extract the object path from the upload URL for our file reference
       const urlParts = uploadURL.split('?')[0]; // Remove query parameters
       const pathMatch = urlParts.match(/\/([^\/]+\/[^\/]+)$/);
@@ -1459,7 +1459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('Could not extract path from upload URL');
       }
       const objectPath = `/objects/${pathMatch[1]}`;
-      
+
       // Upload file directly to the signed URL
       const uploadResponse = await fetch(uploadURL, {
         method: 'PUT',
@@ -1468,11 +1468,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'Content-Type': file.mimetype || 'application/octet-stream',
         },
       });
-      
+
       if (!uploadResponse.ok) {
         throw new Error(`Upload failed: ${uploadResponse.status}`);
       }
-      
+
       // Create receipt record
       const receipt = await storage.createReceipt({
         ...receiptData,
@@ -1626,6 +1626,181 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error instanceof Error ? error.message : "Failed to process email content" 
       });
+    }
+  });
+
+  // Manual fix endpoint for specific receipt
+  app.post("/api/receipts/manual-fix", async (req, res) => {
+    try {
+      const { receiptId, chargeId, forceMatch } = req.body;
+
+      if (!receiptId) {
+        return res.status(400).json({ error: "receiptId is required" });
+      }
+
+      // Get the receipt
+      const receipt = await storage.getReceipt(receiptId);
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+
+      // If chargeId is provided, match to specific charge
+      if (chargeId) {
+        const charge = await storage.getAmexCharge(chargeId);
+        if (!charge) {
+          return res.status(404).json({ error: "Charge not found" });
+        }
+
+        // Update receipt as matched
+        const updatedReceipt = await storage.updateReceipt(receiptId, {
+          isMatched: true,
+          matchedChargeId: chargeId,
+          statementId: charge.statementId,
+          merchant: receipt.merchant || charge.description,
+          amount: receipt.amount || charge.amount,
+          date: receipt.date || charge.date
+        });
+
+        // Update charge as matched
+        await storage.updateAmexCharge(chargeId, {
+          isMatched: true,
+          receiptId: receiptId
+        });
+
+        return res.json({ 
+          message: "Receipt manually matched successfully",
+          receipt: updatedReceipt 
+        });
+      }
+
+      // If no chargeId provided but forceMatch is true, just mark receipt as matched
+      if (forceMatch) {
+        const updatedReceipt = await storage.updateReceipt(receiptId, {
+          isMatched: true
+        });
+
+        return res.json({ 
+          message: "Receipt manually marked as matched",
+          receipt: updatedReceipt 
+        });
+      }
+
+      // Otherwise, try to find matching charge automatically
+      if (receipt.amount) {
+        const allCharges = await storage.getAllCharges();
+        const matchingCharge = allCharges.find(charge => 
+          !charge.isMatched &&
+          Math.abs(parseFloat(charge.amount) - parseFloat(receipt.amount || '0')) < 0.01 &&
+          Math.abs(new Date(charge.date).getTime() - new Date(receipt.date || new Date()).getTime()) < 7 * 24 * 60 * 60 * 1000
+        );
+
+        if (matchingCharge) {
+          const updatedReceipt = await storage.updateReceipt(receiptId, {
+            isMatched: true,
+            matchedChargeId: matchingCharge.id,
+            statementId: matchingCharge.statementId,
+            merchant: receipt.merchant || matchingCharge.description,
+            amount: receipt.amount || matchingCharge.amount,
+            date: receipt.date || matchingCharge.date
+          });
+
+          await storage.updateAmexCharge(matchingCharge.id, {
+            isMatched: true,
+            receiptId: receiptId
+          });
+
+          return res.json({ 
+            message: "Receipt automatically matched to charge",
+            receipt: updatedReceipt,
+            charge: matchingCharge
+          });
+        }
+      }
+
+      return res.json({ 
+        message: "No matching charge found",
+        receipt 
+      });
+
+    } catch (error) {
+      console.error("Error in manual fix:", error);
+      res.status(500).json({ error: "Failed to fix receipt" });
+    }
+  });
+
+  // Find and fix receipt by specific details
+  app.post("/api/receipts/find-and-fix", async (req, res) => {
+    try {
+      const { amount, date, merchant } = req.body;
+
+      // Get all receipts
+      const allReceipts = await storage.getAllReceipts();
+      const allCharges = await storage.getAllCharges();
+
+      // Find receipt matching the criteria
+      let targetReceipt = null;
+      if (amount) {
+        targetReceipt = allReceipts.find(r => 
+          r.amount && Math.abs(parseFloat(r.amount) - parseFloat(amount)) < 0.01
+        );
+      }
+
+      if (!targetReceipt && merchant) {
+        targetReceipt = allReceipts.find(r => 
+          r.merchant && r.merchant.toLowerCase().includes(merchant.toLowerCase())
+        );
+      }
+
+      if (!targetReceipt) {
+        return res.status(404).json({ error: "Receipt not found with given criteria" });
+      }
+
+      // Find matching charge
+      const matchingCharge = allCharges.find(c => 
+        !c.isMatched &&
+        Math.abs(parseFloat(c.amount) - parseFloat(targetReceipt.amount || '0')) < 0.01 &&
+        (Math.abs(new Date(c.date).getTime() - new Date(targetReceipt.date || new Date()).getTime()) < 7 * 24 * 60 * 60 * 1000 ||
+         c.description.toLowerCase().includes('astr') || 
+         c.description.toLowerCase().includes('chicago'))
+      );
+
+      if (matchingCharge) {
+        // Update receipt as matched
+        const updatedReceipt = await storage.updateReceipt(targetReceipt.id, {
+          isMatched: true,
+          matchedChargeId: matchingCharge.id,
+          statementId: matchingCharge.statementId,
+          merchant: targetReceipt.merchant || matchingCharge.description,
+          amount: targetReceipt.amount || matchingCharge.amount,
+          date: targetReceipt.date || matchingCharge.date
+        });
+
+        // Update charge as matched
+        await storage.updateAmexCharge(matchingCharge.id, {
+          isMatched: true,
+          receiptId: targetReceipt.id
+        });
+
+        return res.json({
+          message: "Receipt found and matched successfully",
+          receipt: updatedReceipt,
+          charge: matchingCharge
+        });
+      } else {
+        // Just mark as matched if no charge found
+        const updatedReceipt = await storage.updateReceipt(targetReceipt.id, {
+          isMatched: true
+        });
+
+        return res.json({
+          message: "Receipt found and marked as matched (no charge found)",
+          receipt: updatedReceipt
+        });
+      }
+
+    } catch (error) {
+      console.error("Error finding and fixing receipt:", error);
+      res.status(500).json({ error: "Failed to find and fix receipt" });
     }
   });
 
