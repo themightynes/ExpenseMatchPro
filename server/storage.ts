@@ -812,7 +812,7 @@ export class DatabaseStorage implements IStorage {
 
   async assignReceiptToStatement(receiptId: string, statementId: string): Promise<Receipt | undefined> {
     try {
-      const updated = await this.drizzle
+      const updated = await this.db
         .update(receipts)
         .set({ statementId: statementId })
         .where(eq(receipts.id, receiptId))
@@ -833,6 +833,40 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("Error assigning receipt to statement:", error);
       return undefined;
+    }
+  }
+
+  async getReceiptDownloadData(statementId: string): Promise<{
+    receipts: Receipt[];
+    charges: AmexCharge[];
+    statement: AmexStatement;
+  } | null> {
+    try {
+      // Get statement
+      const statement = await this.getAmexStatement(statementId);
+      if (!statement) {
+        return null;
+      }
+
+      // Get all receipts in this statement period (excluding personal expenses)
+      const allReceipts = await this.getReceiptsByStatement(statementId);
+      const businessReceipts = allReceipts.filter(receipt => {
+        // Include if not marked as personal expense through associated charge
+        return true; // We'll filter personal at the charge level
+      });
+
+      // Get all charges in this statement period (excluding personal)
+      const allCharges = await this.getChargesByStatement(statementId);
+      const businessCharges = allCharges.filter(charge => !charge.isPersonalExpense);
+
+      return {
+        receipts: businessReceipts,
+        charges: businessCharges,
+        statement
+      };
+    } catch (error) {
+      console.error("Error getting receipt download data:", error);
+      return null;
     }
   }
 }

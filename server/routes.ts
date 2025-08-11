@@ -14,6 +14,7 @@ import {
 import { ObjectStorageService, ObjectNotFoundError, objectStorageClient, parseObjectPath } from "./objectStorage";
 import { ocrService } from "./ocrService";
 import { EmailService } from "./emailService";
+import archiver from 'archiver';
 
 // Helper function to create statement folder structure
 async function createStatementFolder(statementId: string | null) {
@@ -1117,6 +1118,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error assigning receipt to statement:", error);
       res.status(500).json({ error: "Failed to assign receipt to statement" });
+    }
+  });
+
+  // Download all receipts for a statement period as ZIP
+  app.get("/api/statements/:statementId/download-receipts", requireAuth, async (req, res) => {
+    try {
+      const statementId = req.params.statementId;
+      
+      // Get receipts, charges, and statement data
+      const downloadData = await storage.getReceiptDownloadData(statementId);
+      if (!downloadData) {
+        return res.status(404).json({ error: "Statement not found" });
+      }
+
+      const { receipts, charges, statement } = downloadData;
+      
+      // Create ZIP archive
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      
+      // Set response headers
+      const filename = `receipts_${statement.periodName.replace(/[^a-zA-Z0-9]/g, '_')}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      // Pipe archive to response
+      archive.pipe(res);
+
+      // Function to create clean filename from receipt/charge data
+      const createReceiptFilename = (receipt: any, charge: any | null) => {
+        const date = receipt.date ? new Date(receipt.date).toISOString().split('T')[0].replace(/-/g, '') : 'NODATE';
+        const merchant = (receipt.merchant || 'Unknown').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+        const amount = receipt.amount ? parseFloat(receipt.amount).toFixed(2).replace('.', '') : '000';
+        const suffix = charge?.isNonAmex ? '_NON_AMEX' : '';
+        const extension = receipt.originalFileName?.split('.').pop() || 'pdf';
+        
+        return `${date}_${merchant}_${amount}${suffix}.${extension}`;
+      };
+
+      // Add receipts to ZIP
+      for (const receipt of receipts) {
+        try {
+          if (!receipt.filePath) continue;
+          
+          // Find associated charge to determine if non-AMEX
+          const associatedCharge = charges.find(c => c.receiptId === receipt.id);
+          
+          // Skip personal expenses
+          if (associatedCharge?.isPersonalExpense) continue;
+          
+          // Get receipt file from object storage
+          const fileBuffer = await objectStorageClient.getFile(receipt.filePath);
+          const filename = createReceiptFilename(receipt, associatedCharge);
+          
+          archive.append(fileBuffer, { name: filename });
+        } catch (error) {
+          console.error(`Error adding receipt ${receipt.id} to ZIP:`, error);
+          // Continue with other receipts even if one fails
+        }
+      }
+
+      // Create summary CSV content
+      const summaryRows = receipts.map(receipt => {
+        const associatedCharge = charges.find(c => c.receiptId === receipt.id);
+        return {
+          'Receipt_Date': receipt.date || '',
+          'Merchant': receipt.merchant || '',
+          'Amount': receipt.amount || '',
+          'Category': receipt.category || '',
+          'Status': receipt.isMatched ? 'Matched' : 'Unmatched',
+          'Charge_Type': associatedCharge?.isNonAmex ? 'Non-AMEX' : 'AMEX',
+          'Personal_Expense': associatedCharge?.isPersonalExpense ? 'Yes' : 'No',
+          'Original_Filename': receipt.originalFileName || '',
+          'ZIP_Filename': createReceiptFilename(receipt, associatedCharge),
+          'Notes': receipt.notes || ''
+        };
+      }).filter(row => row.Personal_Expense === 'No'); // Filter out personal expenses
+
+      // Convert to CSV
+      if (summaryRows.length > 0) {
+        const csvHeaders = Object.keys(summaryRows[0]).join(',');
+        const csvRows = summaryRows.map(row => 
+          Object.values(row).map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')
+        );
+        const summaryCSV = [csvHeaders, ...csvRows].join('\n');
+        archive.append(summaryCSV, { name: 'receipt_summary.csv' });
+      }
+
+      // Add Oracle export CSV
+      try {
+        const oracleData = await storage.getOracleExportData(statementId);
+        if (oracleData) {
+          const oracleCSV = [
+            'Expense_Date,Expense_Type,Merchant,Amount,Currency,Receipt_File,Receipt_URL,Business_Purpose,Statement_Period,Card_Member,Transaction_Type,Address,Transportation_From,Transportation_To,Match_Status',
+            ...oracleData.charges.map(charge => {
+              const receipt = oracleData.receipts.find(r => r.id === charge.receiptId);
+              const receiptUrl = receipt?.filePath ? 
+                `${req.protocol}://${req.get('host')}/api/objects/${receipt.filePath}` : '';
+              
+              return [
+                charge.date || '',
+                charge.category || 'General',
+                charge.description || '',
+                charge.amount || '',
+                'USD',
+                receipt ? createReceiptFilename(receipt, charge) : '',
+                receiptUrl,
+                receipt?.notes || charge.userNotes || charge.category || 'Business expense',
+                oracleData.statement.periodName,
+                charge.cardMember,
+                charge.isPersonalExpense ? 'Personal' : (charge.isNonAmex ? 'Non-AMEX Business' : 'AMEX Business'),
+                `${charge.address || ''} ${charge.cityState || ''}`.trim(),
+                receipt?.fromAddress || '',
+                receipt?.toAddress || '',
+                charge.isMatched ? 'Matched' : (charge.noReceiptRequired ? 'No Receipt Required' : 'Unmatched')
+              ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
+            })
+          ].join('\n');
+          
+          archive.append(oracleCSV, { name: 'oracle_export.csv' });
+        }
+      } catch (error) {
+        console.error("Error adding Oracle CSV to ZIP:", error);
+      }
+
+      // Finalize the archive
+      await archive.finalize();
+      
+    } catch (error) {
+      console.error("Error creating receipt ZIP:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to create receipt download" });
+      }
     }
   });
 

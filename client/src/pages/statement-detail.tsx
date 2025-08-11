@@ -59,6 +59,7 @@ export default function StatementDetailPage() {
   const [showManualChargeModal, setShowManualChargeModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [convertingReceipts, setConvertingReceipts] = useState<{ [key: string]: boolean }>({});
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // All useQuery hooks together
   const { data: statement } = useQuery<AmexStatement>({
@@ -502,6 +503,41 @@ export default function StatementDetailPage() {
     }
   };
 
+  const handleReceiptsDownload = async () => {
+    if (!statementId) return;
+    
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`/api/statements/${statementId}/download-receipts`);
+      if (!response.ok) {
+        throw new Error("Download failed");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `receipts_${statement?.periodName?.replace(/[^a-zA-Z0-9]/g, '_') || 'statement'}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Download Successful",
+        description: "All business receipts downloaded successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Failed to download receipts. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
@@ -543,6 +579,20 @@ export default function StatementDetailPage() {
             </span>
             <span className="sm:hidden">
               {isExporting ? "..." : "Export"}
+            </span>
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={handleReceiptsDownload}
+            disabled={isDownloading}
+            className="gap-2 w-full sm:w-auto"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">
+              {isDownloading ? "Downloading..." : "Download Receipts"}
+            </span>
+            <span className="sm:hidden">
+              {isDownloading ? "..." : "Download"}
             </span>
           </Button>
         </div>
