@@ -13,6 +13,7 @@ This document provides detailed information about all features available in the 
 7. [Email Integration](#email-integration)
 8. [Dashboard & Analytics](#dashboard--analytics)
 9. [Export & Templates](#export--templates)
+10. [Bulk Receipt Downloads](#bulk-receipt-downloads)
 
 ## 📄 Receipt Management
 
@@ -490,6 +491,54 @@ This document provides detailed information about all features available in the 
 - **Template Sharing**: Export/import template configurations
 - **Version Control**: Track template changes and updates
 - **Default Settings**: Set organization-wide template defaults
+
+## 📦 Bulk Receipt Downloads
+
+### ZIP Package Generation
+**Purpose**: Download all business receipts for a statement period in a single organized ZIP file with standardized naming conventions.
+
+**Key Features**:
+- **Flat File Structure**: All receipts in root directory with descriptive filenames
+- **Smart Filtering**: Excludes personal expenses, includes only business receipts
+- **Standardized Naming**: `[YYYYMMDD]_[Merchant]_[Amount]_NON_AMEX.ext` format
+- **Complete Package**: Includes receipt images, summary CSV, and Oracle export CSV
+
+**ZIP Contents**:
+- **Receipt Images**: All business receipt files with standardized names
+- **Summary CSV**: Detailed receipt metadata and matching information
+- **Oracle Export CSV**: Ready-to-import Oracle iExpense format
+- **Organized Structure**: Consistent file organization for easy processing
+
+### Smart Assignment Controls
+**Purpose**: Ensure data quality by requiring complete receipt information before period assignment.
+
+**Assignment Requirements**:
+- **Date**: Valid expense date must be filled
+- **Merchant**: Vendor/merchant name must be present
+- **Amount**: Valid expense amount must be entered
+- **Visual Feedback**: Clear messaging when requirements not met
+
+**Quality Assurance**:
+- **Filename Generation**: Ensures proper filename creation upon assignment
+- **Data Validation**: Prevents incomplete receipts from being processed
+- **User Guidance**: Helpful prompts to complete required fields
+- **Workflow Control**: Assignment only available when data is complete
+
+### File Naming Convention
+**Purpose**: Standardized, descriptive filenames for easy identification and Oracle compatibility.
+
+**Naming Format**:
+- **Standard Format**: `[Date]_[Merchant]_[Amount].ext`
+- **Non-AMEX Suffix**: `[Date]_[Merchant]_[Amount]_NON_AMEX.ext`
+- **Date Format**: YYYYMMDD (20241231 for December 31, 2024)
+- **Merchant Sanitization**: Alphanumeric only, truncated to 20 characters
+- **Amount Format**: Dollars and cents without decimal (1234 for $12.34)
+
+**Integration Benefits**:
+- **Oracle Compatibility**: Filenames work seamlessly with Oracle iExpense
+- **Easy Sorting**: Chronological sorting by filename
+- **Clear Identification**: Immediate recognition of expense type
+- **Batch Processing**: Consistent naming for automated processing
 
 ---
 

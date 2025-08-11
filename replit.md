@@ -38,6 +38,8 @@ Preferred communication style: Simple, everyday language.
 - **Automated Matching**: Algorithm to match receipts to AMEX charges (amount, date, merchant).
 - **Non-AMEX Charge Creation**: Convert receipts to virtual charges for non-AMEX business expenses with visual distinction.
 - **Template Generation**: Oracle iExpense CSV/XML template creation with support for both AMEX and non-AMEX charges.
+- **Comprehensive Receipt Download System (August 2025)**: ZIP package downloads with flat file structure, intelligent naming convention ([Date][Merchant][Amount] + NON_AMEX suffix), includes summary CSV and Oracle export CSV.
+- **Smart Assignment Validation**: Receipt assignment to periods only available when date, merchant, and amount are complete, ensuring proper filename generation.
 - **Intelligent Transportation Processing**: Automatic Uber receipt detection with specialized field extraction (locations, trip details, driver info).
 - **Web Link Processing**: Import receipt data from web URLs (Gmail, Google Drive).
 - **Enhanced PDF Processing (August 2025)**: Modern PDF processing using pdf-to-png-converter and enhanced pdf2pic with progressive fallback system. Includes OCR artifact cleaning and comprehensive error handling for reliable text extraction.
@@ -72,6 +74,7 @@ Preferred communication style: Simple, everyday language.
 - **Drizzle ORM**: Type-safe database queries.
 - **PDF.js**: Advanced PDF viewing.
 - **pdf-to-png-converter / pdf2pic**: Enhanced PDF processing with modern 2024-2025 solutions.
+- **Archiver**: ZIP file generation for bulk receipt downloads.
 
 ## Payment Integration
 - **AMEX Integration**: Processes AMEX statement CSV files.

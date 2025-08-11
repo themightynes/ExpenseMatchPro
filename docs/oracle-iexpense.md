@@ -1,43 +1,55 @@
 # Oracle iExpense Integration
 
-Complete integration with Oracle iExpense system including file naming conventions, export templates, and metadata management.
+Complete integration with Oracle iExpense system including file naming conventions, export templates, metadata management, and comprehensive receipt download packages (Updated August 2025).
 
 ## Overview
 
-The Oracle iExpense integration ensures seamless compatibility with enterprise expense reporting systems by implementing Oracle-specific naming conventions and export formats.
+The Oracle iExpense integration ensures seamless compatibility with enterprise expense reporting systems by implementing Oracle-specific naming conventions, export formats, and comprehensive receipt packaging. The system now includes advanced ZIP download functionality with standardized file naming, complete CSV exports, and smart data validation.
+
+### Key Features (August 2025 Update)
+- **ZIP Package Downloads**: Complete receipt packages with standardized naming
+- **Dual Export System**: Both individual CSV exports and comprehensive ZIP packages
+- **Smart Validation**: Assignment controls to ensure data completeness
+- **File Naming Consistency**: Standardized [Date][Merchant][Amount] convention
+- **Non-AMEX Support**: Clear identification of virtual charges with NON_AMEX suffix
 
 ## File Naming Convention
 
-### Oracle-Friendly Format
-**Pattern**: `DATE_MERCHANT_$AMOUNT_RECEIPT.ext`
+### Updated File Naming Format (August 2025)
+**Pattern**: `[YYYYMMDD]_[Merchant]_[Amount]_NON_AMEX.ext` (for non-AMEX) or `[YYYYMMDD]_[Merchant]_[Amount].ext` (for AMEX)
 
 **Components**:
-- `DATE`: YYYY-MM-DD format (ISO 8601)
-- `MERCHANT`: Sanitized merchant name (uppercase, underscores)
-- `AMOUNT`: Dollar amount with DOT replacing decimal point
-- `RECEIPT`: Literal text identifier
-- `ext`: Original file extension (JPG, PNG, PDF)
+- `Date`: YYYYMMDD format (20250806 for August 6, 2025)
+- `Merchant`: Sanitized merchant name (alphanumeric only, max 20 chars)
+- `Amount`: Dollar amount without decimal (1479 for $14.79)
+- `NON_AMEX`: Suffix for virtual charges from non-AMEX business expenses
+- `ext`: Original file extension (jpg, png, pdf)
 
 ### Examples
 ```
-2025-03-06_CAFE_LANDWER_$14DOT79_RECEIPT.JPG
-2025-08-09_OFFICE_SUPPLIES_$45DOT23_RECEIPT.PDF
-2025-07-15_UBER_$28DOT50_RECEIPT.PNG
-2025-06-20_HOTEL_BOOKING_$350DOT00_RECEIPT.PDF
+20250306_CafeLandwer_1479.jpg
+20250809_OfficeSupplies_4523_NON_AMEX.pdf
+20250715_Uber_2850.png
+20250620_HotelBooking_35000_NON_AMEX.pdf
 ```
 
 ### Merchant Name Processing
 1. **Remove Special Characters**: Strip non-alphanumeric characters
-2. **Replace Spaces**: Convert spaces to underscores
-3. **Uppercase Conversion**: All letters to uppercase
-4. **Length Limitation**: Truncate to 25 characters for Oracle compatibility
-5. **Fallback Values**: Use "UNKNOWN_MERCHANT" when merchant data missing
+2. **Preserve Case**: Maintain original capitalization for readability
+3. **Remove Spaces**: Convert spaces to empty string (no underscores)
+4. **Length Limitation**: Truncate to 20 characters for consistency
+5. **Fallback Values**: Use "Unknown" when merchant data missing
 
 ### Amount Formatting
-- **Decimal Handling**: Replace "." with "DOT" (e.g., 14.79 → 14DOT79)
-- **Zero Padding**: Maintain consistent formatting
-- **Currency Symbol**: Prefix with "$" symbol
-- **Fallback Values**: Use "UNKNOWN_AMOUNT" when amount missing
+- **Decimal Removal**: Remove decimal point (14.79 → 1479)
+- **Zero Padding**: Natural formatting without padding
+- **No Currency Symbol**: Amount only in filename
+- **Fallback Values**: Use "000" when amount missing
+
+### Non-AMEX Identification
+- **NON_AMEX Suffix**: Added to distinguish virtual charges created from receipts
+- **Visual Distinction**: Clear identification in ZIP downloads and file listings
+- **Oracle Compatibility**: Maintains Oracle iExpense import compatibility
 
 ## Intelligent Fallback System
 

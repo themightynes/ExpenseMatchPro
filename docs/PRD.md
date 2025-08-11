@@ -73,6 +73,13 @@ An integrated web application that:
 #### 3.1.2 AMEX Integration ✅
 - **CSV import** from AMEX online portal
 - **Automatic statement period creation**
+
+#### 3.1.3 Bulk Receipt Downloads ✅ (August 2025)
+- **ZIP package generation** with all business receipts for statement periods
+- **Standardized file naming** using [Date][Merchant][Amount] convention
+- **NON_AMEX suffix** for virtual charges from non-AMEX business expenses
+- **Complete export package** including summary CSV and Oracle export CSV
+- **Smart assignment validation** requiring complete receipt data before period assignment
 - **Charge categorization** and filtering
 - **Personal vs business expense separation**
 - **Duplicate statement detection**

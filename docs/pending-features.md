@@ -18,9 +18,9 @@ This document outlines planned enhancements, user-requested features, and strate
 - [ ] **Security Audit**: Complete security review and implement recommended fixes
 
 ### P1 - High Priority Features
-- [ ] **Bulk Receipt Operations**: Select and process multiple receipts simultaneously
+- [x] **Bulk Receipt Operations**: ✅ Complete - ZIP downloads with standardized naming (August 2025)
 - [ ] **Advanced Search**: Full-text search across receipts and charges
-- [ ] **Export Improvements**: Enhanced Oracle iExpense export with custom templates
+- [x] **Export Improvements**: ✅ Complete - Enhanced Oracle export with receipt packages (August 2025)
 
 ---
 
@@ -183,6 +183,7 @@ This document outlines planned enhancements, user-requested features, and strate
 ## User-Requested Features
 
 ### High-Demand Requests
+- [x] **Bulk Download**: ✅ Complete - ZIP downloads with all receipts (August 2025)
 - [ ] **Bulk Edit**: Edit multiple receipts simultaneously
 - [ ] **Receipt Splitting**: Split single receipt across multiple projects/categories
 - [ ] **Mileage Tracking**: Integration with GPS/maps for mileage expenses
