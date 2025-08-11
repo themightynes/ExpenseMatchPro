@@ -562,34 +562,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       let extractedData: any = {};
       let ocrText = 'URL processed - manual entry required';
+      let actualFileUrl = url;
       
-      // Parse Gmail URLs specifically
-      if (url.includes('mail.google.com')) {
-        ocrText = 'Gmail link detected - please manually enter receipt details';
-        extractedData = {
-          merchant: 'Gmail Import',
-          notes: 'Receipt imported from Gmail. Please add merchant, amount, and date manually.'
-        };
-      } 
-      // Parse Google Drive URLs
-      else if (url.includes('drive.google.com')) {
-        ocrText = 'Google Drive link detected - please manually enter receipt details';
-        extractedData = {
-          merchant: 'Google Drive Import',
-          notes: 'Receipt imported from Google Drive. Please add merchant, amount, and date manually.'
-        };
+      // Try to fetch content from the URL
+      try {
+        // For Gmail attachment URLs, try to fetch the actual content
+        if (url.includes('mail.google.com') || url.includes('googleusercontent.com')) {
+          console.log('Attempting to fetch Gmail attachment...');
+          
+          const response = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
+          
+          if (response.ok) {
+            const contentType = response.headers.get('content-type') || '';
+            
+            if (contentType.includes('image') || contentType.includes('pdf')) {
+              // Get the file content as buffer
+              const fileBuffer = Buffer.from(await response.arrayBuffer());
+              
+              // Upload to our object storage
+              const objectStorageService = new ObjectStorageService(objectStorageClient);
+              const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+              
+              const uploadResponse = await fetch(uploadURL, {
+                method: 'PUT',
+                body: fileBuffer,
+                headers: {
+                  'Content-Type': contentType,
+                },
+              });
+
+              if (uploadResponse.ok) {
+                // Extract the object path from the upload URL
+                const urlParts = uploadURL.split('?')[0];
+                const pathMatch = urlParts.match(/\/([^\/]+\/[^\/]+)$/);
+                if (pathMatch) {
+                  actualFileUrl = `/objects/${pathMatch[1]}`;
+                  console.log('Successfully uploaded content from URL to:', actualFileUrl);
+                  
+                  // Start OCR processing for the uploaded file
+                  const fileName = url.includes('googleusercontent.com') ? 'gmail-attachment' : 'web-content';
+                  const fileExtension = contentType.includes('pdf') ? '.pdf' : 
+                                      contentType.includes('jpeg') ? '.jpg' : 
+                                      contentType.includes('png') ? '.png' : '';
+                  
+                  try {
+                    const ocrResult = await ocrService.processReceipt(actualFileUrl, fileName + fileExtension);
+                    ocrText = ocrResult.ocrText || 'File uploaded successfully - add details manually';
+                    extractedData = ocrResult.extractedData || {};
+                    
+                    if (extractedData.merchant) extractedData.merchant = extractedData.merchant;
+                    if (extractedData.amount) extractedData.amount = extractedData.amount;
+                    if (extractedData.date) extractedData.date = extractedData.date;
+                  } catch (ocrError) {
+                    console.error('OCR processing failed:', ocrError);
+                    ocrText = 'File uploaded successfully - OCR failed, add details manually';
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (fetchError) {
+        console.error('Failed to fetch content from URL:', fetchError);
+        // Fall back to URL reference
       }
-      // Generic web URL
-      else {
-        ocrText = 'Web link imported - please manually enter receipt details';
-        extractedData = {
-          merchant: 'Web Import',
-          notes: `Receipt imported from web link: ${url}. Please add merchant, amount, and date manually.`
-        };
+      
+      // Set default values based on URL type if we couldn't fetch content
+      if (!extractedData.merchant) {
+        if (url.includes('mail.google.com') || url.includes('googleusercontent.com')) {
+          extractedData.merchant = 'Gmail Import';
+          extractedData.notes = 'Receipt imported from Gmail. Please add merchant, amount, and date manually.';
+        } else if (url.includes('drive.google.com')) {
+          extractedData.merchant = 'Google Drive Import';
+          extractedData.notes = 'Receipt imported from Google Drive. Please add merchant, amount, and date manually.';
+        } else {
+          extractedData.merchant = 'Web Import';
+          extractedData.notes = `Receipt imported from web link: ${url}. Please add merchant, amount, and date manually.`;
+        }
       }
 
       // Update receipt with processed data
       const updates: any = {
+        fileUrl: actualFileUrl, // Use the actual file URL or original URL
         ocrText,
         extractedData,
         processingStatus: 'completed',
