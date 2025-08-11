@@ -56,6 +56,7 @@ export default function StatementDetailPage() {
   const [chargeNotes, setChargeNotes] = useState<{ [key: string]: string }>({});
   const [uploadingCharges, setUploadingCharges] = useState<{ [key: string]: boolean }>({});
   const [showManualChargeModal, setShowManualChargeModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // All useQuery hooks together
   const { data: statement } = useQuery<AmexStatement>({
@@ -401,6 +402,48 @@ export default function StatementDetailPage() {
     }
   };
 
+  const handleOracleExport = async () => {
+    if (!statementId) return;
+    
+    setIsExporting(true);
+    try {
+      const response = await fetch(`/api/statements/${statementId}/export/oracle`);
+      
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+      
+      // Get the filename from the Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `Oracle_Export_${statement.periodName.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+      
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Export Successful",
+        description: `Oracle CSV exported successfully with ${stats.totalCharges} charges.`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to generate Oracle export. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4 space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
@@ -431,10 +474,18 @@ export default function StatementDetailPage() {
             <span className="hidden sm:inline">Add Missing Charge</span>
             <span className="sm:hidden">Add Charge</span>
           </Button>
-          <Button className="gap-2 w-full sm:w-auto">
+          <Button 
+            onClick={handleOracleExport}
+            disabled={isExporting}
+            className="gap-2 w-full sm:w-auto"
+          >
             <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Export to Oracle</span>
-            <span className="sm:hidden">Export</span>
+            <span className="hidden sm:inline">
+              {isExporting ? "Exporting..." : "Export to Oracle"}
+            </span>
+            <span className="sm:hidden">
+              {isExporting ? "..." : "Export"}
+            </span>
           </Button>
         </div>
       </div>

@@ -74,6 +74,12 @@ export interface IStorage {
   // File organization
   getOrganizedPath(receipt: Receipt): string;
   updateReceiptPath(receiptId: string, organizedPath: string): Promise<Receipt | undefined>;
+
+  // Oracle export
+  getOracleExportData(statementId: string): Promise<{
+    statement: AmexStatement;
+    charges: (AmexCharge & { receipt?: Receipt })[];
+  } | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -692,6 +698,46 @@ export class DatabaseStorage implements IStorage {
 
   async updateReceiptPath(receiptId: string, organizedPath: string): Promise<Receipt | undefined> {
     return await this.updateReceipt(receiptId, { organizedPath });
+  }
+
+  // Oracle export
+  async getOracleExportData(statementId: string): Promise<{
+    statement: AmexStatement;
+    charges: (AmexCharge & { receipt?: Receipt })[];
+  } | null> {
+    try {
+      // Get the statement
+      const statement = await this.getAmexStatement(statementId);
+      if (!statement) return null;
+
+      // Get all charges for this statement
+      const statementCharges = await this.getChargesByStatement(statementId);
+      
+      // Get all receipts for this statement
+      const statementReceipts = await this.getReceiptsByStatement(statementId);
+      
+      // Create a map of charge ID to receipt for quick lookup
+      const receiptMap = new Map<string, Receipt>();
+      statementReceipts.forEach(receipt => {
+        if (receipt.matchedChargeId) {
+          receiptMap.set(receipt.matchedChargeId, receipt);
+        }
+      });
+
+      // Combine charges with their matched receipts
+      const chargesWithReceipts = statementCharges.map(charge => ({
+        ...charge,
+        receipt: receiptMap.get(charge.id)
+      }));
+
+      return {
+        statement,
+        charges: chargesWithReceipts
+      };
+    } catch (error) {
+      console.error("Error in getOracleExportData:", error);
+      return null;
+    }
   }
 }
 

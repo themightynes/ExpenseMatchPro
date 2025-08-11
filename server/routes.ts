@@ -735,6 +735,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Oracle export route
+  app.get("/api/statements/:id/export/oracle", requireAuth, async (req, res) => {
+    try {
+      const statementId = req.params.id;
+      const exportData = await storage.getOracleExportData(statementId);
+
+      if (!exportData) {
+        return res.status(404).json({ error: "Statement not found" });
+      }
+
+      const { statement, charges } = exportData;
+
+      // Generate CSV headers
+      const headers = [
+        "Expense_Date",
+        "Expense_Type", 
+        "Merchant",
+        "Amount",
+        "Currency",
+        "Receipt_File",
+        "Receipt_URL",
+        "Business_Purpose",
+        "Statement_Period",
+        "Card_Member",
+        "Transaction_Type",
+        "Address",
+        "Transportation_From",
+        "Transportation_To",
+        "Match_Status"
+      ];
+
+      // Generate CSV rows
+      const rows = charges.map(charge => {
+        const receipt = charge.receipt;
+        const receiptPath = receipt ? storage.getOrganizedPath(receipt) : '';
+        const receiptUrl = receipt ? `${process.env.BASE_URL || 'https://your-domain.replit.dev'}${receipt.fileUrl}` : '';
+        
+        return [
+          charge.date.toISOString().split('T')[0], // Expense_Date
+          receipt?.category || charge.category || 'General', // Expense_Type
+          charge.description || 'Unknown Merchant', // Merchant
+          Math.abs(parseFloat(charge.amount || '0')).toFixed(2), // Amount (remove negative signs)
+          'USD', // Currency
+          receiptPath.replace('/objects/', ''), // Receipt_File (clean path)
+          receiptUrl, // Receipt_URL
+          receipt?.notes || charge.userNotes || charge.category || 'Business expense', // Business_Purpose
+          statement.periodName, // Statement_Period
+          charge.cardMember, // Card_Member
+          charge.isPersonalExpense ? 'Personal' : 'Business', // Transaction_Type
+          `${charge.address || ''} ${charge.cityState || ''}`.trim(), // Address
+          receipt?.fromAddress || '', // Transportation_From
+          receipt?.toAddress || '', // Transportation_To
+          charge.isMatched ? 'Matched' : (charge.noReceiptRequired ? 'No Receipt Required' : 'Unmatched') // Match_Status
+        ];
+      });
+
+      // Generate CSV content
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(field => 
+          // Escape fields containing commas or quotes
+          typeof field === 'string' && (field.includes(',') || field.includes('"')) 
+            ? `"${field.replace(/"/g, '""')}"` 
+            : field
+        ).join(','))
+      ].join('\n');
+
+      // Set response headers for CSV download
+      const filename = `Oracle_Export_${statement.periodName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      res.send(csvContent);
+    } catch (error) {
+      console.error("Error generating Oracle export:", error);
+      res.status(500).json({ error: "Failed to generate Oracle export" });
+    }
+  });
+
   app.post("/api/statements", requireAuth, async (req, res) => {
     try {
       const validatedData = insertAmexStatementSchema.parse(req.body);
