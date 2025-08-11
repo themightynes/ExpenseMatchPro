@@ -39,7 +39,7 @@ Preferred communication style: Simple, everyday language.
 - **Template Generation**: Oracle iExpense CSV/XML template creation.
 - **Intelligent Transportation Processing**: Automatic Uber receipt detection with specialized field extraction (locations, trip details, driver info).
 - **Web Link Processing**: Import receipt data from web URLs (Gmail, Google Drive).
-- **PDF Processing**: Enhanced PDF-to-image conversion and OCR for text extraction.
+- **Enhanced PDF Processing (August 2025)**: Modern PDF processing using pdf-to-png-converter and enhanced pdf2pic with progressive fallback system. Includes OCR artifact cleaning and comprehensive error handling for reliable text extraction.
 
 ## Authentication & Authorization
 - **Google OAuth 2.0**: Single-user authentication.
@@ -70,7 +70,7 @@ Preferred communication style: Simple, everyday language.
 - **TanStack Query**: Server state synchronization.
 - **Drizzle ORM**: Type-safe database queries.
 - **PDF.js**: Advanced PDF viewing.
-- **pdf-to-png-converter / pdf2pic**: PDF processing.
+- **pdf-to-png-converter / pdf2pic**: Enhanced PDF processing with modern 2024-2025 solutions.
 
 ## Payment Integration
 - **AMEX Integration**: Processes AMEX statement CSV files.

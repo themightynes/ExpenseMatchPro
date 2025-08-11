@@ -163,20 +163,31 @@ This document provides detailed information about all features available in the 
 - Need to reprocess after image rotation or enhancement
 - Manual verification of automatic extraction results
 
-### PDF Handling
-**Purpose**: Smart handling of PDF receipts with appropriate processing guidance.
+### Enhanced PDF Processing (August 2025)
+**Purpose**: Modern PDF processing with reliable text extraction using 2024-2025 solutions.
 
-**Approach**:
-- **Recognition**: Automatic PDF format detection
-- **Guidance**: Clear instructions for manual data entry
-- **Recommendations**: Suggestions for optimal processing methods
-- **Fallback**: Manual entry form pre-populated when possible
+**Technology Stack**:
+- **Primary**: pdf-to-png-converter (most reliable for Node.js environments)
+- **Fallback**: Enhanced pdf2pic with optimized settings
+- **Validation**: Comprehensive buffer checking and error handling
+- **Cleaning**: OCR artifact removal for improved text quality
 
-**User Experience**:
-- Informative messages about PDF processing limitations
-- Clear call-to-action for manual entry
-- Option to save PDF for later processing
-- Integration with manual data entry workflow
+**Processing Flow**:
+- **Stage 1**: Direct PDF text extraction using pdf-parse
+- **Stage 2**: Progressive image conversion with multiple library fallbacks
+- **Stage 3**: Enhanced OCR with artifact cleaning and pattern recognition
+- **Stage 4**: Intelligent error messages with clear user guidance
+
+**Key Improvements**:
+- **Reliability**: Modern libraries address "empty buffer" issues common in containerized environments
+- **Error Handling**: Progressive fallback system prevents processing failures
+- **Quality**: Enhanced OCR cleaning removes conversion artifacts
+- **User Guidance**: Clear messaging when image uploads would provide better results
+
+**Best Practice Recommendations**:
+- **Image uploads (PNG/JPG)**: Optimal quality for OCR and Uber receipt detection
+- **PDF processing**: Significantly improved but may have lower text quality due to conversion
+- **Manual entry**: Enhanced form when automatic processing limitations are encountered
 
 ## 💳 AMEX Integration
 
