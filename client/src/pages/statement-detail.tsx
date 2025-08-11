@@ -396,18 +396,29 @@ export default function StatementDetailPage() {
       return matchesSearch && matchesPersonalFilter;
     })
     .sort((a, b) => {
-      // First priority: Unmatched charges with "No Receipt Required" should appear first
+      // Sorting priority:
+      // 1st: Unmatched (regular unmatched charges that need receipts)
+      // 2nd: Unmatched No Receipt Required 
+      // 3rd: Matched charges
+      
+      const aIsUnmatched = !a.isMatched && !a.noReceiptRequired;
+      const bIsUnmatched = !b.isMatched && !b.noReceiptRequired;
       const aIsUnmatchedNoReceipt = !a.isMatched && a.noReceiptRequired;
       const bIsUnmatchedNoReceipt = !b.isMatched && b.noReceiptRequired;
+      const aIsMatched = a.isMatched;
+      const bIsMatched = b.isMatched;
       
-      if (aIsUnmatchedNoReceipt && !bIsUnmatchedNoReceipt) {
-        return -1; // a comes first
-      }
-      if (!aIsUnmatchedNoReceipt && bIsUnmatchedNoReceipt) {
-        return 1; // b comes first
+      // Priority 1: Regular unmatched charges (need receipts)
+      if (aIsUnmatched && !bIsUnmatched) return -1;
+      if (!aIsUnmatched && bIsUnmatched) return 1;
+      
+      // Priority 2: Unmatched no receipt required (among non-priority-1)
+      if (!aIsUnmatched && !bIsUnmatched) {
+        if (aIsUnmatchedNoReceipt && !bIsUnmatchedNoReceipt) return -1;
+        if (!aIsUnmatchedNoReceipt && bIsUnmatchedNoReceipt) return 1;
       }
       
-      // If both have same priority, sort by the selected column
+      // Within same priority group, sort by the selected column
       let aValue: any = a[sortColumn as keyof AmexCharge];
       let bValue: any = b[sortColumn as keyof AmexCharge];
       
@@ -643,7 +654,7 @@ export default function StatementDetailPage() {
                     </Badge>
                     <div className="flex items-center gap-1 text-sm text-gray-600">
                       {charge.isNonAmex && (
-                        <CreditCard className="h-3 w-3 text-blue-600" title="Non-AMEX Charge" />
+                        <CreditCard className="h-3 w-3 text-blue-600" />
                       )}
                       {charge.cardMember}
                     </div>
