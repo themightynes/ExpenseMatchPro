@@ -91,7 +91,7 @@ export default function Dashboard() {
                   <span className="text-purple-600">{financialStats?.personalExpensesCount || 0} Personal</span>
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Business Expenses: ${((financialStats?.totalStatementAmount || 0) - (financialStats?.personalExpensesAmount || 0)).toLocaleString()} | {Math.round(financialStats?.matchingPercentage || 0)}% Complete
+                  Total Amount: ${(financialStats?.totalStatementAmount || 0).toLocaleString()} | Business Expenses: ${((financialStats?.totalStatementAmount || 0) - (financialStats?.personalExpensesAmount || 0)).toLocaleString()} | {Math.round(financialStats?.matchingPercentage || 0)}% Complete
                 </p>
               </div>
             </CardContent>

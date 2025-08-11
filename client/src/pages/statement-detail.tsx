@@ -332,13 +332,17 @@ export default function StatementDetailPage() {
       }
     });
 
+  const personalExpenseAmount = charges.filter(c => c.isPersonalExpense).reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0);
+  const totalAmount = charges.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0);
+  
   const stats = {
     totalCharges: charges.length,
     matchedCharges: charges.filter(c => c.isMatched && !c.isPersonalExpense).length,
     unmatchedCharges: charges.filter(c => !c.isMatched && !c.noReceiptRequired && !c.isPersonalExpense).length,
     noReceiptRequired: charges.filter(c => c.noReceiptRequired && !c.isPersonalExpense).length,
     personalExpenses: charges.filter(c => c.isPersonalExpense).length,
-    totalAmount: charges.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0),
+    totalAmount,
+    businessExpenseAmount: totalAmount - personalExpenseAmount,
     matchedAmount: charges.filter(c => c.isMatched).reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0),
   };
 
@@ -394,7 +398,7 @@ export default function StatementDetailPage() {
               <span className="text-purple-600">{stats.personalExpenses} Personal</span>
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              Total Amount: {formatCurrency(stats.totalAmount.toString())}
+              Total Amount: {formatCurrency(stats.totalAmount.toString())} | Business Expenses: {formatCurrency(stats.businessExpenseAmount.toString())}
             </p>
           </div>
         </CardContent>
