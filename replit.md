@@ -33,10 +33,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Core Data Models
 - **Users**: Authentication and user management
-- **Receipts**: OCR-processed receipt data with categorization
+- **Receipts**: OCR-processed receipt data with categorization and transportation-specific fields
 - **AMEX Statements**: Statement periods and charge data
 - **AMEX Charges**: Individual charge records for matching
 - **Expense Templates**: Oracle iExpense-compatible export data
+- **Transportation Data**: Pickup/dropoff locations, trip details, driver information for rideshare/taxi expenses
 
 ## Processing Pipeline
 - **Manual Entry System**: Instant receipt upload with manual data entry (OCR disabled due to 30+ minute processing times)
@@ -45,6 +46,7 @@ Preferred communication style: Simple, everyday language.
 - **Smart Organization**: Automatic folder creation and receipt organization by AMEX statement periods
 - **Automated Matching**: Algorithm to match receipts to AMEX charges based on amount, date, and merchant similarity
 - **Template Generation**: Oracle iExpense CSV/XML template creation for seamless integration
+- **Intelligent Transportation Processing**: Automatic Uber receipt detection with specialized field extraction for pickup/dropoff locations, trip details, driver information, and payment method integration
 
 ## Authentication & Authorization
 - **Google OAuth 2.0**: Single-user authentication system with Google account integration
@@ -135,3 +137,4 @@ Preferred communication style: Simple, everyday language.
 - **Critical Bug Fix (August 10, 2025)**: Resolved application crash caused by duplicate HTTP responses in receipt processing endpoint. Fixed "Cannot set headers after they are sent to the client" error that prevented server startup. Receipt upload functionality now works reliably with proper background processing and error handling.
 - **Upload System Documentation (August 10, 2025)**: Comprehensive verification and documentation of the revamped dual-architecture upload system. Updated documentation to accurately reflect smart device detection, desktop/mobile optimization, authentication integration, and background processing features. Created detailed technical architecture documentation covering the Uppy-based desktop uploads and server-based mobile uploads.
 - **Web Link Processing (August 11, 2025)**: Added comprehensive support for processing web URLs in the upload receipt interface. Users can now paste Gmail attachment links, Google Drive URLs, or other web links to import receipt data. The system automatically downloads file content from accessible URLs, uploads to secure storage, and processes with OCR for text extraction. Enhanced UI includes dedicated web link input section with smart URL detection and processing status indicators.
+- **Enhanced Uber Receipt Processing (August 11, 2025)**: Implemented intelligent Uber receipt detection and specialized field extraction for transportation expenses. The OCR system now automatically identifies Uber receipts and extracts specific data including date, final charge amount, pickup/dropoff locations, trip distance and duration, driver name, and payment method. Added new TAXI category with dedicated transportation fields (fromAddress, toAddress, tripDistance, tripDuration, driverName, vehicleInfo) for comprehensive expense tracking. Enhanced UI displays trip details in specialized sections for TAXI category receipts with location tracking support for Oracle export integration.

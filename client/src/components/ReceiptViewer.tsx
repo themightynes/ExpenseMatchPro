@@ -45,6 +45,12 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     amount: '',
     date: '',
     category: '',
+    fromAddress: '',
+    toAddress: '',
+    tripDistance: '',
+    tripDuration: '',
+    driverName: '',
+    vehicleInfo: '',
   });
 
   // OCR trigger mutation
@@ -380,6 +386,12 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       amount: receipt.amount || "",
       date: receipt.date ? new Date(receipt.date).toISOString().split('T')[0] : "",
       category: receipt.category || "",
+      fromAddress: receipt.fromAddress || "",
+      toAddress: receipt.toAddress || "",
+      tripDistance: receipt.tripDistance || "",
+      tripDuration: receipt.tripDuration || "",
+      driverName: receipt.driverName || "",
+      vehicleInfo: receipt.vehicleInfo || "",
     });
     setIsEditing(true);
   };
@@ -648,6 +660,8 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Meals">Meals</SelectItem>
+                        <SelectItem value="Gas">Gas</SelectItem>
+                        <SelectItem value="TAXI">Taxi/Rideshare</SelectItem>
                         <SelectItem value="Travel">Travel</SelectItem>
                         <SelectItem value="Office Supplies">Office Supplies</SelectItem>
                         <SelectItem value="Entertainment">Entertainment</SelectItem>
@@ -655,6 +669,71 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Transportation fields for TAXI category */}
+                  {editedData.category === 'TAXI' && (
+                    <div className="space-y-4 pt-4 border-t border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-700">Trip Details</h4>
+                      <div>
+                        <Label htmlFor="fromAddress">From Address</Label>
+                        <Input
+                          id="fromAddress"
+                          value={editedData.fromAddress || ''}
+                          onChange={(e) => setEditedData(prev => ({ ...prev, fromAddress: e.target.value }))}
+                          placeholder="Pickup location"
+                          className="text-base"
+                          style={{ fontSize: '16px' }}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="toAddress">To Address</Label>
+                        <Input
+                          id="toAddress"
+                          value={editedData.toAddress || ''}
+                          onChange={(e) => setEditedData(prev => ({ ...prev, toAddress: e.target.value }))}
+                          placeholder="Dropoff location"
+                          className="text-base"
+                          style={{ fontSize: '16px' }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="tripDistance">Distance</Label>
+                          <Input
+                            id="tripDistance"
+                            value={editedData.tripDistance || ''}
+                            onChange={(e) => setEditedData(prev => ({ ...prev, tripDistance: e.target.value }))}
+                            placeholder="e.g., 5.2 miles"
+                            className="text-base"
+                            style={{ fontSize: '16px' }}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="tripDuration">Duration</Label>
+                          <Input
+                            id="tripDuration"
+                            value={editedData.tripDuration || ''}
+                            onChange={(e) => setEditedData(prev => ({ ...prev, tripDuration: e.target.value }))}
+                            placeholder="e.g., 15 minutes"
+                            className="text-base"
+                            style={{ fontSize: '16px' }}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="driverName">Driver Name</Label>
+                        <Input
+                          id="driverName"
+                          value={editedData.driverName || ''}
+                          onChange={(e) => setEditedData(prev => ({ ...prev, driverName: e.target.value }))}
+                          placeholder="Driver name"
+                          className="text-base"
+                          style={{ fontSize: '16px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {/* MOBILE: Improved button layout with better touch targets */}
                   <div className="flex gap-2 pt-2">
                     <Button onClick={handleSave} className="flex-1 min-h-[44px]">
@@ -704,6 +783,47 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       <p className="text-base">{receipt.category || 'Not set'}</p>
                     </div>
                   </div>
+
+                  {/* Transportation-specific fields for TAXI category */}
+                  {receipt.category === 'TAXI' && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Trip Details</h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        {receipt.fromAddress && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">From</label>
+                            <p className="text-sm text-gray-900">{receipt.fromAddress}</p>
+                          </div>
+                        )}
+                        {receipt.toAddress && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">To</label>
+                            <p className="text-sm text-gray-900">{receipt.toAddress}</p>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                          {receipt.tripDistance && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Distance</label>
+                              <p className="text-sm text-gray-900">{receipt.tripDistance}</p>
+                            </div>
+                          )}
+                          {receipt.tripDuration && (
+                            <div>
+                              <label className="text-sm font-medium text-gray-500">Duration</label>
+                              <p className="text-sm text-gray-900">{receipt.tripDuration}</p>
+                            </div>
+                          )}
+                        </div>
+                        {receipt.driverName && (
+                          <div>
+                            <label className="text-sm font-medium text-gray-500">Driver</label>
+                            <p className="text-sm text-gray-900">{receipt.driverName}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="pt-2">
                     <label className="text-sm font-medium text-gray-500">Status</label>

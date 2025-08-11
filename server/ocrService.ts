@@ -8,6 +8,17 @@ interface ExtractedReceiptData {
   category?: string;
   total?: string;
   items?: string[];
+  // Transportation-specific fields
+  fromAddress?: string;
+  toAddress?: string;
+  tripDistance?: string;
+  tripDuration?: string;
+  driverName?: string;
+  vehicleInfo?: string;
+  paymentMethod?: string;
+  tipAmount?: string;
+  subtotal?: string;
+  fees?: string[];
 }
 
 export class OCRService {
@@ -156,6 +167,14 @@ export class OCRService {
 
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
+    // Check if this is an Uber receipt first
+    const isUberReceipt = this.detectUberReceipt(text);
+    
+    if (isUberReceipt) {
+      console.log('Uber receipt detected, using specialized extraction...');
+      return this.extractUberData(text, lines);
+    }
+    
     const data: ExtractedReceiptData = {
       items: []
     };
@@ -191,7 +210,8 @@ export class OCRService {
       'Meals': ['restaurant', 'cafe', 'food', 'dining', 'pizza', 'burger', 'kitchen', 'grill', 'bistro'],
       'Gas': ['gas', 'fuel', 'chevron', 'shell', 'exxon', 'bp', 'arco', 'mobil'],
       'Office Supplies': ['office', 'depot', 'staples', 'supplies', 'paper', 'printing'],
-      'Travel': ['hotel', 'motel', 'airline', 'airport', 'rental', 'uber', 'lyft', 'taxi'],
+      'TAXI': ['uber', 'lyft', 'taxi', 'cab', 'rideshare', 'ride share'],
+      'Travel': ['hotel', 'motel', 'airline', 'airport', 'rental'],
       'Entertainment': ['movie', 'theater', 'entertainment', 'show', 'concert'],
       'Retail': ['store', 'shop', 'market', 'walmart', 'target', 'costco', 'amazon'],
     };
@@ -259,6 +279,148 @@ export class OCRService {
     }
 
     return data;
+  }
+
+  /**
+   * Detect if the receipt is from Uber
+   */
+  private detectUberReceipt(text: string): boolean {
+    const uberIndicators = [
+      /\bUber\b/i,
+      /Here's your receipt for your ride/i,
+      /You rode with/i,
+      /UberX|Uber Pool|Uber Black|Uber Select/i,
+      /Trip fare/i,
+      /Visit the trip page/i,
+      /miles\s*\|\s*\d+\s*min/i
+    ];
+
+    return uberIndicators.some(pattern => pattern.test(text));
+  }
+
+  /**
+   * Extract Uber-specific data from receipt text
+   */
+  private extractUberData(text: string, lines: string[]): ExtractedReceiptData {
+    const data: ExtractedReceiptData = {
+      merchant: 'Uber',
+      category: 'TAXI',
+      items: []
+    };
+
+    // Extract total amount - Uber shows "Total" prominently
+    const totalMatch = text.match(/Total[\s]*\$([0-9]+\.?[0-9]*)/i);
+    if (totalMatch) {
+      data.amount = totalMatch[1];
+      data.total = totalMatch[1];
+    }
+
+    // Extract date from header (e.g., "June 9, 2025" or "May 13, 2025")
+    const dateMatch = text.match(/([A-Za-z]+\s+\d{1,2},\s+\d{4})/);
+    if (dateMatch) {
+      try {
+        const parsedDate = new Date(dateMatch[1]);
+        if (!isNaN(parsedDate.getTime())) {
+          data.date = parsedDate.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        console.log('Uber date parsing failed:', dateMatch[1]);
+      }
+    }
+
+    // Extract trip distance and duration
+    const tripInfoMatch = text.match(/([0-9.]+)\s*miles?\s*\|\s*([0-9]+)\s*min/i);
+    if (tripInfoMatch) {
+      data.tripDistance = `${tripInfoMatch[1]} miles`;
+      data.tripDuration = `${tripInfoMatch[2]} minutes`;
+    }
+
+    // Extract driver name (appears after "You rode with")
+    const driverMatch = text.match(/You rode with\s+([A-Za-z]+)/i);
+    if (driverMatch) {
+      data.driverName = driverMatch[1];
+    }
+
+    // Extract pickup and dropoff locations
+    const locations = this.extractUberLocations(text, lines);
+    if (locations.from) data.fromAddress = locations.from;
+    if (locations.to) data.toAddress = locations.to;
+
+    // Extract payment method
+    const paymentMatch = text.match(/Marriott Amex.*(\d{4})/);
+    if (paymentMatch) {
+      data.paymentMethod = `Marriott Amex ****${paymentMatch[1]}`;
+    }
+
+    // Extract tip amount
+    const tipMatch = text.match(/Tip fare[\s]*\$([0-9]+\.?[0-9]*)/i);
+    if (tipMatch) {
+      data.tipAmount = tipMatch[1];
+    }
+
+    // Extract subtotal
+    const subtotalMatch = text.match(/Subtotal[\s]*\$([0-9]+\.?[0-9]*)/i);
+    if (subtotalMatch) {
+      data.subtotal = subtotalMatch[1];
+    }
+
+    // Extract fees (tolls, surcharges, etc.)
+    const fees: string[] = [];
+    const feePatterns = [
+      /([A-Za-z\s]+(?:Toll|Fee|Surcharge|Benefits))[\s]*\$([0-9]+\.?[0-9]*)/gi
+    ];
+
+    feePatterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        fees.push(`${match[1]}: $${match[2]}`);
+      }
+    });
+
+    if (fees.length > 0) {
+      data.fees = fees;
+    }
+
+    console.log('Extracted Uber data:', data);
+    return data;
+  }
+
+  /**
+   * Extract pickup and dropoff locations from Uber receipt
+   */
+  private extractUberLocations(text: string, lines: string[]): { from?: string; to?: string } {
+    const locations: { from?: string; to?: string } = {};
+
+    // Look for time stamps with addresses (e.g., "4:13 AM | 9520 Airport Blvd, Los Angeles, CA 90045, US")
+    const timeAddressPattern = /(\d{1,2}:\d{2}\s*(?:AM|PM))\s*\|\s*(.+)/gi;
+    const matches = [...text.matchAll(timeAddressPattern)];
+
+    if (matches.length >= 2) {
+      // First match is pickup, second is dropoff
+      locations.from = matches[0][2].trim();
+      locations.to = matches[1][2].trim();
+    } else if (matches.length === 1) {
+      // If only one location found, try to determine if it's pickup or dropoff
+      const location = matches[0][2].trim();
+      if (text.indexOf(matches[0][0]) < text.length / 2) {
+        locations.from = location;
+      } else {
+        locations.to = location;
+      }
+    }
+
+    // Alternative pattern: look for addresses in specific sections
+    if (!locations.from || !locations.to) {
+      const addressPattern = /([0-9]+\s+[^|]+(?:Blvd|Ave|St|Road|Dr|Way|Lane)[^|]*)/gi;
+      const addressMatches = [...text.matchAll(addressPattern)];
+      
+      if (addressMatches.length >= 2) {
+        locations.from = addressMatches[0][1].trim();
+        locations.to = addressMatches[1][1].trim();
+      }
+    }
+
+    return locations;
   }
 
   /**

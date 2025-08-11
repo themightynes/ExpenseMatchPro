@@ -657,6 +657,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (extractedData.merchant) updates.merchant = extractedData.merchant;
       if (extractedData.amount) updates.amount = extractedData.amount;
       if (extractedData.date) updates.date = extractedData.date;
+      if (extractedData.category) updates.category = extractedData.category;
+      
+      // Transportation-specific fields
+      if (extractedData.fromAddress) updates.fromAddress = extractedData.fromAddress;
+      if (extractedData.toAddress) updates.toAddress = extractedData.toAddress;
+      if (extractedData.tripDistance) updates.tripDistance = extractedData.tripDistance;
+      if (extractedData.tripDuration) updates.tripDuration = extractedData.tripDuration;
+      if (extractedData.driverName) updates.driverName = extractedData.driverName;
+      if (extractedData.vehicleInfo) updates.vehicleInfo = extractedData.vehicleInfo;
 
       await storage.updateReceipt(receiptId, updates);
 

@@ -30,6 +30,14 @@ export const receipts = pgTable("receipts", {
   isMatched: boolean("is_matched").default(false),
   matchedChargeId: varchar("matched_charge_id").references(() => amexCharges.id),
   organizedPath: text("organized_path"), // Path after file reorganization
+  // Transportation-specific fields
+  fromAddress: text("from_address"), // Pickup location for rideshare/taxi
+  toAddress: text("to_address"), // Dropoff location for rideshare/taxi
+  tripDistance: text("trip_distance"), // Distance traveled
+  tripDuration: text("trip_duration"), // Duration of trip
+  driverName: text("driver_name"), // Driver information
+  vehicleInfo: text("vehicle_info"), // Vehicle details
+  notes: text("notes"), // Additional notes
   createdAt: timestamp("created_at").default(sql`now()`),
   updatedAt: timestamp("updated_at").default(sql`now()`),
 });
