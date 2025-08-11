@@ -1868,6 +1868,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Database inspection endpoint - check specific receipt and charge status
+  app.get("/api/debug/receipt-charge-status/:amount", async (req, res) => {
+    try {
+      const targetAmount = req.params.amount;
+      const allReceipts = await storage.getAllReceipts();
+      const allCharges = await storage.getAllCharges();
+
+      // Find receipts matching the amount
+      const matchingReceipts = allReceipts.filter(r => 
+        r.amount && Math.abs(parseFloat(r.amount) - parseFloat(targetAmount)) < 0.01
+      );
+
+      // Find charges matching the amount
+      const matchingCharges = allCharges.filter(c => 
+        Math.abs(parseFloat(c.amount) - parseFloat(targetAmount)) < 0.01
+      );
+
+      const analysis = {
+        searchAmount: targetAmount,
+        receipts: matchingReceipts.map(r => ({
+          id: r.id,
+          fileName: r.fileName,
+          merchant: r.merchant,
+          amount: r.amount,
+          date: r.date,
+          isMatched: r.isMatched,
+          matchedChargeId: r.matchedChargeId,
+          statementId: r.statementId
+        })),
+        charges: matchingCharges.map(c => ({
+          id: c.id,
+          description: c.description,
+          amount: c.amount,
+          date: c.date,
+          isMatched: c.isMatched,
+          receiptId: c.receiptId,
+          statementId: c.statementId
+        })),
+        potentialMatches: []
+      };
+
+      // Check for potential matches
+      for (const receipt of matchingReceipts) {
+        for (const charge of matchingCharges) {
+          if (Math.abs(parseFloat(receipt.amount || '0') - parseFloat(charge.amount)) < 0.01) {
+            analysis.potentialMatches.push({
+              receiptId: receipt.id,
+              receiptFileName: receipt.fileName,
+              chargeId: charge.id,
+              chargeDescription: charge.description,
+              bothMatched: receipt.isMatched && charge.isMatched,
+              receiptMatchedToThis: receipt.matchedChargeId === charge.id,
+              chargeMatchedToThis: charge.receiptId === receipt.id,
+              bidirectionalMatch: receipt.matchedChargeId === charge.id && charge.receiptId === receipt.id
+            });
+          }
+        }
+      }
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error inspecting database:", error);
+      res.status(500).json({ error: "Failed to inspect database" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
