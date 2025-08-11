@@ -64,7 +64,12 @@ Preferred communication style: Simple, everyday language.
 ## Cloud Services
 - **Neon Database**: Serverless PostgreSQL.
 - **Google Cloud Storage**: Object storage for receipts.
-- **Replit Infrastructure**: Development environment.
+- **Replit Infrastructure**: Development and production environment.
+
+## Production Database Configuration (August 2025)
+- Development database successfully deployed as production database
+- DATABASE_URL environment variable required in Secrets for production deployment
+- Production authentication resolved by manual secrets configuration
 
 ## Third-Party Libraries
 - **Uppy**: File upload handling.
