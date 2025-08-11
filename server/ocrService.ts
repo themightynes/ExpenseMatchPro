@@ -75,42 +75,68 @@ export class OCRService {
         console.log('Direct PDF text extraction failed, falling back to OCR conversion:', errorMessage);
       }
       
-      // Second try: Convert PDF to image and use OCR
+      // Second try: Convert PDF to image using modern libraries (2024-2025 solutions)
       console.log('PDF processing: Converting PDF to images for OCR extraction...');
       
-      const { fromBuffer } = await import('pdf2pic');
-      
-      // Try multiple conversion settings for better compatibility
-      const conversionSettings = [
-        { density: 300, format: "png", quality: 100 },
-        { density: 200, format: "jpeg", quality: 95 },
-        { density: 150, format: "png", quality: 90 }
-      ];
-      
-      for (const settings of conversionSettings) {
-        try {
-          console.log(`Trying PDF conversion with settings:`, settings);
-          
-          const convert = fromBuffer(buffer, {
-            ...settings,
-            saveFilename: "receipt",
-            savePath: "/tmp",
-            preserveAspectRatio: true
-          });
-          
-          const result = await convert(1, { responseType: "buffer" });
-          
-          if (result?.buffer && result.buffer.length > 10000) { // Increased threshold
-            console.log(`PDF conversion successful with ${settings.format}. Buffer size: ${result.buffer.length} bytes`);
-            return await this.extractImageText(result.buffer);
-          } else {
-            console.log(`Conversion with ${settings.format} produced small buffer: ${result?.buffer?.length || 0} bytes`);
-          }
-        } catch (conversionError) {
-          const errorMessage = conversionError instanceof Error ? conversionError.message : 'Unknown error';
-          console.log(`Conversion failed with ${settings.format}:`, errorMessage);
-          continue;
+      // Try pdf-to-png-converter first (most reliable according to recent research)
+      try {
+        console.log('Attempting PDF conversion with pdf-to-png-converter...');
+        const { pdfToPng } = await import('pdf-to-png-converter');
+        
+        const pngPages = await pdfToPng(buffer, {
+          disableFontFace: false,
+          useSystemFonts: false,
+          pagesToProcess: [1],
+          viewportScale: 2.0
+        });
+
+        if (pngPages && pngPages.length > 0 && pngPages[0].content) {
+          console.log(`PDF conversion successful with pdf-to-png-converter. Buffer size: ${pngPages[0].content.length} bytes`);
+          return await this.extractImageText(pngPages[0].content);
         }
+      } catch (pngConverterError) {
+        console.log('pdf-to-png-converter failed:', pngConverterError instanceof Error ? pngConverterError.message : 'Unknown error');
+      }
+
+      // Fallback: Try pdf2pic with enhanced settings
+      try {
+        console.log('Falling back to pdf2pic with enhanced options...');
+        const { fromBuffer } = await import('pdf2pic');
+        
+        // Enhanced conversion settings based on research
+        const conversionSettings = [
+          { density: 300, format: "png", quality: 100, width: 2550, height: 3300 },
+          { density: 200, format: "jpeg", quality: 95 },
+          { density: 150, format: "png", quality: 90 }
+        ];
+        
+        for (const settings of conversionSettings) {
+          try {
+            console.log(`Trying PDF conversion with enhanced settings:`, settings);
+            
+            const convert = fromBuffer(buffer, {
+              ...settings,
+              saveFilename: "receipt",
+              savePath: "/tmp",
+              preserveAspectRatio: true
+            });
+            
+            const result = await convert(1, { responseType: "buffer" });
+            
+            if (result?.buffer && result.buffer.length > 10000) {
+              console.log(`PDF conversion successful with ${settings.format}. Buffer size: ${result.buffer.length} bytes`);
+              return await this.extractImageText(result.buffer);
+            } else {
+              console.log(`Conversion with ${settings.format} produced small buffer: ${result?.buffer?.length || 0} bytes`);
+            }
+          } catch (conversionError) {
+            const errorMessage = conversionError instanceof Error ? conversionError.message : 'Unknown error';
+            console.log(`Conversion failed with ${settings.format}:`, errorMessage);
+            continue;
+          }
+        }
+      } catch (pdf2picError) {
+        console.log('pdf2pic fallback failed:', pdf2picError instanceof Error ? pdf2picError.message : 'Unknown error');
       }
       
       return "PDF processing: Unable to extract text from this PDF. The enhanced Uber detection system works best with image receipts (PNG/JPG). For optimal results with Uber receipts, please upload as an image format, or enter the details manually for accurate AMEX matching.";
@@ -122,13 +148,18 @@ export class OCRService {
   }
 
   /**
-   * Extract text from image using Tesseract.js
+   * Extract text from image using Tesseract.js with enhanced buffer validation
    */
   private async extractImageText(buffer: Buffer): Promise<string> {
     try {
-      // Validate buffer before processing
-      if (!buffer || buffer.length === 0) {
+      // Enhanced buffer validation based on 2024-2025 best practices
+      if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
         throw new Error('Invalid or empty image buffer');
+      }
+      
+      // Additional validation for minimum viable image size
+      if (buffer.length < 1000) {
+        throw new Error('Image buffer too small to be valid');
       }
       
       const worker = await this.initTesseract();

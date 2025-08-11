@@ -88,6 +88,8 @@
     "passport-local": "^1.0.0",
     "pdf-parse": "^1.1.1",
     "pdf-poppler": "^0.2.1",
+    "pdf-to-png-converter": "^3.7.1",
+    "pdf2json": "^3.2.0",
     "pdf2pic": "^3.2.0",
     "pdfjs-dist": "^5.4.54",
     "react": "^18.3.1",
