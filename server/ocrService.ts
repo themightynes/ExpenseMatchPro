@@ -58,8 +58,7 @@ export class OCRService {
         
         // Configure pdf-parse options to avoid test file issues
         const options = {
-          max: 1, // Only parse first page for performance
-          version: 'v1.10.100'
+          max: 1 // Only parse first page for performance
         };
         
         const data = await pdfParse(buffer, options);
@@ -322,28 +321,39 @@ export class OCRService {
       data.total = totalMatch[1];
     }
 
-    // Extract date from header (e.g., "June 9, 2025" or "May 13, 2025")
-    const dateMatch = text.match(/([A-Za-z]+\s+\d{1,2},\s+\d{4})/);
+    // Extract date from header (e.g., "June 9, 2025", "May 13, 2025", or "May 13,2025")
+    const dateMatch = text.match(/([A-Za-z]+\s+\d{1,2},?\s*\d{4})/);
     if (dateMatch) {
       try {
-        const parsedDate = new Date(dateMatch[1]);
+        // Normalize the date string by ensuring space after comma
+        const normalizedDate = dateMatch[1].replace(/,(\d)/, ', $1');
+        const parsedDate = new Date(normalizedDate);
         if (!isNaN(parsedDate.getTime())) {
           data.date = parsedDate.toISOString().split('T')[0];
+          console.log(`Uber date extracted successfully: ${normalizedDate} -> ${data.date}`);
         }
       } catch (e) {
         console.log('Uber date parsing failed:', dateMatch[1]);
       }
     }
 
-    // Extract trip distance and duration
-    const tripInfoMatch = text.match(/([0-9.]+)\s*miles?\s*\|\s*([0-9]+)\s*min/i);
+    // Extract trip distance and duration (multiple patterns)
+    let tripInfoMatch = text.match(/([0-9.]+)\s*miles?\s*\|\s*([0-9]+)\s*min/i);
+    if (!tripInfoMatch) {
+      // Alternative pattern: "16.69 miles 41" (space separated)
+      tripInfoMatch = text.match(/([0-9.]+)\s*miles?\s+([0-9]+)(?:\s|$)/i);
+    }
     if (tripInfoMatch) {
       data.tripDistance = `${tripInfoMatch[1]} miles`;
       data.tripDuration = `${tripInfoMatch[2]} minutes`;
     }
 
-    // Extract driver name (appears after "You rode with")
-    const driverMatch = text.match(/You rode with\s+([A-Za-z]+)/i);
+    // Extract driver name (appears after "You rode with" or in receipt greeting)
+    let driverMatch = text.match(/You rode with\s+([A-Za-z]+)/i);
+    if (!driverMatch) {
+      // Alternative: extract from greeting "Here's your receipt for your ride, Ernesto"
+      driverMatch = text.match(/receipt for your ride,?\s+([A-Za-z]+)/i);
+    }
     if (driverMatch) {
       data.driverName = driverMatch[1];
     }
@@ -354,7 +364,7 @@ export class OCRService {
     if (locations.to) data.toAddress = locations.to;
 
     // Extract payment method
-    const paymentMatch = text.match(/Marriott Amex.*(\d{4})/);
+    const paymentMatch = text.match(/(?:EE\s+)?Marriott Amex.*?(\d{3,4})/i);
     if (paymentMatch) {
       data.paymentMethod = `Marriott Amex ****${paymentMatch[1]}`;
     }
