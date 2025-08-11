@@ -832,45 +832,37 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                         {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
                       </Badge>
                       {receipt.isMatched && <Badge variant="default">Matched to AMEX</Badge>}
-
-                      {/* Text Extraction Status and Control */}
-                      {receipt.processingStatus === 'processing' ? (
-                        <Badge variant="secondary" className="flex items-center gap-1">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          {isPDF ? 'Extracting PDF Text...' : 'Processing Image...'}
-                        </Badge>
-                      ) : (
-                        <>
-                          {/* Always show Extract Text button for reprocessing */}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => triggerOcrMutation.mutate(receipt.id)}
-                            disabled={triggerOcrMutation.isPending}
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
-                          >
-                            {triggerOcrMutation.isPending ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                Processing...
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="w-4 h-4 mr-1" />
-                                {receipt.ocrText && receipt.ocrText.length > 50 ? 'Re-extract Text' : 'Extract Text'}
-                              </>
-                            )}
-                          </Button>
-                          
-                          {/* Status badge */}
-                          {receipt.ocrText && receipt.ocrText !== 'Processing...' && receipt.ocrText.length > 50 && (
-                            <Badge variant="default" className="text-green-700 bg-green-100">
-                              {isPDF ? 'PDF Text Extracted' : 'Text Extracted'}
-                            </Badge>
-                          )}
-                        </>
-                      )}
                     </div>
+                  </div>
+
+                  {/* Text Extraction Control - separate section */}
+                  <div className="pt-2">
+                    {receipt.processingStatus === 'processing' ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {isPDF ? 'Extracting PDF Text...' : 'Processing Image...'}
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => triggerOcrMutation.mutate(receipt.id)}
+                        disabled={triggerOcrMutation.isPending}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                      >
+                        {triggerOcrMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-4 h-4 mr-1" />
+                            {receipt.ocrText && receipt.ocrText.length > 50 ? 'Re-extract Text' : 'Extract Text'}
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
