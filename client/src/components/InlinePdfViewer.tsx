@@ -27,22 +27,43 @@ interface PDFPageRendererProps {
 function PDFPageRenderer({ pdfDoc, pageNumber, zoom, panPosition, isDragging }: PDFPageRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pageLoading, setPageLoading] = useState(true);
+  const [renderError, setRenderError] = useState(false);
 
   useEffect(() => {
     const renderPage = async () => {
-      if (!pdfDoc || !canvasRef.current) return;
+      if (!pdfDoc || !canvasRef.current) {
+        setPageLoading(false);
+        return;
+      }
 
       try {
         setPageLoading(true);
+        setRenderError(false);
         
-        const page = await pdfDoc.getPage(pageNumber);
+        // Add timeout for page rendering
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Page render timeout')), 10000)
+        );
+        
+        const pagePromise = pdfDoc.getPage(pageNumber);
+        const page = await Promise.race([pagePromise, timeoutPromise]) as any;
+        
+        if (!page) {
+          throw new Error('Failed to get PDF page');
+        }
+        
         const canvas = canvasRef.current;
+        if (!canvas) {
+          throw new Error('Canvas not available');
+        }
+        
         const context = canvas.getContext('2d');
-
-        if (!context) return;
+        if (!context) {
+          throw new Error('Canvas context not available');
+        }
 
         // Calculate scale for high-DPI displays
-        const devicePixelRatio = window.devicePixelRatio || 1;
+        const devicePixelRatio = Math.min(window.devicePixelRatio || 1, 2); // Limit to 2x for performance
         const scale = zoom * devicePixelRatio;
 
         // Get viewport
@@ -54,41 +75,63 @@ function PDFPageRenderer({ pdfDoc, pageNumber, zoom, panPosition, isDragging }: 
         canvas.style.width = `${viewport.width / devicePixelRatio}px`;
         canvas.style.height = `${viewport.height / devicePixelRatio}px`;
 
-        // Render PDF page
+        // Clear canvas first
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Render PDF page with timeout
         const renderContext = {
           canvasContext: context,
           viewport: viewport,
         };
 
-        await page.render(renderContext).promise;
+        const renderPromise = page.render(renderContext).promise;
+        const renderTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Render timeout')), 15000)
+        );
+
+        await Promise.race([renderPromise, renderTimeoutPromise]);
         setPageLoading(false);
         
       } catch (error) {
         console.error('Error rendering PDF page:', error);
         setPageLoading(false);
+        setRenderError(true);
       }
     };
 
-    renderPage();
+    const timeoutId = setTimeout(renderPage, 50); // Small delay to prevent rapid calls
+    return () => clearTimeout(timeoutId);
   }, [pdfDoc, pageNumber, zoom]);
 
   return (
     <div className="relative">
-      {pageLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-200 rounded">
+      {pageLoading && !renderError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-200 rounded min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
             <p className="text-sm text-gray-600">Rendering page {pageNumber}...</p>
           </div>
         </div>
       )}
+      
+      {renderError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded min-h-[400px]">
+          <div className="text-center p-4">
+            <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+            <p className="text-sm text-gray-600 mb-2">Failed to render page {pageNumber}</p>
+            <p className="text-xs text-gray-500">This PDF may not be supported by the viewer</p>
+          </div>
+        </div>
+      )}
+      
       <canvas 
         ref={canvasRef}
-        className="max-w-full h-auto rounded-lg shadow-lg bg-white"
+        className={`max-w-full h-auto rounded-lg shadow-lg bg-white ${renderError ? 'hidden' : ''}`}
         style={{
           transform: `translate(${panPosition.x}px, ${panPosition.y}px)`,
           transition: !isDragging ? 'transform 0.1s ease-out' : 'none',
-          cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+          cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+          minHeight: pageLoading ? '400px' : 'auto'
         }}
       />
     </div>
@@ -115,16 +158,53 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
       try {
         setLoading(true);
         setRenderError(false);
+        setPdfDoc(null);
         
-        // Dynamic import of PDF.js
-        const pdfjsLib = await import('pdfjs-dist');
+        // Check if we can access the PDF URL first
+        const testResponse = await fetch(src, { method: 'HEAD' });
+        if (!testResponse.ok) {
+          throw new Error(`PDF not accessible: ${testResponse.status}`);
+        }
         
-        // Set worker path
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        // Dynamic import of PDF.js with timeout
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('PDF.js load timeout')), 10000)
+        );
         
-        // Load PDF document
-        const loadingTask = pdfjsLib.getDocument(src);
-        const pdf = await loadingTask.promise;
+        const pdfjsLib = await Promise.race([
+          import('pdfjs-dist'),
+          timeoutPromise
+        ]) as any;
+        
+        if (!pdfjsLib || !pdfjsLib.getDocument) {
+          throw new Error('PDF.js failed to load properly');
+        }
+        
+        // Set worker path with fallback
+        try {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        } catch (workerError) {
+          console.warn('Failed to set PDF.js worker, using fallback:', workerError);
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        
+        // Load PDF document with timeout
+        const loadingTask = pdfjsLib.getDocument({
+          url: src,
+          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+          cMapPacked: true,
+        });
+        
+        const pdfLoadPromise = loadingTask.promise;
+        const pdfTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('PDF document load timeout')), 15000)
+        );
+        
+        const pdf = await Promise.race([pdfLoadPromise, pdfTimeoutPromise]) as any;
+        
+        if (!pdf || !pdf.numPages) {
+          throw new Error('Invalid PDF document');
+        }
         
         setPdfDoc(pdf);
         setTotalPages(pdf.numPages);
@@ -133,10 +213,11 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
         setPanPosition({ x: 0, y: 0 });
         setLoading(false);
         
-        console.log(`PDF loaded: ${pdf.numPages} pages`);
+        console.log(`PDF loaded successfully: ${pdf.numPages} pages`);
         
       } catch (error) {
         console.error('Failed to load PDF with PDF.js:', error);
+        setPdfDoc(null);
         // Fallback to iframe/embed approach
         setUseIframe(true);
         setLoading(false);
@@ -144,7 +225,9 @@ export default function InlinePdfViewer({ src, fileName }: InlinePdfViewerProps)
     };
 
     if (src) {
-      loadPdf();
+      // Add a small delay to prevent rapid successive calls
+      const timeoutId = setTimeout(loadPdf, 100);
+      return () => clearTimeout(timeoutId);
     }
   }, [src]);
 
