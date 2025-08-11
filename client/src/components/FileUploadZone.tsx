@@ -3,11 +3,12 @@ import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { MobileFileUploader } from "@/components/MobileFileUploader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Upload, Mail, FileText, Image, Check, Zap } from "lucide-react";
+import { Upload, Mail, FileText, Image, Check, Zap, Link2, Plus } from "lucide-react";
 import type { UploadResult } from "@uppy/core";
 
 interface FileUploadZoneProps {
@@ -20,6 +21,8 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [currentStatus, setCurrentStatus] = useState("");
   const [isMobile, setIsMobile] = useState(true); // Start with mobile as default for better compatibility
+  const [urlInput, setUrlInput] = useState("");
+  const [isProcessingUrl, setIsProcessingUrl] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -56,6 +59,48 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
       // Individual errors are handled in handleUploadComplete
     },
   });
+
+  const processUrlMutation = useMutation({
+    mutationFn: async (data: { url: string }) => {
+      const response = await apiRequest("POST", "/api/receipts/process-url", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Web Link Processed",
+        description: "Receipt data extracted from the web link successfully.",
+      });
+      setUrlInput("");
+      onUploadComplete?.();
+    },
+    onError: (error) => {
+      console.error("Error processing URL:", error);
+      toast({
+        title: "URL Processing Failed",
+        description: "Could not extract receipt data from the provided web link. Please check the URL and try again.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setIsProcessingUrl(false);
+    },
+  });
+
+  const handleUrlSubmit = async () => {
+    if (!urlInput.trim()) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid web link.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessingUrl(true);
+    processUrlMutation.mutate({ url: urlInput.trim() });
+  };
 
   const uploadFileDirectly = async (file: File): Promise<string> => {
     console.log("Starting server upload for:", file.name);
@@ -228,6 +273,46 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
                 </div>
               )}
             </label>
+          </div>
+        </div>
+
+        {/* URL Input Section */}
+        <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-100 dark:border-green-800">
+          <div className="flex items-center gap-2 mb-3">
+            <Link2 className="h-4 w-4 text-green-600" />
+            <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">Process Web Link</span>
+          </div>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Paste a Gmail link, Google Drive share link, or other web URL containing receipt information
+            </p>
+            <div className="flex gap-2">
+              <Input
+                type="url"
+                placeholder="https://mail.google.com/mail/..."
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                className="flex-1"
+                disabled={isProcessingUrl}
+              />
+              <Button 
+                onClick={handleUrlSubmit}
+                disabled={isProcessingUrl || !urlInput.trim()}
+                size="sm"
+                className="px-3"
+              >
+                {isProcessingUrl ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            {isProcessingUrl && (
+              <p className="text-sm text-green-600">
+                Processing web link and extracting receipt data...
+              </p>
+            )}
           </div>
         </div>
 

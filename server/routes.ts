@@ -514,6 +514,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Process web URLs for receipt extraction
+  app.post("/api/receipts/process-url", requireAuth, async (req, res) => {
+    try {
+      console.log("Processing URL for receipt data:", req.body.url);
+      if (!req.body.url) {
+        return res.status(400).json({ error: "URL is required" });
+      }
+
+      const url = req.body.url.trim();
+      
+      // Validate URL format
+      try {
+        new URL(url);
+      } catch (error) {
+        return res.status(400).json({ error: "Invalid URL format" });
+      }
+
+      // Create initial receipt record
+      const receipt = await storage.createReceipt({
+        fileName: `url-receipt-${Date.now()}`,
+        originalFileName: `url-receipt-${Date.now()}`,
+        fileUrl: url, // Store the URL as fileUrl for now
+        processingStatus: 'processing',
+        ocrText: 'Processing web link...',
+        merchant: 'URL Import',
+        notes: `Imported from: ${url}`,
+      });
+
+      // Return success immediately
+      res.status(201).json({
+        ...receipt,
+        message: "URL processing started successfully"
+      });
+
+      // Process URL in background
+      processUrlInBackground(url, receipt.id);
+
+    } catch (error) {
+      console.error("Error processing URL:", error);
+      res.status(500).json({ error: "Failed to process URL" });
+    }
+  });
+
+  // Helper function to process URL in background
+  async function processUrlInBackground(url: string, receiptId: string) {
+    try {
+      let extractedData: any = {};
+      let ocrText = 'URL processed - manual entry required';
+      
+      // Parse Gmail URLs specifically
+      if (url.includes('mail.google.com')) {
+        ocrText = 'Gmail link detected - please manually enter receipt details';
+        extractedData = {
+          merchant: 'Gmail Import',
+          notes: 'Receipt imported from Gmail. Please add merchant, amount, and date manually.'
+        };
+      } 
+      // Parse Google Drive URLs
+      else if (url.includes('drive.google.com')) {
+        ocrText = 'Google Drive link detected - please manually enter receipt details';
+        extractedData = {
+          merchant: 'Google Drive Import',
+          notes: 'Receipt imported from Google Drive. Please add merchant, amount, and date manually.'
+        };
+      }
+      // Generic web URL
+      else {
+        ocrText = 'Web link imported - please manually enter receipt details';
+        extractedData = {
+          merchant: 'Web Import',
+          notes: `Receipt imported from web link: ${url}. Please add merchant, amount, and date manually.`
+        };
+      }
+
+      // Update receipt with processed data
+      const updates: any = {
+        ocrText,
+        extractedData,
+        processingStatus: 'completed',
+        notes: extractedData.notes
+      };
+
+      if (extractedData.merchant) updates.merchant = extractedData.merchant;
+      if (extractedData.amount) updates.amount = extractedData.amount;
+      if (extractedData.date) updates.date = extractedData.date;
+
+      await storage.updateReceipt(receiptId, updates);
+
+      // Try auto-assignment to statement
+      try {
+        const updatedReceipt = await storage.autoAssignReceiptToStatement(receiptId);
+        if (updatedReceipt?.statementId) {
+          await fileOrganizer.attemptAutoMatch(receiptId);
+        }
+      } catch (error) {
+        console.error('Error in post-URL processing:', error);
+      }
+
+      console.log(`URL processing completed for receipt ${receiptId}`);
+    } catch (error) {
+      console.error(`URL processing failed for receipt ${receiptId}:`, error);
+      
+      // Update receipt with failed status
+      await storage.updateReceipt(receiptId, {
+        ocrText: 'URL processing failed - manual entry required',
+        processingStatus: 'completed',
+        extractedData: null
+      });
+    }
+  }
+
   // AMEX Statement endpoints
   app.get("/api/statements", requireAuth, async (req, res) => {
     try {
