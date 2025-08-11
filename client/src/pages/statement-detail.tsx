@@ -32,7 +32,8 @@ import {
   MapPin,
   FileText,
   Plus,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from "lucide-react";
 import { AmexStatement, AmexCharge, Receipt as ReceiptType } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -195,6 +196,34 @@ export default function StatementDetailPage() {
     },
   });
 
+  // Delete charge mutation
+  const deleteChargeMutation = useMutation({
+    mutationFn: async (chargeId: string) => {
+      const response = await fetch(`/api/charges/${chargeId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete charge');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/statements", statementId, "charges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/statements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Charge Deleted",
+        description: "The charge has been successfully deleted.",
+      });
+    },
+    onError: (error) => {
+      console.error("Error deleting charge:", error);
+      toast({
+        title: "Delete Failed",
+        description: "There was an error deleting the charge. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // All useEffect hooks together - MUST be after all other hooks  
   useEffect(() => {
     if (statement?.userNotes && notes === "") {
@@ -258,6 +287,12 @@ export default function StatementDetailPage() {
     const notes = chargeNotes[chargeId] || "";
     updateChargeNotesMutation.mutate({ chargeId, notes });
     setSelectedChargeNotes(prev => ({ ...prev, [chargeId]: false }));
+  };
+
+  const handleDeleteCharge = (chargeId: string) => {
+    if (confirm("Are you sure you want to delete this charge? This action cannot be undone.")) {
+      deleteChargeMutation.mutate(chargeId);
+    }
   };
 
   const handleReceiptUpload = async (chargeId: string, file: File) => {
@@ -608,6 +643,18 @@ export default function StatementDetailPage() {
                     >
                       <Edit3 className="h-3 w-3 sm:mr-1" />
                       <span className="hidden sm:inline">{selectedChargeNotes[charge.id] ? "Hide" : "Notes"}</span>
+                    </Button>
+                    
+                    {/* Delete Button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteCharge(charge.id)}
+                      disabled={deleteChargeMutation.isPending}
+                      className="h-6 px-1 sm:px-2 text-xs min-h-[36px] min-w-[36px] sm:min-h-[24px] sm:min-w-[auto] text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                    >
+                      <Trash2 className="h-3 w-3 sm:mr-1" />
+                      <span className="hidden sm:inline">Delete</span>
                     </Button>
                   </div>
                   

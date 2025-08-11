@@ -503,6 +503,24 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(amexCharges.date));
   }
 
+  async deleteAmexCharge(chargeId: string): Promise<boolean> {
+    try {
+      // First unlink any receipt that was matched to this charge
+      await db.update(receipts)
+        .set({ isMatched: false, matchedChargeId: null })
+        .where(eq(receipts.matchedChargeId, chargeId));
+
+      // Delete the charge
+      const result = await db.delete(amexCharges)
+        .where(eq(amexCharges.id, chargeId));
+      
+      return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
+    } catch (error) {
+      console.error("Error in deleteAmexCharge:", error);
+      return false;
+    }
+  }
+
   // Expense Template methods
   async createExpenseTemplate(template: InsertExpenseTemplate): Promise<ExpenseTemplate> {
     const [newTemplate] = await db.insert(expenseTemplates).values(template).returning();

@@ -977,20 +977,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/charges", async (req, res) => {
     try {
-      console.log("Received request body:", JSON.stringify(req.body, null, 2));
-      
       // Convert date string to Date object if needed
       const requestData = { ...req.body };
       if (requestData.date && typeof requestData.date === 'string') {
-        console.log("Converting date string to Date object:", requestData.date);
         requestData.date = new Date(requestData.date);
-        console.log("Converted date:", requestData.date);
       }
-      
-      console.log("Request data before validation:", JSON.stringify({
-        ...requestData,
-        date: requestData.date ? requestData.date.toString() : 'undefined'
-      }, null, 2));
       
       const validatedData = insertAmexChargeSchema.parse(requestData);
       const charge = await storage.createAmexCharge(validatedData);
@@ -1008,6 +999,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting unmatched charges:", error);
       res.status(500).json({ error: "Failed to get unmatched charges" });
+    }
+  });
+
+  app.delete("/api/charges/:chargeId", async (req, res) => {
+    try {
+      const chargeId = req.params.chargeId;
+      const success = await storage.deleteAmexCharge(chargeId);
+      
+      if (success) {
+        res.json({ message: "Charge deleted successfully" });
+      } else {
+        res.status(404).json({ error: "Charge not found" });
+      }
+    } catch (error) {
+      console.error("Error deleting charge:", error);
+      res.status(500).json({ error: "Failed to delete charge" });
     }
   });
 
