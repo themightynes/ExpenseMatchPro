@@ -1804,94 +1804,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Fix specific ApiPay receipt
-  app.post("/api/receipts/fix-apipay", async (req, res) => {
+  // Fix bidirectional matching - ensure both receipt and charge show matched status
+  app.post("/api/receipts/fix-bidirectional-matching", async (req, res) => {
     try {
-      // Get all receipts and charges
       const allReceipts = await storage.getAllReceipts();
       const allCharges = await storage.getAllCharges();
+      
+      let fixed = 0;
+      let errors = 0;
+      const fixes = [];
 
-      console.log(`Searching for ApiPay receipt among ${allReceipts.length} receipts`);
-
-      // Find the ApiPay receipt - looking for $162.06 around Mar 5, 2025
-      const apiPayReceipt = allReceipts.find(receipt => {
-        const amountMatch = receipt.amount && Math.abs(parseFloat(receipt.amount) - 162.06) < 0.01;
-        const merchantMatch = receipt.merchant && (
-          receipt.merchant.toLowerCase().includes('apipay') ||
-          receipt.merchant.toLowerCase().includes('astr') ||
-          receipt.merchant.toLowerCase().includes('chicago')
-        );
-        const dateMatch = receipt.date && new Date(receipt.date).getMonth() === 2; // March is month 2 (0-indexed)
-        
-        console.log(`Checking receipt ${receipt.id}: amount=${receipt.amount}, merchant=${receipt.merchant}, date=${receipt.date}`);
-        console.log(`Matches: amount=${amountMatch}, merchant=${merchantMatch}, date=${dateMatch}`);
-        
-        return amountMatch || merchantMatch || dateMatch;
-      });
-
-      if (!apiPayReceipt) {
-        // List all receipts for debugging
-        console.log("Available receipts:");
-        allReceipts.forEach(r => {
-          console.log(`ID: ${r.id}, Amount: ${r.amount}, Merchant: ${r.merchant}, Date: ${r.date}, Matched: ${r.isMatched}`);
-        });
-        return res.status(404).json({ error: "ApiPay receipt not found" });
+      // Find receipts that are matched but their corresponding charges aren't
+      for (const receipt of allReceipts) {
+        if (receipt.isMatched && receipt.matchedChargeId) {
+          const charge = allCharges.find(c => c.id === receipt.matchedChargeId);
+          if (charge && !charge.isMatched) {
+            try {
+              await storage.updateAmexCharge(charge.id, {
+                isMatched: true,
+                receiptId: receipt.id
+              });
+              fixes.push(`Fixed charge ${charge.description} $${charge.amount} - now shows as matched`);
+              fixed++;
+            } catch (error) {
+              console.error(`Error fixing charge ${charge.id}:`, error);
+              errors++;
+            }
+          }
+        }
       }
 
-      console.log(`Found ApiPay receipt: ${apiPayReceipt.id} - ${apiPayReceipt.merchant} $${apiPayReceipt.amount}`);
-
-      // Find the matching charge
-      const apiPayCharge = allCharges.find(charge => {
-        const amountMatch = Math.abs(parseFloat(charge.amount) - 162.06) < 0.01;
-        const merchantMatch = charge.description && (
-          charge.description.toLowerCase().includes('apipay') ||
-          charge.description.toLowerCase().includes('astr') ||
-          charge.description.toLowerCase().includes('chicago')
-        );
-        
-        console.log(`Checking charge ${charge.id}: amount=${charge.amount}, description=${charge.description}`);
-        console.log(`Matches: amount=${amountMatch}, merchant=${merchantMatch}`);
-        
-        return amountMatch && merchantMatch;
-      });
-
-      if (!apiPayCharge) {
-        console.log("Available charges:");
-        allCharges.forEach(c => {
-          console.log(`ID: ${c.id}, Amount: ${c.amount}, Description: ${c.description}, Matched: ${c.isMatched}`);
-        });
-        return res.status(404).json({ error: "ApiPay charge not found" });
+      // Find charges that are matched but their corresponding receipts aren't
+      for (const charge of allCharges) {
+        if (charge.isMatched && charge.receiptId) {
+          const receipt = allReceipts.find(r => r.id === charge.receiptId);
+          if (receipt && !receipt.isMatched) {
+            try {
+              await storage.updateReceipt(receipt.id, {
+                isMatched: true,
+                matchedChargeId: charge.id,
+                statementId: charge.statementId
+              });
+              fixes.push(`Fixed receipt ${receipt.fileName} $${receipt.amount} - now shows as matched`);
+              fixed++;
+            } catch (error) {
+              console.error(`Error fixing receipt ${receipt.id}:`, error);
+              errors++;
+            }
+          }
+        }
       }
-
-      console.log(`Found ApiPay charge: ${apiPayCharge.id} - ${apiPayCharge.description} $${apiPayCharge.amount}`);
-
-      // Update receipt as matched
-      const updatedReceipt = await storage.updateReceipt(apiPayReceipt.id, {
-        isMatched: true,
-        matchedChargeId: apiPayCharge.id,
-        statementId: apiPayCharge.statementId,
-        merchant: apiPayCharge.description,
-        amount: apiPayCharge.amount,
-        date: apiPayCharge.date
-      });
-
-      // Update charge as matched  
-      const updatedCharge = await storage.updateAmexCharge(apiPayCharge.id, {
-        isMatched: true,
-        receiptId: apiPayReceipt.id
-      });
-
-      console.log(`Successfully matched receipt ${apiPayReceipt.id} to charge ${apiPayCharge.id}`);
 
       return res.json({
-        message: "ApiPay receipt successfully matched",
-        receipt: updatedReceipt,
-        charge: updatedCharge
+        message: `Fixed ${fixed} bidirectional matching issues`,
+        fixed,
+        errors,
+        details: fixes
       });
 
     } catch (error) {
-      console.error("Error fixing ApiPay receipt:", error);
-      res.status(500).json({ error: "Failed to fix ApiPay receipt" });
+      console.error("Error fixing bidirectional matching:", error);
+      res.status(500).json({ error: "Failed to fix bidirectional matching" });
     }
   });
 
