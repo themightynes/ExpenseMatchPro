@@ -1482,8 +1482,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Organize the receipt with Oracle naming
       await fileOrganizer.organizeReceipt(receipt);
 
-      // Update charge to mark as matched
-      await storage.updateAmexCharge(chargeId, { isMatched: true });
+      // Update charge to mark as matched with proper receipt linking
+      await storage.updateAmexCharge(chargeId, { 
+        isMatched: true, 
+        receiptId: receipt.id 
+      });
 
       res.json({ 
         message: "Receipt uploaded and matched successfully",
