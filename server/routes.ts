@@ -1097,6 +1097,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Assign receipt to statement period
+  app.put("/api/receipts/:receiptId/assign-to-statement", requireAuth, async (req, res) => {
+    try {
+      const receiptId = req.params.receiptId;
+      const { statementId } = req.body;
+      
+      if (!receiptId || !statementId) {
+        return res.status(400).json({ error: "receiptId and statementId are required" });
+      }
+
+      const updatedReceipt = await storage.assignReceiptToStatement(receiptId, statementId);
+      
+      if (!updatedReceipt) {
+        return res.status(404).json({ error: "Receipt not found or failed to assign to statement" });
+      }
+
+      res.json(updatedReceipt);
+    } catch (error) {
+      console.error("Error assigning receipt to statement:", error);
+      res.status(500).json({ error: "Failed to assign receipt to statement" });
+    }
+  });
+
   app.get("/api/charges/unmatched/:statementId", async (req, res) => {
     try {
       const charges = await storage.getUnmatchedCharges(req.params.statementId);

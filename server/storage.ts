@@ -809,6 +809,32 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
   }
+
+  async assignReceiptToStatement(receiptId: string, statementId: string): Promise<Receipt | undefined> {
+    try {
+      const updated = await this.drizzle
+        .update(receipts)
+        .set({ statementId: statementId })
+        .where(eq(receipts.id, receiptId))
+        .returning();
+
+      if (updated.length === 0) {
+        console.error("Receipt not found for assignment:", receiptId);
+        return undefined;
+      }
+
+      console.log("Assigned receipt to statement:", {
+        receiptId: receiptId,
+        statementId: statementId,
+        fileName: updated[0].originalFileName
+      });
+
+      return updated[0];
+    } catch (error) {
+      console.error("Error assigning receipt to statement:", error);
+      return undefined;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();
