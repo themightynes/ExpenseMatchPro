@@ -45,73 +45,89 @@ export class OCRService {
   }
 
   /**
-   * Extract text from PDF by converting to images and using OCR
+   * Extract text from PDF by trying multiple approaches
    */
   private async extractPdfText(buffer: Buffer): Promise<string> {
     try {
-      console.log('PDF processing: Converting PDF to images for text extraction...');
+      console.log('PDF processing: Attempting text extraction...');
       
-      // Dynamic import to avoid module loading issues
-      const { fromBuffer } = await import('pdf2pic');
-      
-      // Convert PDF to images (first page only for performance)
-      const convert = fromBuffer(buffer, {
-        density: 200,           // Higher DPI for better text quality
-        saveFilename: "receipt",
-        savePath: "/tmp",
-        format: "png",          // PNG for better text quality
-        quality: 100,           // Maximum quality
-        preserveAspectRatio: true
-      });
-      
-      console.log('Converting PDF page 1 to image...');
-      const result = await convert(1, { responseType: "buffer" });
-      
-      if (!result || !result.buffer) {
-        console.log('PDF to image conversion failed');
-        return "PDF processing: Unable to convert PDF to image for text extraction. This might be a complex or password-protected PDF. Please enter the receipt details manually.";
-      }
-      
-      console.log('PDF converted to image, starting text extraction...');
-      
-      // Validate the image buffer before processing
-      if (result.buffer.length < 5000) { // Increased threshold for better validation
-        console.log('Converted image appears to be too small or corrupted, buffer size:', result.buffer.length);
+      // First try: Direct PDF text extraction using PDF.js
+      try {
+        console.log('Attempting direct PDF text extraction...');
+        const pdfjs = await import('pdfjs-dist');
         
-        // Try alternative conversion settings
-        console.log('Attempting PDF conversion with alternative settings...');
-        try {
-          const fallbackConvert = fromBuffer(buffer, {
-            density: 150,
-            format: "jpeg",
-            quality: 90
-          });
-          const fallbackResult = await fallbackConvert(1, { responseType: "buffer" });
+        // Load the PDF
+        const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+        console.log(`PDF loaded successfully. Pages: ${pdf.numPages}`);
+        
+        let fullText = '';
+        
+        // Extract text from first page (most receipts are single page)
+        const page = await pdf.getPage(1);
+        const textContent = await page.getTextContent();
+        
+        // Combine all text items
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ')
+          .trim();
           
-          if (fallbackResult?.buffer && fallbackResult.buffer.length > 5000) {
-            console.log('Fallback conversion successful, buffer size:', fallbackResult.buffer.length, 'bytes');
-            return await this.extractImageText(fallbackResult.buffer);
-          }
-        } catch (fallbackError) {
-          console.error('Fallback conversion also failed:', fallbackError);
+        fullText += pageText;
+        
+        if (fullText.length > 50) {
+          console.log(`Direct PDF text extraction successful. Extracted ${fullText.length} characters`);
+          return fullText;
         }
         
-        return "PDF processing: Unable to convert PDF to readable image. This might be a password-protected, scanned, or complex PDF format. Please enter the receipt details manually for accurate AMEX matching.";
+        console.log('Direct PDF text extraction returned minimal text, trying OCR conversion...');
+      } catch (directError) {
+        const errorMessage = directError instanceof Error ? directError.message : 'Unknown error';
+        console.log('Direct PDF text extraction failed, falling back to OCR conversion:', errorMessage);
       }
       
-      console.log('PDF conversion successful, image buffer size:', result.buffer.length, 'bytes');
+      // Second try: Convert PDF to image and use OCR
+      console.log('PDF processing: Converting PDF to images for OCR extraction...');
       
-      // Use existing image OCR processing with error handling
-      try {
-        return await this.extractImageText(result.buffer);
-      } catch (ocrError) {
-        console.error('OCR failed on converted PDF image:', ocrError);
-        return "PDF text extraction failed during OCR processing. This might be a scanned PDF with poor image quality. Please enter the receipt details manually for accurate matching.";
+      const { fromBuffer } = await import('pdf2pic');
+      
+      // Try multiple conversion settings for better compatibility
+      const conversionSettings = [
+        { density: 300, format: "png", quality: 100 },
+        { density: 200, format: "jpeg", quality: 95 },
+        { density: 150, format: "png", quality: 90 }
+      ];
+      
+      for (const settings of conversionSettings) {
+        try {
+          console.log(`Trying PDF conversion with settings:`, settings);
+          
+          const convert = fromBuffer(buffer, {
+            ...settings,
+            saveFilename: "receipt",
+            savePath: "/tmp",
+            preserveAspectRatio: true
+          });
+          
+          const result = await convert(1, { responseType: "buffer" });
+          
+          if (result?.buffer && result.buffer.length > 10000) { // Increased threshold
+            console.log(`PDF conversion successful with ${settings.format}. Buffer size: ${result.buffer.length} bytes`);
+            return await this.extractImageText(result.buffer);
+          } else {
+            console.log(`Conversion with ${settings.format} produced small buffer: ${result?.buffer?.length || 0} bytes`);
+          }
+        } catch (conversionError) {
+          const errorMessage = conversionError instanceof Error ? conversionError.message : 'Unknown error';
+          console.log(`Conversion failed with ${settings.format}:`, errorMessage);
+          continue;
+        }
       }
+      
+      return "PDF processing: Unable to extract text from this PDF. This might be a password-protected, scanned, or complex PDF format. For Uber receipts, try uploading as an image (PNG/JPG) instead, or enter the details manually for accurate AMEX matching.";
       
     } catch (error) {
       console.error('Error processing PDF:', error);
-      return "PDF processing failed. This might be a password-protected, corrupted, or complex PDF. Please enter the receipt details manually to enable automatic matching with AMEX charges.";
+      return "PDF processing failed. For Uber receipts, try uploading as an image format (PNG/JPG) which works better with our enhanced transportation detection, or enter details manually.";
     }
   }
 
