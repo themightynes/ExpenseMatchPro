@@ -783,7 +783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           receipt?.notes || charge.userNotes || charge.category || 'Business expense', // Business_Purpose
           statement.periodName, // Statement_Period
           charge.cardMember, // Card_Member
-          charge.isPersonalExpense ? 'Personal' : 'Business', // Transaction_Type
+          charge.isPersonalExpense ? 'Personal' : (charge.isNonAmex ? 'Non-AMEX Business' : 'AMEX Business'), // Transaction_Type
           `${charge.address || ''} ${charge.cityState || ''}`.trim(), // Address
           receipt?.fromAddress || '', // Transportation_From
           receipt?.toAddress || '', // Transportation_To
@@ -1068,6 +1068,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating charge:", error);
       res.status(400).json({ error: "Invalid charge data" });
+    }
+  });
+
+  // Create non-AMEX charge from receipt
+  app.post("/api/charges/create-from-receipt", requireAuth, async (req, res) => {
+    try {
+      const { receiptId, statementId } = req.body;
+      
+      if (!receiptId || !statementId) {
+        return res.status(400).json({ error: "receiptId and statementId are required" });
+      }
+
+      const charge = await storage.createNonAmexChargeFromReceipt(receiptId, statementId);
+      
+      if (!charge) {
+        return res.status(400).json({ error: "Failed to create non-AMEX charge. Receipt may be missing required data or already matched." });
+      }
+
+      // Invalidate cache for both charges and receipts
+      // This ensures the UI updates immediately
+      await createStatementFolder(statementId);
+      
+      res.status(201).json(charge);
+    } catch (error) {
+      console.error("Error creating non-AMEX charge from receipt:", error);
+      res.status(500).json({ error: "Failed to create non-AMEX charge" });
     }
   });
 

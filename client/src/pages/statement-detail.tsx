@@ -33,7 +33,8 @@ import {
   FileText,
   Plus,
   AlertCircle,
-  Trash2
+  Trash2,
+  CreditCard
 } from "lucide-react";
 import { AmexStatement, AmexCharge, Receipt as ReceiptType } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +58,7 @@ export default function StatementDetailPage() {
   const [uploadingCharges, setUploadingCharges] = useState<{ [key: string]: boolean }>({});
   const [showManualChargeModal, setShowManualChargeModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [convertingReceipts, setConvertingReceipts] = useState<{ [key: string]: boolean }>({});
 
   // All useQuery hooks together
   const { data: statement } = useQuery<AmexStatement>({
@@ -82,6 +84,39 @@ export default function StatementDetailPage() {
     queryKey: ["/api/statements", statementId, "unmatched-receipts"],
     queryFn: () => fetch(`/api/statements/${statementId}/unmatched-receipts`).then(res => res.json()),
     enabled: !!statementId,
+  });
+
+  // Mutation for creating non-AMEX charges from receipts
+  const createNonAmexCharge = useMutation({
+    mutationFn: async ({ receiptId, statementId }: { receiptId: string; statementId: string }) => {
+      const response = await fetch("/api/charges/create-from-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receiptId, statementId }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create non-AMEX charge");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate all related queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["/api/charges", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/receipts", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/statements", statementId, "unmatched-receipts"] });
+      toast({
+        title: "Success",
+        description: "Receipt converted to non-AMEX charge successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Get all statements for the manual charge modal
@@ -594,7 +629,10 @@ export default function StatementDetailPage() {
                     <Badge variant="outline" className="text-xs">
                       {charge.category || "Uncategorized"}
                     </Badge>
-                    <div className="text-sm text-gray-600">
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      {charge.isNonAmex && (
+                        <CreditCard className="h-3 w-3 text-blue-600" title="Non-AMEX Charge" />
+                      )}
                       {charge.cardMember}
                     </div>
                   </div>
@@ -811,6 +849,24 @@ export default function StatementDetailPage() {
                           Match
                         </Button>
                       </Link>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="h-7 px-3 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                        disabled={convertingReceipts[receipt.id] || !receipt.date || !receipt.amount || !receipt.merchant}
+                        onClick={async () => {
+                          if (!statementId) return;
+                          setConvertingReceipts(prev => ({ ...prev, [receipt.id]: true }));
+                          try {
+                            await createNonAmexCharge.mutateAsync({ receiptId: receipt.id, statementId });
+                          } finally {
+                            setConvertingReceipts(prev => ({ ...prev, [receipt.id]: false }));
+                          }
+                        }}
+                      >
+                        <CreditCard className="h-3 w-3 mr-1" />
+                        {convertingReceipts[receipt.id] ? "Converting..." : "Add as Non-AMEX"}
+                      </Button>
                     </div>
                   </div>
 

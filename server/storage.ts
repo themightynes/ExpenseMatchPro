@@ -57,6 +57,7 @@ export interface IStorage {
   getUnmatchedCharges(statementId: string): Promise<AmexCharge[]>;
   toggleChargePersonalExpense(chargeId: string): Promise<AmexCharge | undefined>;
   toggleChargeNoReceiptRequired(chargeId: string): Promise<AmexCharge | undefined>;
+  createNonAmexChargeFromReceipt(receiptId: string, statementId: string): Promise<AmexCharge | undefined>;
 
   // Expense Template methods
   createExpenseTemplate(template: InsertExpenseTemplate): Promise<ExpenseTemplate>;
@@ -737,6 +738,75 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("Error in getOracleExportData:", error);
       return null;
+    }
+  }
+
+  async createNonAmexChargeFromReceipt(receiptId: string, statementId: string): Promise<AmexCharge | undefined> {
+    try {
+      // Get the receipt
+      const receipt = await this.getReceipt(receiptId);
+      if (!receipt) {
+        console.error("Receipt not found:", receiptId);
+        return undefined;
+      }
+
+      // Check if receipt is already matched
+      if (receipt.isMatched) {
+        console.error("Receipt is already matched:", receiptId);
+        return undefined;
+      }
+
+      // Validate receipt has required data
+      if (!receipt.date || !receipt.amount || !receipt.merchant) {
+        console.error("Receipt missing required data for charge creation:", receiptId);
+        return undefined;
+      }
+
+      // Create charge from receipt data
+      const chargeData = {
+        statementId: statementId,
+        date: receipt.date,
+        description: receipt.merchant,
+        cardMember: "Non-AMEX", // Default since it's not from AMEX
+        accountNumber: "NON-AMEX", // Default identifier
+        amount: receipt.amount,
+        extendedDetails: receipt.notes || "",
+        statementAs: receipt.merchant,
+        address: receipt.fromAddress || "",
+        cityState: "",
+        zipCode: "",
+        country: "",
+        reference: `NON-AMEX-${receiptId.slice(0, 8)}`,
+        category: receipt.category || "General",
+        isMatched: true, // Automatically matched to the receipt
+        receiptId: receiptId,
+        isPersonalExpense: false, // Default to business expense
+        noReceiptRequired: false, // Has receipt attached
+        isNonAmex: true, // Mark as non-AMEX charge
+        userNotes: receipt.notes || ""
+      };
+
+      // Create the charge
+      const newCharge = await this.createAmexCharge(chargeData);
+
+      // Update receipt to mark as matched
+      await this.updateReceipt(receiptId, {
+        isMatched: true,
+        matchedChargeId: newCharge.id,
+        statementId: statementId // Ensure receipt is associated with the statement
+      });
+
+      console.log("Created non-AMEX charge from receipt:", {
+        chargeId: newCharge.id,
+        receiptId: receiptId,
+        merchant: receipt.merchant,
+        amount: receipt.amount
+      });
+
+      return newCharge;
+    } catch (error) {
+      console.error("Error creating non-AMEX charge from receipt:", error);
+      return undefined;
     }
   }
 }

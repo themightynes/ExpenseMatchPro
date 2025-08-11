@@ -72,6 +72,7 @@ export const amexCharges = pgTable("amex_charges", {
   receiptId: varchar("receipt_id"),
   isPersonalExpense: boolean("is_personal_expense").default(false),
   noReceiptRequired: boolean("no_receipt_required").default(false), // Marks expense as not requiring a receipt
+  isNonAmex: boolean("is_non_amex").default(false), // Marks expense as created from non-AMEX receipt
   userNotes: text("user_notes"),
   createdAt: timestamp("created_at").default(sql`now()`),
 });

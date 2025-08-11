@@ -28,7 +28,7 @@ Preferred communication style: Simple, everyday language.
 - **File Storage**: Google Cloud Storage buckets
 
 ## Core Data Models
-- Users, Receipts, AMEX Statements, AMEX Charges, Expense Templates, Transportation Data.
+- Users, Receipts, AMEX Statements, AMEX Charges (with isNonAmex flag for virtual charges), Expense Templates, Transportation Data.
 
 ## Processing Pipeline
 - **Manual Entry System**: Instant receipt upload with manual data entry.
@@ -36,7 +36,8 @@ Preferred communication style: Simple, everyday language.
 - **Direct Upload to Charges**: One-click receipt upload from statement line items.
 - **Smart Organization**: Automatic folder creation and receipt organization by AMEX statement periods.
 - **Automated Matching**: Algorithm to match receipts to AMEX charges (amount, date, merchant).
-- **Template Generation**: Oracle iExpense CSV/XML template creation.
+- **Non-AMEX Charge Creation**: Convert receipts to virtual charges for non-AMEX business expenses with visual distinction.
+- **Template Generation**: Oracle iExpense CSV/XML template creation with support for both AMEX and non-AMEX charges.
 - **Intelligent Transportation Processing**: Automatic Uber receipt detection with specialized field extraction (locations, trip details, driver info).
 - **Web Link Processing**: Import receipt data from web URLs (Gmail, Google Drive).
 - **Enhanced PDF Processing (August 2025)**: Modern PDF processing using pdf-to-png-converter and enhanced pdf2pic with progressive fallback system. Includes OCR artifact cleaning and comprehensive error handling for reliable text extraction.
