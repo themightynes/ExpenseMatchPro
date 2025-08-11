@@ -393,7 +393,7 @@ export class OCRService {
 
     // Look for time stamps with addresses (e.g., "4:13 AM | 9520 Airport Blvd, Los Angeles, CA 90045, US")
     const timeAddressPattern = /(\d{1,2}:\d{2}\s*(?:AM|PM))\s*\|\s*(.+)/gi;
-    const matches = [...text.matchAll(timeAddressPattern)];
+    const matches = Array.from(text.matchAll(timeAddressPattern));
 
     if (matches.length >= 2) {
       // First match is pickup, second is dropoff
@@ -412,7 +412,7 @@ export class OCRService {
     // Alternative pattern: look for addresses in specific sections
     if (!locations.from || !locations.to) {
       const addressPattern = /([0-9]+\s+[^|]+(?:Blvd|Ave|St|Road|Dr|Way|Lane)[^|]*)/gi;
-      const addressMatches = [...text.matchAll(addressPattern)];
+      const addressMatches = Array.from(text.matchAll(addressPattern));
       
       if (addressMatches.length >= 2) {
         locations.from = addressMatches[0][1].trim();

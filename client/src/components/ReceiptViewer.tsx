@@ -868,6 +868,39 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
               </Card>
             )}
 
+            {/* OCR Text Results */}
+            {receipt.ocrText && receipt.ocrText !== 'Processing...' && receipt.ocrText !== 'Manual entry required' && receipt.ocrText.length > 50 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Extracted Text</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-gray-50 p-3 rounded-lg border">
+                    <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
+                      {receipt.ocrText}
+                    </pre>
+                  </div>
+                  {receipt.extractedData && (
+                    <div className="mt-3 pt-3 border-t">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Parsed Data</h4>
+                      <div className="text-xs space-y-1">
+                        {typeof receipt.extractedData === 'object' && receipt.extractedData !== null && (
+                          Object.entries(receipt.extractedData as Record<string, any>).map(([key, value]) => (
+                            value && (
+                              <div key={key} className="flex gap-2">
+                                <span className="font-medium text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1')}:</span>
+                                <span className="text-gray-900">{Array.isArray(value) ? value.join(', ') : String(value)}</span>
+                              </div>
+                            )
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* File Information */}
             <Card>
               <CardHeader className="pb-3">
