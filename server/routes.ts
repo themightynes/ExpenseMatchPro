@@ -1159,7 +1159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add receipts to ZIP
       for (const receipt of receipts) {
         try {
-          if (!receipt.filePath) continue;
+          if (!receipt.fileUrl) continue;
           
           // Find associated charge to determine if non-AMEX
           const associatedCharge = charges.find(c => c.receiptId === receipt.id);
@@ -1167,8 +1167,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Skip personal expenses
           if (associatedCharge?.isPersonalExpense) continue;
           
-          // Get receipt file from object storage
-          const fileBuffer = await objectStorageClient.getFile(receipt.filePath);
+          // Get receipt file from object storage using the object storage service
+          const objectFile = await objectStorageService.getObjectEntityFile(receipt.fileUrl);
+          const fileBuffer = await objectStorageService.getObjectFileContent(objectFile);
           const filename = createReceiptFilename(receipt, associatedCharge);
           
           archive.append(fileBuffer, { name: filename });
@@ -1212,20 +1213,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const oracleCSV = [
             'Expense_Date,Expense_Type,Merchant,Amount,Currency,Receipt_File,Receipt_URL,Business_Purpose,Statement_Period,Card_Member,Transaction_Type,Address,Transportation_From,Transportation_To,Match_Status',
             ...oracleData.charges.map(charge => {
-              const receipt = oracleData.receipts.find(r => r.id === charge.receiptId);
-              const receiptUrl = receipt?.filePath ? 
-                `${req.protocol}://${req.get('host')}/api/objects/${receipt.filePath}` : '';
+              const receipt = charge.receipt;
+              const receiptUrl = receipt?.fileUrl ? 
+                `${req.protocol}://${req.get('host')}${receipt.fileUrl}` : '';
               
               return [
-                charge.date || '',
+                charge.date ? new Date(charge.date).toISOString().split('T')[0] : '',
                 charge.category || 'General',
                 charge.description || '',
-                charge.amount || '',
+                Math.abs(parseFloat(charge.amount || '0')).toFixed(2),
                 'USD',
                 receipt ? createReceiptFilename(receipt, charge) : '',
                 receiptUrl,
                 receipt?.notes || charge.userNotes || charge.category || 'Business expense',
-                oracleData.statement.periodName,
+                statement.periodName,
                 charge.cardMember,
                 charge.isPersonalExpense ? 'Personal' : (charge.isNonAmex ? 'Non-AMEX Business' : 'AMEX Business'),
                 `${charge.address || ''} ${charge.cityState || ''}`.trim(),

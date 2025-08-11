@@ -95,12 +95,12 @@ export class ObjectStorageService {
   }
 
   // Downloads an object to the response.
-  async downloadObject(file: File, res: Response, cacheTtlSec: number = 3600) {
+  async downloadObject(objectFile: File, res: Response, cacheTtlSec: number = 3600) {
     try {
       // Get file metadata
-      const [metadata] = await file.getMetadata();
+      const [metadata] = await objectFile.getMetadata();
       // Get the ACL policy for the object.
-      const aclPolicy = await getObjectAclPolicy(file);
+      const aclPolicy = await getObjectAclPolicy(objectFile);
       const isPublic = aclPolicy?.visibility === "public";
       // Set appropriate headers
       res.set({
@@ -112,7 +112,7 @@ export class ObjectStorageService {
       });
 
       // Stream the file to the response
-      const stream = file.createReadStream();
+      const stream = objectFile.createReadStream();
 
       stream.on("error", (err) => {
         console.error("Stream error:", err);
@@ -157,7 +157,7 @@ export class ObjectStorageService {
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     console.log("Getting object entity file for path:", objectPath);
-    
+
     if (!objectPath.startsWith("/objects/")) {
       console.log("Path does not start with /objects/");
       throw new ObjectNotFoundError();
@@ -171,24 +171,24 @@ export class ObjectStorageService {
 
     const entityId = parts.slice(1).join("/");
     console.log("Entity ID:", entityId);
-    
+
     let entityDir = this.getPrivateObjectDir();
     if (!entityDir.endsWith("/")) {
       entityDir = `${entityDir}/`;
     }
-    
+
     const objectEntityPath = `${entityDir}${entityId}`;
     console.log("Full object path:", objectEntityPath);
-    
+
     const { bucketName, objectName } = parseObjectPath(objectEntityPath);
     console.log("Bucket:", bucketName, "Object:", objectName);
-    
+
     const bucket = objectStorageClient.bucket(bucketName);
     const objectFile = bucket.file(objectName);
-    
+
     const [exists] = await objectFile.exists();
     console.log("File exists:", exists);
-    
+
     if (!exists) {
       throw new ObjectNotFoundError();
     }
@@ -201,20 +201,20 @@ export class ObjectStorageService {
     if (!rawPath.startsWith("https://storage.googleapis.com/")) {
       return rawPath;
     }
-  
+
     // Extract the path from the URL by removing query parameters and domain
     const url = new URL(rawPath);
     const rawObjectPath = url.pathname;
-  
+
     let objectEntityDir = this.getPrivateObjectDir();
     if (!objectEntityDir.endsWith("/")) {
       objectEntityDir = `${objectEntityDir}/`;
     }
-  
+
     if (!rawObjectPath.startsWith(objectEntityDir)) {
       return rawObjectPath;
     }
-  
+
     // Extract the entity ID from the path
     const entityId = rawObjectPath.slice(objectEntityDir.length);
     return `/objects/${entityId}`;
@@ -257,15 +257,15 @@ export class ObjectStorageService {
     try {
       // Get the source file
       const sourceFile = await this.getObjectEntityFile(sourcePath);
-      
+
       // Parse destination path to get bucket and object name
       const { bucketName: destBucketName, objectName: destObjectName } = parseObjectPath(destinationPath);
       const destBucket = objectStorageClient.bucket(destBucketName);
       const destFile = destBucket.file(destObjectName);
-      
+
       // Copy the file to the new location
       await sourceFile.copy(destFile);
-      
+
       // Copy metadata including ACL policies
       const [sourceMetadata] = await sourceFile.getMetadata();
       if (sourceMetadata.metadata) {
@@ -273,13 +273,28 @@ export class ObjectStorageService {
           metadata: sourceMetadata.metadata
         });
       }
-      
+
       // Delete the original file
       await sourceFile.delete();
-      
+
       console.log(`Successfully moved object from ${sourcePath} to ${destinationPath}`);
     } catch (error) {
       console.error(`Failed to move object from ${sourcePath} to ${destinationPath}:`, error);
+      throw error;
+    }
+  }
+
+  // Gets the file content of an object entity.
+  async getObjectFileContent(objectFile: File): Promise<Buffer> {
+    try {
+      const { bucketName, objectName } = parseObjectPath(objectFile.path);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const file = bucket.file(objectName);
+
+      const [fileContent] = await file.download();
+      return fileContent;
+    } catch (error) {
+      console.error('Error getting object file content:', error);
       throw error;
     }
   }
