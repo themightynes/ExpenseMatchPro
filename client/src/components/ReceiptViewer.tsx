@@ -27,10 +27,7 @@ import type { Receipt } from '@shared/schema';
 import InlinePdfViewer from '@/components/InlinePdfViewer';
 import { features } from '@/config/features';
 
-// Import react-image-crop for cropping functionality
-import ReactCrop from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
-import type { Crop, PixelCrop } from 'react-image-crop';
+// Removed react-image-crop imports - not currently used
 
 interface ReceiptViewerProps {
   receipt: Receipt;
@@ -123,11 +120,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   });
   const [rotation, setRotation] = useState(0);
   const [zoom, setZoom] = useState(1);
-  const [isCropping, setIsCropping] = useState(false);
-  const [crop, setCrop] = useState<Crop>();
-  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const imgRef = useRef<HTMLImageElement>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
   // Touch handling for pinch-to-zoom and panning
@@ -184,62 +177,74 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   };
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2) {
-      // Two-finger pinch for zoom
-      e.preventDefault();
-      const distance = getTouchDistance(e.touches);
-      setLastTouchDistance(distance);
-      setIsDragging(false);
-    } else if (e.touches.length === 1 && zoom > 1) {
-      // Single finger drag for pan when zoomed
-      const touch = e.touches[0];
-      setIsDragging(true);
-      setDragStart({ x: touch.clientX, y: touch.clientY });
-      setLastPanPosition(panPosition);
+    try {
+      if (e.touches.length === 2) {
+        // Two-finger pinch for zoom
+        e.preventDefault();
+        const distance = getTouchDistance(e.touches);
+        setLastTouchDistance(distance);
+        setIsDragging(false);
+      } else if (e.touches.length === 1 && zoom > 1) {
+        // Single finger drag for pan when zoomed
+        const touch = e.touches[0];
+        setIsDragging(true);
+        setDragStart({ x: touch.clientX, y: touch.clientY });
+        setLastPanPosition(panPosition);
+      }
+    } catch (error) {
+      console.warn('Touch start error:', error);
     }
   }, [zoom, panPosition]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2 && lastTouchDistance) {
-      // Handle pinch zoom
-      e.preventDefault();
-      e.stopPropagation();
-      const currentDistance = getTouchDistance(e.touches);
-      if (currentDistance) {
-        const scale = currentDistance / lastTouchDistance;
-        const newZoom = Math.max(0.5, Math.min(3, zoom * scale));
-        setZoom(newZoom);
-        setLastTouchDistance(currentDistance);
-      }
-    } else if (e.touches.length === 1 && isDragging && zoom > 1) {
-      // Handle pan
-      e.preventDefault();
-      e.stopPropagation();
-      const touch = e.touches[0];
-      const deltaX = touch.clientX - dragStart.x;
-      const deltaY = touch.clientY - dragStart.y;
+    try {
+      if (e.touches.length === 2 && lastTouchDistance) {
+        // Handle pinch zoom
+        e.preventDefault();
+        e.stopPropagation();
+        const currentDistance = getTouchDistance(e.touches);
+        if (currentDistance) {
+          const scale = currentDistance / lastTouchDistance;
+          const newZoom = Math.max(0.5, Math.min(3, zoom * scale));
+          setZoom(newZoom);
+          setLastTouchDistance(currentDistance);
+        }
+      } else if (e.touches.length === 1 && isDragging && zoom > 1) {
+        // Handle pan
+        e.preventDefault();
+        e.stopPropagation();
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - dragStart.x;
+        const deltaY = touch.clientY - dragStart.y;
 
-      // Calculate pan constraints based on actual container and zoom level
-      const container = imageContainerRef.current;
-      if (container) {
-        const containerRect = container.getBoundingClientRect();
-        const maxPanX = (zoom - 1) * containerRect.width * 0.8;
-        const maxPanY = (zoom - 1) * containerRect.height * 0.8;
+        // Calculate pan constraints based on actual container and zoom level
+        const container = imageContainerRef.current;
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          const maxPanX = (zoom - 1) * containerRect.width * 0.8;
+          const maxPanY = (zoom - 1) * containerRect.height * 0.8;
 
-        setPanPosition({
-          x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
-          y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
-        });
+          setPanPosition({
+            x: Math.max(-maxPanX, Math.min(maxPanX, lastPanPosition.x + deltaX)),
+            y: Math.max(-maxPanY, Math.min(maxPanY, lastPanPosition.y + deltaY))
+          });
+        }
       }
+    } catch (error) {
+      console.warn('Touch move error:', error);
     }
   }, [lastTouchDistance, zoom, isDragging, dragStart, lastPanPosition]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length < 2) {
-      setLastTouchDistance(null);
-    }
-    if (e.touches.length === 0) {
-      setIsDragging(false);
+    try {
+      if (e.touches.length < 2) {
+        setLastTouchDistance(null);
+      }
+      if (e.touches.length === 0) {
+        setIsDragging(false);
+      }
+    } catch (error) {
+      console.warn('Touch end error:', error);
     }
   }, []);
 
@@ -316,8 +321,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   }, [hasNext, currentIndex, receipts, onNavigate]);
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const { width, height } = e.currentTarget;
-    setCrop({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
+    // Image loaded successfully
   }, []);
 
   const handleSave = async () => {
@@ -782,15 +786,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
         </div>
       </div>
 
-      {/* Hidden canvas for crop processing */}
-      <canvas
-        ref={previewCanvasRef}
-        style={{
-          position: 'absolute',
-          top: '-9999px',
-          left: '-9999px',
-        }}
-      />
+      
     </div>
   );
 }
