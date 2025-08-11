@@ -30,11 +30,15 @@ import {
   Receipt,
   Building,
   MapPin,
-  FileText
+  FileText,
+  Plus,
+  AlertCircle
 } from "lucide-react";
 import { AmexStatement, AmexCharge, Receipt as ReceiptType } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import ManualChargeModal from "@/components/ManualChargeModal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function StatementDetailPage() {
   const [, params] = useRoute("/statements/:id");
@@ -50,6 +54,7 @@ export default function StatementDetailPage() {
   const [selectedChargeNotes, setSelectedChargeNotes] = useState<{ [key: string]: boolean }>({});
   const [chargeNotes, setChargeNotes] = useState<{ [key: string]: string }>({});
   const [uploadingCharges, setUploadingCharges] = useState<{ [key: string]: boolean }>({});
+  const [showManualChargeModal, setShowManualChargeModal] = useState(false);
 
   // All useQuery hooks together
   const { data: statement } = useQuery<AmexStatement>({
@@ -75,6 +80,12 @@ export default function StatementDetailPage() {
     queryKey: ["/api/statements", statementId, "unmatched-receipts"],
     queryFn: () => fetch(`/api/statements/${statementId}/unmatched-receipts`).then(res => res.json()),
     enabled: !!statementId,
+  });
+
+  // Get all statements for the manual charge modal
+  const { data: allStatements = [] } = useQuery<AmexStatement[]>({
+    queryKey: ["/api/statements"],
+    queryFn: () => fetch("/api/statements").then(res => res.json()),
   });
 
   // All useMutation hooks together
@@ -375,12 +386,41 @@ export default function StatementDetailPage() {
             </p>
           </div>
         </div>
-        <Button className="gap-2 w-full sm:w-auto">
-          <Download className="h-4 w-4" />
-          <span className="hidden sm:inline">Export to Oracle</span>
-          <span className="sm:hidden">Export</span>
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowManualChargeModal(true)}
+            className="gap-2 w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add Missing Charge</span>
+            <span className="sm:hidden">Add Charge</span>
+          </Button>
+          <Button className="gap-2 w-full sm:w-auto">
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export to Oracle</span>
+            <span className="sm:hidden">Export</span>
+          </Button>
+        </div>
       </div>
+
+      {/* Reconciliation Alert - Show when there might be missing charges */}
+      {stats.totalCharges > 0 && (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <span>
+                <strong>Data Reconciliation:</strong> Always verify charge counts match your AMEX statement. 
+                If you notice missing charges, use "Add Missing Charge" to manually add them.
+              </span>
+              <span className="text-sm text-yellow-600">
+                Current: {stats.totalCharges} charges
+              </span>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats Overview */}
       <Card>
@@ -763,6 +803,14 @@ export default function StatementDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Manual Charge Modal */}
+      <ManualChargeModal
+        isOpen={showManualChargeModal}
+        onClose={() => setShowManualChargeModal(false)}
+        statements={allStatements}
+        defaultStatementId={statementId}
+      />
     </div>
   );
 }

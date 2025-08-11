@@ -37,10 +37,26 @@ export default function CsvUploadModal({ isOpen, onClose, statements }: CsvUploa
       return response.json();
     },
     onSuccess: (data) => {
+      let description = `Imported ${data.imported} charges.`;
+      if (data.skipped > 0) {
+        description += ` ${data.skipped} charges were skipped (payments/invalid data).`;
+      }
+      if (data.errors > 0) {
+        description += ` ${data.errors} errors occurred.`;
+      }
+      description += ` Created statement: ${data.statementName}`;
+      
       toast({
-        title: "CSV Import Successful",
-        description: `Imported ${data.imported} charges. Created statement: ${data.statementName}`,
+        title: data.skipped > 0 ? "CSV Import Completed with Skipped Items" : "CSV Import Successful",
+        description,
+        variant: data.skipped > 0 ? "default" : "default",
       });
+
+      // Log detailed skip reasons for debugging
+      if (data.skipped > 0 && data.skippedReasons) {
+        console.log('CSV Import - Skipped charges details:');
+        data.skippedReasons.forEach((reason: string) => console.log(`  - ${reason}`));
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/charges"] });
       queryClient.invalidateQueries({ queryKey: ["/api/statements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });

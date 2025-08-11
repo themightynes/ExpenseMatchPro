@@ -793,6 +793,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let maxDate: Date | null = null; // Will be set to first valid date
       let imported = 0;
       let errors = 0;
+      let skipped = 0;
+      const skippedReasons: string[] = [];
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -813,12 +815,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Skip payments and credits (negative amounts or "AUTOPAY")
           if (validatedRow.Description.includes('AUTOPAY') || validatedRow.Description.includes('PAYMENT')) {
+            skipped++;
+            skippedReasons.push(`Row ${i}: PAYMENT/AUTOPAY - ${validatedRow.Description}`);
+            console.log(`Skipped PAYMENT/AUTOPAY: ${validatedRow.Description}`);
             continue;
           }
 
           // Parse MM/DD/YYYY format properly
           const dateParts = validatedRow.Date.split('/');
           if (dateParts.length !== 3) {
+            skipped++;
+            skippedReasons.push(`Row ${i}: Invalid date format - ${validatedRow.Date}`);
             console.error(`Invalid date format: ${validatedRow.Date}`);
             continue;
           }
@@ -829,6 +836,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Validate date components
           if (isNaN(month) || isNaN(day) || isNaN(year) || month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+            skipped++;
+            skippedReasons.push(`Row ${i}: Invalid date components - ${validatedRow.Date} (month:${month}, day:${day}, year:${year})`);
             console.error(`Invalid date components: ${validatedRow.Date} -> month:${month}, day:${day}, year:${year}`);
             continue;
           }
@@ -837,6 +846,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Validate that the date was created correctly
           if (isNaN(chargeDate.getTime())) {
+            skipped++;
+            skippedReasons.push(`Row ${i}: Failed to create valid date - ${validatedRow.Date}`);
             console.error(`Failed to create valid date from: ${validatedRow.Date}`);
             continue;
           }
@@ -930,10 +941,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Log skipped information
+      if (skipped > 0) {
+        console.log(`CSV Import Summary: ${imported} imported, ${skipped} skipped, ${errors} errors`);
+        console.log('Skipped charges details:');
+        skippedReasons.forEach(reason => console.log(`  - ${reason}`));
+      }
+
       res.json({ 
-        message: `Import completed. ${imported} charges imported, ${errors} errors.`,
+        message: `Import completed. ${imported} charges imported, ${skipped} skipped, ${errors} errors.`,
         imported,
+        skipped,
         errors,
+        skippedReasons,
         statementName: statement.periodName,
         statementId: statement.id
       });
