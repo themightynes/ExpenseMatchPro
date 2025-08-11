@@ -1133,6 +1133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { receipts, charges, statement } = downloadData;
+      console.log(`Creating ZIP for statement ${statement.periodName} with ${receipts.length} receipts`);
       
       // Create ZIP archive
       const archive = archiver('zip', { zlib: { level: 9 } });
@@ -1156,31 +1157,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return `${date}_${merchant}_${amount}${suffix}.${extension}`;
       };
 
+      let addedFiles = 0;
+      let skippedFiles = 0;
+
       // Add receipts to ZIP
       for (const receipt of receipts) {
         try {
-          if (!receipt.fileUrl) continue;
+          if (!receipt.fileUrl) {
+            console.log(`Skipping receipt ${receipt.id} - no file URL`);
+            skippedFiles++;
+            continue;
+          }
           
           // Find associated charge to determine if non-AMEX
           const associatedCharge = charges.find(c => c.receiptId === receipt.id);
           
           // Skip personal expenses
-          if (associatedCharge?.isPersonalExpense) continue;
+          if (associatedCharge?.isPersonalExpense) {
+            console.log(`Skipping receipt ${receipt.id} - personal expense`);
+            skippedFiles++;
+            continue;
+          }
           
-          // Get receipt file from object storage using the object storage service
+          console.log(`Adding receipt ${receipt.id} with fileUrl: ${receipt.fileUrl}`);
+          
+          // Get receipt file from object storage
           const objectFile = await objectStorageService.getObjectEntityFile(receipt.fileUrl);
-          const fileBuffer = await objectStorageService.getObjectFileContent(objectFile);
+          
+          // Use the file's download stream method directly
+          const [fileBuffer] = await objectFile.download();
+          
           const filename = createReceiptFilename(receipt, associatedCharge);
+          console.log(`Adding file to ZIP: ${filename}`);
           
           archive.append(fileBuffer, { name: filename });
+          addedFiles++;
         } catch (error) {
           console.error(`Error adding receipt ${receipt.id} to ZIP:`, error);
+          skippedFiles++;
           // Continue with other receipts even if one fails
         }
       }
 
+      console.log(`ZIP creation: ${addedFiles} files added, ${skippedFiles} files skipped`);
+
       // Create summary CSV content
-      const summaryRows = receipts.map(receipt => {
+      const businessReceipts = receipts.filter(receipt => {
+        const associatedCharge = charges.find(c => c.receiptId === receipt.id);
+        return !associatedCharge?.isPersonalExpense;
+      });
+
+      const summaryRows = businessReceipts.map(receipt => {
         const associatedCharge = charges.find(c => c.receiptId === receipt.id);
         return {
           'Receipt_Date': receipt.date || '',
@@ -1189,12 +1216,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'Category': receipt.category || '',
           'Status': receipt.isMatched ? 'Matched' : 'Unmatched',
           'Charge_Type': associatedCharge?.isNonAmex ? 'Non-AMEX' : 'AMEX',
-          'Personal_Expense': associatedCharge?.isPersonalExpense ? 'Yes' : 'No',
+          'Personal_Expense': 'No',
           'Original_Filename': receipt.originalFileName || '',
           'ZIP_Filename': createReceiptFilename(receipt, associatedCharge),
           'Notes': receipt.notes || ''
         };
-      }).filter(row => row.Personal_Expense === 'No'); // Filter out personal expenses
+      });
 
       // Convert to CSV
       if (summaryRows.length > 0) {
@@ -1204,6 +1231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
         const summaryCSV = [csvHeaders, ...csvRows].join('\n');
         archive.append(summaryCSV, { name: 'receipt_summary.csv' });
+        console.log('Added summary CSV to ZIP');
       }
 
       // Add Oracle export CSV
@@ -1227,7 +1255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 receiptUrl,
                 receipt?.notes || charge.userNotes || charge.category || 'Business expense',
                 statement.periodName,
-                charge.cardMember,
+                charge.cardMember || '',
                 charge.isPersonalExpense ? 'Personal' : (charge.isNonAmex ? 'Non-AMEX Business' : 'AMEX Business'),
                 `${charge.address || ''} ${charge.cityState || ''}`.trim(),
                 receipt?.fromAddress || '',
@@ -1238,10 +1266,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ].join('\n');
           
           archive.append(oracleCSV, { name: 'oracle_export.csv' });
+          console.log('Added Oracle export CSV to ZIP');
         }
       } catch (error) {
         console.error("Error adding Oracle CSV to ZIP:", error);
       }
+
+      // Handle archive events
+      archive.on('error', (err) => {
+        console.error('Archive error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to create ZIP archive' });
+        }
+      });
+
+      archive.on('end', () => {
+        console.log('ZIP archive finalized successfully');
+      });
 
       // Finalize the archive
       await archive.finalize();

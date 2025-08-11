@@ -287,11 +287,7 @@ export class ObjectStorageService {
   // Gets the file content of an object entity.
   async getObjectFileContent(objectFile: File): Promise<Buffer> {
     try {
-      const { bucketName, objectName } = parseObjectPath(objectFile.path);
-      const bucket = objectStorageClient.bucket(bucketName);
-      const file = bucket.file(objectName);
-
-      const [fileContent] = await file.download();
+      const [fileContent] = await objectFile.download();
       return fileContent;
     } catch (error) {
       console.error('Error getting object file content:', error);
