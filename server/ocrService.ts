@@ -336,7 +336,7 @@ export class OCRService {
   }
 
   /**
-   * Extract Uber-specific data from receipt text
+   * Extract Uber-specific data from receipt text with OCR error handling
    */
   private extractUberData(text: string, lines: string[]): ExtractedReceiptData {
     const data: ExtractedReceiptData = {
@@ -345,27 +345,63 @@ export class OCRService {
       items: []
     };
 
+    // Clean up common OCR artifacts before processing
+    const cleanedText = this.cleanOCRText(text);
+    
     // Extract total amount - Uber shows "Total" prominently
-    const totalMatch = text.match(/Total[\s]*\$([0-9]+\.?[0-9]*)/i);
-    if (totalMatch) {
-      data.amount = totalMatch[1];
-      data.total = totalMatch[1];
+    // Handle OCR artifacts where $ might be misread as S, 5, etc.
+    const totalPatterns = [
+      /Total[\s]*\$([0-9]+\.?[0-9]*)/i,
+      /Total[\s]*S([0-9]+\.?[0-9]*)/i,  // $ misread as S
+      /Total[\s]*5([0-9]+\.?[0-9]*)/i,  // $ misread as 5
+      /Total[\s]*([0-9]+\.[0-9]{2})/i,  // Just the amount after Total
+    ];
+    
+    for (const pattern of totalPatterns) {
+      const totalMatch = cleanedText.match(pattern);
+      if (totalMatch && totalMatch[1]) {
+        const amount = parseFloat(totalMatch[1]);
+        if (amount > 0 && amount < 1000) { // Reasonable range for Uber rides
+          data.amount = amount.toFixed(2);
+          data.total = amount.toFixed(2);
+          console.log(`Uber amount extracted: $${data.amount}`);
+          break;
+        }
+      }
     }
 
-    // Extract date from header (e.g., "June 9, 2025", "May 13, 2025", or "May 13,2025")
-    const dateMatch = text.match(/([A-Za-z]+\s+\d{1,2},?\s*\d{4})/);
-    if (dateMatch) {
+    // Extract date from header - enhanced for poor OCR quality
+    // First try: Standard date patterns
+    let dateMatch = text.match(/([A-Za-z]+\s+\d{1,2},?\s*\d{4})/);
+    
+    // Second try: Handle OCR artifacts like "Uber 000000" 
+    if (!dateMatch || dateMatch[1].includes('000000')) {
+      // Look for 4-digit years in the text
+      const yearMatch = text.match(/(20\d{2})/);
+      if (yearMatch) {
+        // Try to find month names near the year
+        const monthPattern = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{1,2}[,.]?\s*(20\d{2})/i;
+        const fullDateMatch = text.match(monthPattern);
+        if (fullDateMatch) {
+          dateMatch = [fullDateMatch[0], fullDateMatch[0]];
+        }
+      }
+    }
+    
+    if (dateMatch && !dateMatch[1].includes('000000')) {
       try {
         // Normalize the date string by ensuring space after comma
         const normalizedDate = dateMatch[1].replace(/,(\d)/, ', $1');
         const parsedDate = new Date(normalizedDate);
-        if (!isNaN(parsedDate.getTime())) {
+        if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() > 2020) {
           data.date = parsedDate.toISOString().split('T')[0];
           console.log(`Uber date extracted successfully: ${normalizedDate} -> ${data.date}`);
         }
       } catch (e) {
         console.log('Uber date parsing failed:', dateMatch[1]);
       }
+    } else {
+      console.log('No valid date found in OCR text, possibly due to poor PDF conversion quality');
     }
 
     // Extract trip distance and duration (multiple patterns)
@@ -431,6 +467,20 @@ export class OCRService {
 
     console.log('Extracted Uber data:', data);
     return data;
+  }
+
+  /**
+   * Clean OCR text to remove common artifacts from PDF conversion
+   */
+  private cleanOCRText(text: string): string {
+    return text
+      // Replace common OCR misreads
+      .replace(/[O0]{3,}/g, '') // Remove sequences of 0s/Os
+      .replace(/[C]{2,}/g, 'C') // Reduce multiple Cs
+      .replace(/\b\d{6,}\b/g, '') // Remove long number sequences
+      // Normalize spacing
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   /**
