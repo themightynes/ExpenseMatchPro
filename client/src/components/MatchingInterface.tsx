@@ -460,7 +460,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
       </div>
 
       {/* Mobile Action Buttons - Fixed Position */}
-      <div className="fixed bottom-20 left-0 right-0 bg-white border-t border-gray-200 p-4 z-30">
+      <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-200 p-4 z-30">
         <div className="flex justify-center space-x-4">
           <Button
             variant="outline"
@@ -496,7 +496,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
       </div>
 
         {/* Spacer for fixed buttons */}
-        <div className="h-20"></div>
+        <div className="h-32"></div>
       </div>
     </div>
   );

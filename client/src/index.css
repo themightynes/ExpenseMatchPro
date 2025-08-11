@@ -40,6 +40,17 @@
     -webkit-tap-highlight-color: transparent;
   }
   
+  /* Footer spacing utility for mobile */
+  .mobile-footer-padding {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+  
+  @media (min-width: 768px) {
+    .mobile-footer-padding {
+      padding-bottom: 0;
+    }
+  }
+  
   /* Improve scrolling performance */
   .smooth-scroll {
     -webkit-overflow-scrolling: touch;

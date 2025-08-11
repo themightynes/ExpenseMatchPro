@@ -35,7 +35,7 @@ export default function MobileNavigation() {
     <>
       {/* Bottom Navigation */}
       {/* MOBILE: Added iOS safe area support and improved tap targets */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex items-center justify-around h-16 px-2 min-h-[64px]">
           {navItems.map((item) => (
             <Link key={item.path} href={item.path}>
@@ -102,8 +102,8 @@ export default function MobileNavigation() {
         </div>
       </div>
 
-      {/* Spacer for fixed bottom nav */}
-      <div className="h-16 md:h-0"></div>
+      {/* Spacer for fixed bottom nav - ensures content isn't hidden behind footer */}
+      <div className="h-20 md:h-0 flex-shrink-0"></div>
     </>
   );
 }
