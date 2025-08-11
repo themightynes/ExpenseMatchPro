@@ -51,32 +51,17 @@ export class OCRService {
     try {
       console.log('PDF processing: Attempting text extraction...');
       
-      // First try: Direct PDF text extraction using PDF.js
+      // First try: Direct PDF text extraction using pdf-parse (Node.js compatible)
       try {
-        console.log('Attempting direct PDF text extraction...');
-        const pdfjs = await import('pdfjs-dist');
+        console.log('Attempting direct PDF text extraction using pdf-parse...');
+        const pdfParse = (await import('pdf-parse')).default;
         
-        // Load the PDF
-        const pdf = await pdfjs.getDocument({ data: buffer }).promise;
-        console.log(`PDF loaded successfully. Pages: ${pdf.numPages}`);
+        const data = await pdfParse(buffer);
+        console.log(`PDF parsed successfully. Pages: ${data.numpages}, Text length: ${data.text.length}`);
         
-        let fullText = '';
-        
-        // Extract text from first page (most receipts are single page)
-        const page = await pdf.getPage(1);
-        const textContent = await page.getTextContent();
-        
-        // Combine all text items
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ')
-          .trim();
-          
-        fullText += pageText;
-        
-        if (fullText.length > 50) {
-          console.log(`Direct PDF text extraction successful. Extracted ${fullText.length} characters`);
-          return fullText;
+        if (data.text && data.text.length > 50) {
+          console.log(`Direct PDF text extraction successful. Extracted ${data.text.length} characters`);
+          return data.text;
         }
         
         console.log('Direct PDF text extraction returned minimal text, trying OCR conversion...');
