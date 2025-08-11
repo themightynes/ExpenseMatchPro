@@ -5,13 +5,14 @@ This document provides detailed information about all features available in the 
 ## 📋 Table of Contents
 
 1. [Receipt Management](#receipt-management)
-2. [OCR Processing](#ocr-processing)
-3. [AMEX Integration](#amex-integration)
-4. [Smart Matching](#smart-matching)
-5. [File Organization](#file-organization)
-6. [Email Integration](#email-integration)
-7. [Dashboard & Analytics](#dashboard--analytics)
-8. [Export & Templates](#export--templates)
+2. [Web Link Processing](#web-link-processing)
+3. [OCR Processing](#ocr-processing)
+4. [AMEX Integration](#amex-integration)
+5. [Smart Matching](#smart-matching)
+6. [File Organization](#file-organization)
+7. [Email Integration](#email-integration)
+8. [Dashboard & Analytics](#dashboard--analytics)
+9. [Export & Templates](#export--templates)
 
 ## 📄 Receipt Management
 
@@ -50,6 +51,38 @@ This document provides detailed information about all features available in the 
 - **Desktop**: Modal upload interface with file management dashboard
 - **Mobile**: Inline progress tracking with optimized touch interface
 - **Cross-Platform**: Consistent experience across all devices
+
+## 🔗 Web Link Processing
+
+### URL Import Support
+**Purpose**: Process receipts directly from web links including Gmail attachments and Google Drive files without manual download steps.
+
+**Supported URL Types**:
+- **Gmail Attachments**: `https://mail.google.com/mail/...` and `https://mail-attachment.googleusercontent.com/...`
+- **Google Drive Files**: `https://drive.google.com/...` (publicly accessible)
+- **Generic Web URLs**: Any HTTP/HTTPS URL containing image or PDF content
+- **Authentication**: Uses browser session cookies for private content access
+
+**Processing Features**:
+- **Automatic Download**: Fetches file content from accessible URLs
+- **Smart Detection**: Identifies file types and content from response headers
+- **Secure Storage**: Downloads stored with proper access controls and encryption
+- **OCR Integration**: Full text extraction using Tesseract.js for downloaded content
+- **Error Handling**: Graceful fallback to manual entry when URL access fails
+
+**User Interface**:
+- **Dedicated Input**: Separate URL input field with validation
+- **Real-time Status**: Processing indicators and progress updates
+- **Error Feedback**: Clear messages for different failure types
+- **Mobile Optimized**: Responsive design for all device types
+
+**Processing Workflow**:
+1. **URL Validation**: Checks format and basic accessibility
+2. **Content Download**: Fetches file content using proper headers
+3. **Storage Upload**: Securely stores downloaded content in object storage
+4. **OCR Processing**: Extracts text and data from downloaded files
+5. **Receipt Creation**: Creates receipt record with extracted information
+6. **Auto-Assignment**: Attempts statement assignment and charge matching
 
 ### Manual Data Entry
 **Purpose**: Quick receipt data entry when automatic processing isn't needed.

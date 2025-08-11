@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Web Link Processing (August 11, 2025)**: Complete support for processing web URLs in the upload receipt interface
+  - Gmail attachment URL support with automatic download and OCR processing
+  - Google Drive link integration for publicly accessible files
+  - Smart URL detection and content type identification
+  - Secure content download with object storage integration
+  - Enhanced UI with dedicated web link input section
+  - Real-time processing status indicators and error handling
+
 ### Fixed
 - **Critical Application Crash (August 10, 2025)**: Resolved fatal "Cannot set headers after they are sent to the client" error that prevented server startup
 - **Receipt Processing Reliability**: Fixed duplicate HTTP response issue in receipt upload endpoint, ensuring stable file upload functionality
 - **Server Stability**: Application now runs consistently without crashes during receipt processing operations
 
-### Added
+### Previous Additions
 - Individual statement detail pages with comprehensive CSV data display
 - Modern financial app-inspired dashboard design with color-coded metrics
 - Interactive sortable data tables showing complete charge information
