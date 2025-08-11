@@ -56,7 +56,13 @@ export class OCRService {
         console.log('Attempting direct PDF text extraction using pdf-parse...');
         const pdfParse = (await import('pdf-parse')).default;
         
-        const data = await pdfParse(buffer);
+        // Configure pdf-parse options to avoid test file issues
+        const options = {
+          max: 1, // Only parse first page for performance
+          version: 'v1.10.100'
+        };
+        
+        const data = await pdfParse(buffer, options);
         console.log(`PDF parsed successfully. Pages: ${data.numpages}, Text length: ${data.text.length}`);
         
         if (data.text && data.text.length > 50) {
@@ -108,7 +114,7 @@ export class OCRService {
         }
       }
       
-      return "PDF processing: Unable to extract text from this PDF. This might be a password-protected, scanned, or complex PDF format. For Uber receipts, try uploading as an image (PNG/JPG) instead, or enter the details manually for accurate AMEX matching.";
+      return "PDF processing: Unable to extract text from this PDF. The enhanced Uber detection system works best with image receipts (PNG/JPG). For optimal results with Uber receipts, please upload as an image format, or enter the details manually for accurate AMEX matching.";
       
     } catch (error) {
       console.error('Error processing PDF:', error);
