@@ -839,31 +839,37 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                           <Loader2 className="w-3 h-3 animate-spin" />
                           {isPDF ? 'Extracting PDF Text...' : 'Processing Image...'}
                         </Badge>
-                      ) : receipt.ocrText === 'Manual entry required' || receipt.ocrText === 'OCR failed - manual entry required' || (receipt.ocrText && (receipt.ocrText.includes('PDF receipt detected') || receipt.ocrText.includes('manual entry') || receipt.ocrText.includes('text extraction failed'))) ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => triggerOcrMutation.mutate(receipt.id)}
-                          disabled={triggerOcrMutation.isPending}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
-                        >
-                          {triggerOcrMutation.isPending ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              Starting...
-                            </>
-                          ) : (
-                            <>
-                              <Eye className="w-4 h-4 mr-1" />
-                              {isPDF ? 'Extract PDF Text' : 'Extract Text'}
-                            </>
+                      ) : (
+                        <>
+                          {/* Always show Extract Text button for reprocessing */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => triggerOcrMutation.mutate(receipt.id)}
+                            disabled={triggerOcrMutation.isPending}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                          >
+                            {triggerOcrMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-4 h-4 mr-1" />
+                                {receipt.ocrText && receipt.ocrText.length > 50 ? 'Re-extract Text' : 'Extract Text'}
+                              </>
+                            )}
+                          </Button>
+                          
+                          {/* Status badge */}
+                          {receipt.ocrText && receipt.ocrText !== 'Processing...' && receipt.ocrText.length > 50 && (
+                            <Badge variant="default" className="text-green-700 bg-green-100">
+                              {isPDF ? 'PDF Text Extracted' : 'Text Extracted'}
+                            </Badge>
                           )}
-                        </Button>
-                      ) : receipt.ocrText && receipt.ocrText !== 'Processing...' && receipt.ocrText.length > 50 ? (
-                        <Badge variant="default" className="text-green-700 bg-green-100">
-                          {isPDF ? 'PDF Text Extracted' : 'Text Extracted'}
-                        </Badge>
-                      ) : null}
+                        </>
+                      )}
                     </div>
                   </div>
                 </CardContent>
