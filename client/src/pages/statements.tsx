@@ -161,12 +161,20 @@ export default function StatementsPage() {
       return sum + Math.abs(amount);
     }, 0);
 
-    // Calculate percentage based on charges (since that's our source of truth)
-    const matchPercentage = charges.length > 0 ? (matchedCharges.length / charges.length) * 100 : 0;
+    // Calculate percentage based only on charges that actually need receipts
+    const businessCharges = charges.filter(charge => !charge.isPersonalExpense);
+    const chargesThatNeedReceipts = businessCharges.filter(charge => !charge.noReceiptRequired);
+    const matchedBusinessCharges = matchedCharges.filter(charge => !charge.isPersonalExpense);
+    
+    const matchPercentage = chargesThatNeedReceipts.length > 0 
+      ? (matchedBusinessCharges.length / chargesThatNeedReceipts.length) * 100 
+      : 0;
 
     return {
       totalCharges: charges.length,
+      chargesThatNeedReceipts: chargesThatNeedReceipts.length,
       matchedCharges: matchedCharges.length, // Count of matched charges, not receipts
+      matchedBusinessCharges: matchedBusinessCharges.length,
       unmatchedCharges: charges.length - matchedCharges.length,
       totalAmount,
       matchedAmount,
@@ -364,7 +372,7 @@ export default function StatementsPage() {
                         <div>
                           <div className="flex justify-between text-sm text-gray-600 mb-2">
                             <span>Matching Progress</span>
-                            <span>{stats.matchedCharges}/{stats.totalCharges} charges</span>
+                            <span>{stats.matchedBusinessCharges}/{stats.chargesThatNeedReceipts} charges</span>
                           </div>
                           <Progress value={stats.matchPercentage} className="h-2" />
                         </div>
