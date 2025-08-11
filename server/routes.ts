@@ -1387,6 +1387,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Toggle no receipt required flag for a charge
+  app.put("/api/charges/:id/toggle-no-receipt-required", async (req, res) => {
+    try {
+      const chargeId = req.params.id;
+      const updatedCharge = await storage.toggleChargeNoReceiptRequired(chargeId);
+
+      if (!updatedCharge) {
+        return res.status(404).json({ error: "Charge not found" });
+      }
+
+      res.json({ 
+        charge: updatedCharge, 
+        message: updatedCharge.noReceiptRequired 
+          ? "Charge marked as no receipt required" 
+          : "Charge marked as receipt required" 
+      });
+    } catch (error) {
+      console.error("Error toggling no receipt required:", error);
+      res.status(500).json({ error: "Failed to toggle no receipt required status" });
+    }
+  });
+
   // Update charge (including notes)
   app.put("/api/charges/:id", async (req, res) => {
     try {

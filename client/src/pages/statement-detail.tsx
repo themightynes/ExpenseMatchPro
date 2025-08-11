@@ -134,6 +134,25 @@ export default function StatementDetailPage() {
     },
   });
 
+  const toggleNoReceiptRequiredMutation = useMutation({
+    mutationFn: async (chargeId: string) => {
+      const response = await fetch(`/api/charges/${chargeId}/toggle-no-receipt-required`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to toggle no receipt required');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/charges"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Receipt Requirement Updated",
+        description: data.message,
+      });
+    },
+  });
+
   // Quick match mutation for linking receipts to charges
   const quickMatchMutation = useMutation({
     mutationFn: async ({ receiptId, chargeId }: { receiptId: string; chargeId: string }) => {
@@ -210,6 +229,10 @@ export default function StatementDetailPage() {
   // Handler functions
   const handleTogglePersonalExpense = (chargeId: string) => {
     togglePersonalExpenseMutation.mutate(chargeId);
+  };
+
+  const handleToggleNoReceiptRequired = (chargeId: string) => {
+    toggleNoReceiptRequiredMutation.mutate(chargeId);
   };
 
   const handleQuickMatch = (receiptId: string, chargeId: string) => {
@@ -493,6 +516,11 @@ export default function StatementDetailPage() {
                       <Badge variant={charge.receiptId ? "default" : "secondary"} className="text-xs">
                         {charge.receiptId ? "Matched" : "Unmatched"}
                       </Badge>
+                      {charge.noReceiptRequired && (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          No Receipt Required
+                        </Badge>
+                      )}
                       {charge.receiptId ? (
                         <Link href={`/receipts?selected=${charge.receiptId}`}>
                           <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
@@ -542,6 +570,16 @@ export default function StatementDetailPage() {
                       className="h-6 px-1 sm:px-2 text-xs min-h-[36px] min-w-[36px] sm:min-h-[24px] sm:min-w-[auto]"
                     >
                       {charge.isPersonalExpense ? "Personal" : "Business"}
+                    </Button>
+                    
+                    {/* No Receipt Required Toggle */}
+                    <Button
+                      variant={charge.noReceiptRequired ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleToggleNoReceiptRequired(charge.id)}
+                      className="h-6 px-1 sm:px-2 text-xs min-h-[36px] min-w-[36px] sm:min-h-[24px] sm:min-w-[auto]"
+                    >
+                      {charge.noReceiptRequired ? "No Receipt" : "Receipt Needed"}
                     </Button>
                     
                     {/* Notes Button */}

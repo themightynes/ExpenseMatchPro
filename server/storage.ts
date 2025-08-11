@@ -55,6 +55,8 @@ export interface IStorage {
   getChargesByStatement(statementId: string): Promise<AmexCharge[]>;
   updateAmexCharge(id: string, updates: Partial<AmexCharge>): Promise<AmexCharge | undefined>;
   getUnmatchedCharges(statementId: string): Promise<AmexCharge[]>;
+  toggleChargePersonalExpense(chargeId: string): Promise<AmexCharge | undefined>;
+  toggleChargeNoReceiptRequired(chargeId: string): Promise<AmexCharge | undefined>;
 
   // Expense Template methods
   createExpenseTemplate(template: InsertExpenseTemplate): Promise<ExpenseTemplate>;
@@ -474,7 +476,23 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async toggleChargeNoReceiptRequired(chargeId: string): Promise<AmexCharge | undefined> {
+    try {
+      // First get the current charge
+      const charge = await this.getAmexCharge(chargeId);
+      if (!charge) return undefined;
 
+      // Toggle the no receipt required flag
+      const newNoReceiptStatus = !charge.noReceiptRequired;
+      
+      return await this.updateAmexCharge(chargeId, {
+        noReceiptRequired: newNoReceiptStatus
+      });
+    } catch (error) {
+      console.error("Error in toggleChargeNoReceiptRequired:", error);
+      return undefined;
+    }
+  }
 
   async getUnmatchedCharges(statementId: string): Promise<AmexCharge[]> {
     return await db.select().from(amexCharges)
@@ -582,20 +600,26 @@ export class DatabaseStorage implements IStorage {
     const totalUnmatchedReceiptAmount = unmatchedReceipts.reduce((sum, receipt) => 
       sum + parseFloat(receipt.amount || '0'), 0);
 
-    // Calculate missing receipt amount (work charges without matching receipts)
+    // Calculate missing receipt amount (work charges without matching receipts AND not marked as no receipt required)
     const matchedChargeIds = matchedReceipts
       .map(r => r.matchedChargeId)
       .filter(id => id !== null);
 
     const missingReceiptCharges = workCharges.filter(charge => 
-      !matchedChargeIds.includes(charge.id));
+      !matchedChargeIds.includes(charge.id) && !charge.noReceiptRequired);
 
     const totalMissingReceiptAmount = missingReceiptCharges.reduce((sum, charge) => 
       sum + parseFloat(charge.amount || '0'), 0);
 
-    // Calculate matching percentage (based on work charges only)
+    // Calculate charges that don't need receipts (for completion percentage)
+    const noReceiptRequiredCharges = workCharges.filter(charge => charge.noReceiptRequired);
+    const noReceiptRequiredAmount = noReceiptRequiredCharges.reduce((sum, charge) => 
+      sum + parseFloat(charge.amount || '0'), 0);
+
+    // Calculate matching percentage (matched + no receipt required vs total work charges)
+    const completedAmount = totalMatchedAmount + noReceiptRequiredAmount;
     const matchingPercentage = totalStatementAmount > 0 
-      ? (totalMatchedAmount / totalStatementAmount) * 100 
+      ? (completedAmount / totalStatementAmount) * 100 
       : 0;
 
     return {
