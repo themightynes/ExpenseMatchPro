@@ -396,6 +396,18 @@ export default function StatementDetailPage() {
       return matchesSearch && matchesPersonalFilter;
     })
     .sort((a, b) => {
+      // First priority: Unmatched charges with "No Receipt Required" should appear first
+      const aIsUnmatchedNoReceipt = !a.isMatched && a.noReceiptRequired;
+      const bIsUnmatchedNoReceipt = !b.isMatched && b.noReceiptRequired;
+      
+      if (aIsUnmatchedNoReceipt && !bIsUnmatchedNoReceipt) {
+        return -1; // a comes first
+      }
+      if (!aIsUnmatchedNoReceipt && bIsUnmatchedNoReceipt) {
+        return 1; // b comes first
+      }
+      
+      // If both have same priority, sort by the selected column
       let aValue: any = a[sortColumn as keyof AmexCharge];
       let bValue: any = b[sortColumn as keyof AmexCharge];
       
