@@ -234,7 +234,7 @@ export default function ReceiptsPage() {
                 </div>
                 
                 {/* Show assignment controls only for INBOX NEW receipts */}
-                {folderName === "Inbox_New" && (
+                {folderName === "Inbox_New" && receipt.date && receipt.merchant && receipt.amount && (
                   <div className="mt-4 pt-3 border-t border-gray-100">
                     <div className="flex items-center gap-2">
                       <Select
@@ -261,6 +261,13 @@ export default function ReceiptsPage() {
                             ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+                )}
+                {folderName === "Inbox_New" && (!receipt.date || !receipt.merchant || !receipt.amount) && (
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+                      Please fill out date, merchant, and amount before assigning to a period
                     </div>
                   </div>
                 )}
