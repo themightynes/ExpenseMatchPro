@@ -40,10 +40,12 @@ export default function Dashboard() {
     totalMatchedAmount: number;
     totalUnmatchedReceiptAmount: number;
     totalMissingReceiptAmount: number;
+    noReceiptRequiredAmount: number;
     personalExpensesAmount: number;
     matchedCount: number;
     unmatchedReceiptCount: number;
     missingReceiptCount: number;
+    noReceiptRequiredCount: number;
     totalCharges: number;
     personalExpensesCount: number;
     matchingPercentage: number;
@@ -74,35 +76,26 @@ export default function Dashboard() {
         {/* Quick Balance Overview */}
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-3">Financial Overview</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <FinancialCard
-              title="Business Expenses"
-              amount={(financialStats?.totalStatementAmount || 0) - (financialStats?.personalExpensesAmount || 0)}
-              icon={<DollarSign className="w-4 h-4 text-blue-600" />}
-              variant="default"
-            />
-            <FinancialCard
-              title="Matched"
-              amount={financialStats?.totalMatchedAmount || 0}
-              subtitle={`${financialStats?.matchingPercentage || 0}% complete`}
-              icon={<TrendingUp className="w-4 h-4 text-green-600" />}
-              variant="success"
-            />
-            <FinancialCard
-              title="Missing Receipts"
-              amount={financialStats?.totalMissingReceiptAmount || 0}
-              subtitle={`${financialStats?.missingReceiptCount || 0} charges`}
-              icon={<ReceiptIcon className="w-4 h-4 text-orange-600" />}
-              variant="warning"
-            />
-            <FinancialCard
-              title="Personal Expenses"
-              amount={financialStats?.personalExpensesAmount || 0}
-              subtitle={`${financialStats?.personalExpensesCount || 0} flagged`}
-              icon={<CreditCard className="w-4 h-4 text-gray-600" />}
-              variant="default"
-            />
-          </div>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-center">
+                <p className="text-lg font-semibold text-gray-800">
+                  <span className="text-blue-600">{financialStats?.totalCharges || 0} Total Charges</span>
+                  <span className="text-gray-400 mx-2">|</span>
+                  <span className="text-green-600">{financialStats?.matchedCount || 0} Matched</span>
+                  <span className="text-gray-400 mx-2">|</span>
+                  <span className="text-red-600">{financialStats?.missingReceiptCount || 0} Unmatched</span>
+                  <span className="text-gray-400 mx-2">|</span>
+                  <span className="text-orange-600">{financialStats?.noReceiptRequiredCount || 0} No Receipt Needed</span>
+                  <span className="text-gray-400 mx-2">|</span>
+                  <span className="text-purple-600">{financialStats?.personalExpensesCount || 0} Personal</span>
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Business Expenses: ${((financialStats?.totalStatementAmount || 0) - (financialStats?.personalExpensesAmount || 0)).toLocaleString()} | {Math.round(financialStats?.matchingPercentage || 0)}% Complete
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
 

@@ -334,8 +334,9 @@ export default function StatementDetailPage() {
 
   const stats = {
     totalCharges: charges.length,
-    matchedCharges: charges.filter(c => c.isMatched).length,
-    unmatchedCharges: charges.filter(c => !c.isMatched).length,
+    matchedCharges: charges.filter(c => c.isMatched && !c.isPersonalExpense).length,
+    unmatchedCharges: charges.filter(c => !c.isMatched && !c.noReceiptRequired && !c.isPersonalExpense).length,
+    noReceiptRequired: charges.filter(c => c.noReceiptRequired && !c.isPersonalExpense).length,
     personalExpenses: charges.filter(c => c.isPersonalExpense).length,
     totalAmount: charges.reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0),
     matchedAmount: charges.filter(c => c.isMatched).reduce((sum, c) => sum + parseFloat(c.amount || '0'), 0),
@@ -378,59 +379,26 @@ export default function StatementDetailPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Charges</p>
-                <p className="text-2xl font-bold">{stats.totalCharges}</p>
-                <p className="text-sm text-gray-500">{formatCurrency(stats.totalAmount.toString())}</p>
-              </div>
-              <Receipt className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-green-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Matched</p>
-                <p className="text-2xl font-bold text-green-600">{stats.matchedCharges}</p>
-                <p className="text-sm text-gray-500">{formatCurrency(stats.matchedAmount.toString())}</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-red-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Unmatched</p>
-                <p className="text-2xl font-bold text-red-600">{stats.unmatchedCharges}</p>
-                <p className="text-sm text-gray-500">Need receipts</p>
-              </div>
-              <XCircle className="h-8 w-8 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Personal</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.personalExpenses}</p>
-                <p className="text-sm text-gray-500">Non-business</p>
-              </div>
-              <User className="h-8 w-8 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="p-4">
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800">
+              <span className="text-blue-600">{stats.totalCharges} Total Charges</span>
+              <span className="text-gray-400 mx-2">|</span>
+              <span className="text-green-600">{stats.matchedCharges} Matched</span>
+              <span className="text-gray-400 mx-2">|</span>
+              <span className="text-red-600">{stats.unmatchedCharges} Unmatched</span>
+              <span className="text-gray-400 mx-2">|</span>
+              <span className="text-orange-600">{stats.noReceiptRequired} No Receipt Needed</span>
+              <span className="text-gray-400 mx-2">|</span>
+              <span className="text-purple-600">{stats.personalExpenses} Personal</span>
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              Total Amount: {formatCurrency(stats.totalAmount.toString())}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filters and Controls */}
       <Card>

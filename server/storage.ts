@@ -561,10 +561,12 @@ export class DatabaseStorage implements IStorage {
     totalMatchedAmount: number;
     totalUnmatchedReceiptAmount: number;
     totalMissingReceiptAmount: number;
+    noReceiptRequiredAmount: number;
     personalExpensesAmount: number;
     matchedCount: number;
     unmatchedReceiptCount: number;
     missingReceiptCount: number;
+    noReceiptRequiredCount: number;
     totalCharges: number;
     personalExpensesCount: number;
     matchingPercentage: number;
@@ -627,10 +629,12 @@ export class DatabaseStorage implements IStorage {
       totalMatchedAmount,
       totalUnmatchedReceiptAmount,
       totalMissingReceiptAmount,
+      noReceiptRequiredAmount,
       personalExpensesAmount,
       matchedCount: matchedReceipts.length,
       unmatchedReceiptCount: unmatchedReceipts.length,
       missingReceiptCount: missingReceiptCharges.length,
+      noReceiptRequiredCount: noReceiptRequiredCharges.length,
       totalCharges: workCharges.length,
       personalExpensesCount: personalCharges.length,
       matchingPercentage,
