@@ -1,0 +1,93 @@
+You are an AI code assistant working inside the Replit environment for the Work Expense App project. Your goal in this phase is to audit the current MVP against the Product Requirements Document (PRD) and pending‑features.md, verify core flows, and lay the foundation for improvements such as manual review handling and merchant matching. Focus on understanding and documenting what is implemented vs. what is missing, creating initial tests, and addressing obvious gaps. Skip detailed work on “skipped receipts” for now—manual review and matching accuracy are more important.
+
+🔍 Tasks
+Cross‑reference features with documentation
+
+Read docs/PRD.md, docs/FEATURES.md, and docs/pending-features.md.
+
+For each major functional area (receipt upload, AMEX import, matching algorithm, Oracle export, user account management), identify which requirements are fully implemented, partially implemented, or not implemented.
+
+Summarize your findings in a Markdown file analysis/feature-gap-report.md with tables or lists indicating:
+
+Implemented features: where code matches the PRD.
+
+Incomplete features: implemented partially or missing edge cases.
+
+Missing features: present in PRD/pending-features but absent in the code.
+
+Verify and document core flows
+
+Trace through the code for:
+
+Receipt ingestion (e.g., FileUploadZone.tsx, MobileFileUploader.tsx, server/routes.ts file‑upload endpoints).
+
+AMEX CSV import (e.g., /api/csv/upload, parsing logic, duplicate detection).
+
+Smart matching (both the /api/matching/candidates endpoint and fileOrganizer.suggestMatching implementation).
+
+Oracle export flow (/api/export/oracle and related functions).
+
+Identify any hard‑coded values, unhandled exceptions, or incomplete data flows (e.g., missing fields being set).
+
+Implement manual review handling
+
+Extend the Receipt schema (in @shared/schema.ts and Drizzle migration) with a needsManualReview boolean field.
+
+Add an API endpoint POST /api/receipts/:id/mark-for-review that sets this flag to true and returns the updated receipt.
+
+Update the matching components (MatchingInterface.tsx and DragMatchingInterface.tsx) to call this endpoint when the user selects “Mark for Review” instead of just advancing the index.
+
+Ensure receipts flagged for manual review do not get auto‑matched but still appear in any dedicated manual review interface (to be built in a later phase).
+
+Enhance merchant matching
+
+Replace the simple substring checks with a fuzzy‑matching approach. You can install a lightweight library (e.g., string-similarity or fuse.js) to compute a similarity score between the receipt merchant and charge description.
+
+Modify fileOrganizer.suggestMatching and /api/matching/candidates to use this similarity score and adjust confidence weighting (e.g., high similarity ≥ 0.8 gets +25 confidence points, medium similarity gets +15).
+
+Add comments describing how the new logic addresses abbreviations and common misspellings (e.g., “AMZN Mktp US” vs “Amazon Marketplace”).
+
+Add initial test scaffolding
+
+Introduce Jest (if not already present) for both front‑end and back‑end. Set up a basic jest.config.js and necessary mocks.
+
+Write test skeletons for:
+
+/api/matching/candidates returning sorted pairs by confidence.
+
+fileOrganizer.suggestMatching producing appropriate suggestions for various receipt/charge scenarios.
+
+/api/receipts/:id/mark-for-review correctly setting the needsManualReview flag.
+
+Place tests in a tests/ directory, with separate files for server and client.
+
+Check error handling and security
+
+Review each API route in server/routes.ts to ensure it validates input parameters and returns meaningful error messages when required fields are missing.
+
+Ensure authentication middleware (requireAuth) is applied where necessary (file uploads, matching, exports).
+
+For any missing error checks discovered during code review, make inline TODO comments and note them in the gap report.
+
+Produce an implementation summary
+
+After completing the tasks above, write a summary in analysis/phase1-summary.md detailing:
+
+Key gaps identified and addressed.
+
+Remaining high‑priority gaps for the next phase (e.g., cross‑statement candidate filtering, split/combined receipt handling, skip handling).
+
+Suggestions for how to structure Phase 2 work.
+
+✅ Completion Criteria
+A clear analysis/feature-gap-report.md exists summarizing implemented vs. missing features with citations to files and PRD sections.
+
+A new needsManualReview field is integrated into the schema, with a working API endpoint and updated UI calls.
+
+Merchant matching logic uses fuzzy matching rather than simple substring checks.
+
+Jest is configured with test skeletons for matching logic and the new manual review endpoint.
+
+You have documented outstanding gaps and recommended next steps in analysis/phase1-summary.md.
+
+Follow this plan methodically and commit changes incrementally with meaningful commit messages. After Phase 1 is complete, we will plan Phase 2 to tackle cross‑statement pairing options, accessibility improvements, and other advanced features.
