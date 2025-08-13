@@ -463,9 +463,58 @@ export default function StatementsPage() {
                               </Button>
                             </div>
                           )}
-                          <p className="text-sm text-gray-600">
-                            {new Date(statement.startDate).toLocaleDateString()} - {new Date(statement.endDate).toLocaleDateString()}
-                          </p>
+                          {editingDates === statement.id ? (
+                            <div className="space-y-2">
+                              <div className="flex gap-2">
+                                <Input
+                                  type="date"
+                                  value={editedStartDate}
+                                  onChange={(e) => setEditedStartDate(e.target.value)}
+                                  className="text-sm"
+                                />
+                                <Input
+                                  type="date"
+                                  value={editedEndDate}
+                                  onChange={(e) => setEditedEndDate(e.target.value)}
+                                  className="text-sm"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSaveDateEdit(statement.id)}
+                                  disabled={updateStatementMutation.isPending}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleCancelDateEdit}
+                                  disabled={updateStatementMutation.isPending}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              {dateValidation && !dateValidation.isValid && (
+                                <p className="text-xs text-red-600">{dateValidation.message}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 group">
+                              <p className="text-sm text-gray-600">
+                                {new Date(statement.startDate).toLocaleDateString()} - {new Date(statement.endDate).toLocaleDateString()}
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6"
+                                onClick={() => handleStartDateEdit(statement)}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                         <Badge variant={stats.matchPercentage === 100 ? "default" : "secondary"}>
                           {stats.matchPercentage.toFixed(0)}% Matched
