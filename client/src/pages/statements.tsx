@@ -440,39 +440,44 @@ export default function StatementsPage() {
                             </div>
                           )}
 
-                          {/* Missing Receipts - Business charges that need receipts */}
-                          {stats.missingBusinessReceiptCount > 0 && (
-                            <div className="p-3 bg-red-50 rounded-lg border border-red-100">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                <span className="text-xs font-medium text-red-700">Missing Receipts</span>
-                              </div>
-                              <p className="text-lg font-bold text-red-900">${stats.missingBusinessReceiptAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <p className="text-xs text-red-600">{stats.missingBusinessReceiptCount} business charges need receipts</p>
-                            </div>
-                          )}
+                          {/* Three-column grid for the main action items */}
+                          {(stats.missingBusinessReceiptCount > 0 || stats.personalExpenseCount > 0 || stats.noReceiptRequiredCount > 0) && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {/* Missing Receipts - Business charges that need receipts */}
+                              {stats.missingBusinessReceiptCount > 0 && (
+                                <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                    <span className="text-xs font-medium text-red-700">Missing Receipts</span>
+                                  </div>
+                                  <p className="text-lg font-bold text-red-900">${stats.missingBusinessReceiptAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                  <p className="text-xs text-red-600">{stats.missingBusinessReceiptCount} business charges need receipts</p>
+                                </div>
+                              )}
 
-                          {/* Personal Expenses */}
-                          {stats.personalExpenseCount > 0 && (
-                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                                <span className="text-xs font-medium text-gray-700">Personal Expenses</span>
-                              </div>
-                              <p className="text-lg font-bold text-gray-900">${stats.personalExpenseAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <p className="text-xs text-gray-600">{stats.personalExpenseCount} personal charges</p>
-                            </div>
-                          )}
+                              {/* Personal Expenses */}
+                              {stats.personalExpenseCount > 0 && (
+                                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                                    <span className="text-xs font-medium text-gray-700">Personal Expenses</span>
+                                  </div>
+                                  <p className="text-lg font-bold text-gray-900">${stats.personalExpenseAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                  <p className="text-xs text-gray-600">{stats.personalExpenseCount} personal charges</p>
+                                </div>
+                              )}
 
-                          {/* No Receipt Required */}
-                          {stats.noReceiptRequiredCount > 0 && (
-                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <span className="text-xs font-medium text-blue-700">No Receipt Required</span>
-                              </div>
-                              <p className="text-lg font-bold text-blue-900">${stats.noReceiptRequiredAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                              <p className="text-xs text-blue-600">{stats.noReceiptRequiredCount} business charges</p>
+                              {/* No Receipt Required */}
+                              {stats.noReceiptRequiredCount > 0 && (
+                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                    <span className="text-xs font-medium text-blue-700">No Receipt Required</span>
+                                  </div>
+                                  <p className="text-lg font-bold text-blue-900">${stats.noReceiptRequiredAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                  <p className="text-xs text-blue-600">{stats.noReceiptRequiredCount} business charges</p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
