@@ -210,14 +210,14 @@ export default function Dashboard() {
                     <div className="text-center py-4 text-gray-500">No statements found</div>
                   ) : (
                     statements.map((statement: any) => (
-                      <div
-                        key={statement.id}
-                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                          statement.isActive
-                            ? "bg-primary/5 border border-primary/20"
-                            : "bg-gray-50 hover:bg-gray-100"
-                        }`}
-                      >
+                      <Link key={statement.id} href={`/statements/${statement.id}`}>
+                        <div
+                          className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                            statement.isActive
+                              ? "bg-primary/5 border border-primary/20"
+                              : "bg-gray-50 hover:bg-gray-100"
+                          }`}
+                        >
                         <div>
                           <p className={`font-medium ${statement.isActive ? "text-primary" : "text-gray-900"}`}>
                             {statement.periodName}
@@ -240,6 +240,7 @@ export default function Dashboard() {
                           </p>
                         </div>
                       </div>
+                      </Link>
                     ))
                   )}
                 </div>
