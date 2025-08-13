@@ -28,7 +28,7 @@ Preferred communication style: Simple, everyday language.
 - **File Storage**: Google Cloud Storage buckets
 
 ## Core Data Models
-- Users, Receipts, AMEX Statements, AMEX Charges (with isNonAmex flag for virtual charges), Expense Templates, Transportation Data.
+- Users, Receipts (with needsManualReview flag), AMEX Statements, AMEX Charges (with isNonAmex flag for virtual charges), Expense Templates, Transportation Data.
 
 ## Processing Pipeline
 - **Manual Entry System**: Instant receipt upload with manual data entry.
@@ -43,6 +43,8 @@ Preferred communication style: Simple, everyday language.
 - **Intelligent Transportation Processing**: Automatic Uber receipt detection with specialized field extraction (locations, trip details, driver info).
 - **Web Link Processing**: Import receipt data from web URLs (Gmail, Google Drive).
 - **Enhanced PDF Processing (August 2025)**: Modern PDF processing using pdf-to-png-converter and enhanced pdf2pic with progressive fallback system. Includes OCR artifact cleaning and comprehensive error handling for reliable text extraction.
+- **Manual Review System (August 2025)**: Complete workflow for flagging complex matching scenarios with needsManualReview database field and dedicated API endpoints.
+- **Fuzzy Matching Enhancement (August 2025)**: Advanced merchant name matching using string-similarity library with support for common abbreviations (AMZN → Amazon, etc.).
 
 ## Authentication & Authorization
 - **Google OAuth 2.0**: Single-user authentication.
@@ -66,6 +68,10 @@ Preferred communication style: Simple, everyday language.
 - **Google Cloud Storage**: Object storage for receipts.
 - **Replit Infrastructure**: Development and production environment.
 
+## Testing Infrastructure (August 2025)
+- **Jest**: Unit testing framework with TypeScript support
+- **Test Coverage**: Matching algorithms, API endpoints, manual review system
+
 ## Production Database Configuration (August 2025)
 - Development database successfully deployed as production database
 - DATABASE_URL environment variable required in Secrets for production deployment
@@ -73,6 +79,7 @@ Preferred communication style: Simple, everyday language.
 
 ## Third-Party Libraries
 - **Uppy**: File upload handling.
+- **string-similarity**: Fuzzy matching for merchant names (August 2025).
 - **Tesseract.js**: Client-side OCR.
 - **Radix UI**: Accessible component primitives.
 - **TanStack Query**: Server state synchronization.

@@ -30,6 +30,7 @@ export const receipts = pgTable("receipts", {
   isMatched: boolean("is_matched").default(false),
   matchedChargeId: varchar("matched_charge_id").references(() => amexCharges.id),
   organizedPath: text("organized_path"), // Path after file reorganization
+  needsManualReview: boolean("needs_manual_review").default(false), // Flag for manual review requirement
   // Transportation-specific fields
   fromAddress: text("from_address"), // Pickup location for rideshare/taxi
   toAddress: text("to_address"), // Dropoff location for rideshare/taxi

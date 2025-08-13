@@ -214,20 +214,58 @@ export class FileOrganizer {
           }
         }
 
-        // Merchant matching (fuzzy match)
+        // Merchant matching (fuzzy match using string similarity)
         if (receipt.merchant && charge.description) {
+          const stringSimilarity = require('string-similarity');
           const merchantLower = receipt.merchant.toLowerCase().trim();
           const descriptionLower = charge.description.toLowerCase().trim();
           
-          if (descriptionLower.includes(merchantLower)) {
+          // Calculate similarity score
+          const similarity = stringSimilarity.compareTwoStrings(merchantLower, descriptionLower);
+          
+          if (similarity >= 0.8) {
+            confidence += 25;
+            reasons.push("High similarity merchant match");
+          } else if (similarity >= 0.6) {
+            confidence += 20;
+            reasons.push("Good similarity merchant match");
+          } else if (similarity >= 0.4) {
+            confidence += 15;
+            reasons.push("Moderate similarity merchant match");
+          } else if (descriptionLower.includes(merchantLower) || merchantLower.includes(descriptionLower)) {
             confidence += 25;
             reasons.push("Merchant name match");
           } else {
-            // Check for partial matches
+            // Check for partial matches and common abbreviations
             const merchantWords = merchantLower.split(/\s+/);
             const matchingWords = merchantWords.filter(word => 
               word.length > 3 && descriptionLower.includes(word)
             );
+            
+            // Handle common merchant abbreviations (e.g., "AMZN" for "Amazon")
+            const commonAbbreviations: Record<string, string[]> = {
+              'amazon': ['amzn', 'amzn mktp'],
+              'walmart': ['wal-mart', 'wmt'],
+              'starbucks': ['sbux', 'sbk'],
+              'mcdonalds': ['mcd', 'mcdonald'],
+              'target': ['tgt'],
+              'costco': ['costco wholesale'],
+              'home depot': ['homedepot', 'home depot'],
+              'best buy': ['bestbuy', 'bby']
+            };
+            
+            for (const [fullName, abbrevs] of Object.entries(commonAbbreviations)) {
+              if (merchantLower.includes(fullName) && abbrevs.some(abbrev => descriptionLower.includes(abbrev))) {
+                confidence += 20;
+                reasons.push(`Merchant abbreviation match (${fullName})`);
+                break;
+              }
+              if (abbrevs.some(abbrev => merchantLower.includes(abbrev)) && descriptionLower.includes(fullName)) {
+                confidence += 20;
+                reasons.push(`Merchant abbreviation match (${fullName})`);
+                break;
+              }
+            }
             
             if (matchingWords.length > 0) {
               confidence += 15;

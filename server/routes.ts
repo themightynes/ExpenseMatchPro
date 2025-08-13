@@ -286,6 +286,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Mark receipt for manual review endpoint
+  app.post("/api/receipts/:id/mark-for-review", requireAuth, async (req, res) => {
+    try {
+      const receiptId = req.params.id;
+      
+      const updatedReceipt = await storage.updateReceipt(receiptId, { 
+        needsManualReview: true 
+      });
+      
+      if (!updatedReceipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+      
+      console.log(`Receipt ${receiptId} marked for manual review`);
+      res.json(updatedReceipt);
+    } catch (error) {
+      console.error("Error marking receipt for manual review:", error);
+      res.status(500).json({ error: "Failed to mark receipt for manual review" });
+    }
+  });
+
   app.patch("/api/receipts/:id", async (req, res) => {
     try {
       const receiptId = req.params.id;

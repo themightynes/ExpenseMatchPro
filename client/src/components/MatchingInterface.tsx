@@ -88,13 +88,34 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     setCurrentIndex(prev => prev + 1);
   };
 
+  const markForReviewMutation = useMutation({
+    mutationFn: async (receiptId: string) => {
+      const response = await apiRequest("POST", `/api/receipts/${receiptId}/mark-for-review`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/matching/candidates", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setCurrentIndex(prev => prev + 1);
+      toast({
+        title: "Marked for review",
+        description: "This receipt has been marked for manual review.",
+      });
+    },
+    onError: (error) => {
+      console.error("Error marking for review:", error);
+      toast({
+        title: "Error",
+        description: "Failed to mark receipt for review. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const markForReview = () => {
-    // TODO: Implement manual review marking
-    setCurrentIndex(prev => prev + 1);
-    toast({
-      title: "Marked for review",
-      description: "This receipt has been marked for manual review.",
-    });
+    if (filteredReceipts[currentIndex]) {
+      markForReviewMutation.mutate(filteredReceipts[currentIndex].id);
+    }
   };
 
   // Early returns after all hooks have been called
