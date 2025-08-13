@@ -163,12 +163,33 @@ export default function StatementsPage() {
 
     // Calculate percentage based only on charges that actually need receipts
     const businessCharges = charges.filter(charge => !charge.isPersonalExpense);
+    const personalCharges = charges.filter(charge => charge.isPersonalExpense);
+    const noReceiptRequiredCharges = businessCharges.filter(charge => charge.noReceiptRequired);
     const chargesThatNeedReceipts = businessCharges.filter(charge => !charge.noReceiptRequired);
     const matchedBusinessCharges = matchedCharges.filter(charge => !charge.isPersonalExpense);
+    
+    // Business charges that need receipts but don't have them
+    const missingBusinessReceiptCharges = chargesThatNeedReceipts.filter(charge => !matchedCharges.includes(charge));
     
     const matchPercentage = chargesThatNeedReceipts.length > 0 
       ? (matchedBusinessCharges.length / chargesThatNeedReceipts.length) * 100 
       : 0;
+
+    // Calculate amounts for each category
+    const personalExpenseAmount = personalCharges.reduce((sum, charge) => {
+      const amount = parseFloat(charge.amount || '0');
+      return sum + Math.abs(amount);
+    }, 0);
+
+    const noReceiptRequiredAmount = noReceiptRequiredCharges.reduce((sum, charge) => {
+      const amount = parseFloat(charge.amount || '0');
+      return sum + Math.abs(amount);
+    }, 0);
+
+    const missingBusinessReceiptAmount = missingBusinessReceiptCharges.reduce((sum, charge) => {
+      const amount = parseFloat(charge.amount || '0');
+      return sum + Math.abs(amount);
+    }, 0);
 
     return {
       totalCharges: charges.length,
@@ -181,6 +202,13 @@ export default function StatementsPage() {
       unmatchedReceiptValue,
       unmatchedReceiptCount: unmatchedReceipts.length,
       missingReceiptCount: charges.length - matchedCharges.length,
+      // New categories
+      personalExpenseCount: personalCharges.length,
+      personalExpenseAmount,
+      noReceiptRequiredCount: noReceiptRequiredCharges.length,
+      noReceiptRequiredAmount,
+      missingBusinessReceiptCount: missingBusinessReceiptCharges.length,
+      missingBusinessReceiptAmount,
       matchPercentage
     };
   };
@@ -398,32 +426,56 @@ export default function StatementsPage() {
                           </div>
                         </div>
 
-                        {/* Action Items - Only show if there are issues */}
-                        {(stats.unmatchedReceiptCount > 0 || stats.missingReceiptCount > 0) && (
-                          <div className="grid grid-cols-2 gap-3">
-                            {stats.unmatchedReceiptCount > 0 && (
-                              <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                                  <span className="text-xs font-medium text-orange-700">Unmatched Receipts</span>
-                                </div>
-                                <p className="text-lg font-bold text-orange-900">${stats.unmatchedReceiptValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                <p className="text-xs text-orange-600">{stats.unmatchedReceiptCount} need matching</p>
+                        {/* Action Items - Show all categories */}
+                        <div className="space-y-3">
+                          {/* Unmatched Receipts */}
+                          {stats.unmatchedReceiptCount > 0 && (
+                            <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                <span className="text-xs font-medium text-orange-700">Unmatched Receipts</span>
                               </div>
-                            )}
+                              <p className="text-lg font-bold text-orange-900">${stats.unmatchedReceiptValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="text-xs text-orange-600">{stats.unmatchedReceiptCount} need matching</p>
+                            </div>
+                          )}
 
-                            {stats.missingReceiptCount > 0 && (
-                              <div className="p-3 bg-red-50 rounded-lg border border-red-100">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                  <span className="text-xs font-medium text-red-700">Missing Receipts</span>
-                                </div>
-                                <p className="text-lg font-bold text-red-900">${(stats.totalAmount - stats.matchedAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                <p className="text-xs text-red-600">{stats.missingReceiptCount} charges without receipts</p>
+                          {/* Missing Receipts - Business charges that need receipts */}
+                          {stats.missingBusinessReceiptCount > 0 && (
+                            <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                <span className="text-xs font-medium text-red-700">Missing Receipts</span>
                               </div>
-                            )}
-                          </div>
-                        )}
+                              <p className="text-lg font-bold text-red-900">${stats.missingBusinessReceiptAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="text-xs text-red-600">{stats.missingBusinessReceiptCount} business charges need receipts</p>
+                            </div>
+                          )}
+
+                          {/* Personal Expenses */}
+                          {stats.personalExpenseCount > 0 && (
+                            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                                <span className="text-xs font-medium text-gray-700">Personal Expenses</span>
+                              </div>
+                              <p className="text-lg font-bold text-gray-900">${stats.personalExpenseAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="text-xs text-gray-600">{stats.personalExpenseCount} personal charges</p>
+                            </div>
+                          )}
+
+                          {/* No Receipt Required */}
+                          {stats.noReceiptRequiredCount > 0 && (
+                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <span className="text-xs font-medium text-blue-700">No Receipt Required</span>
+                              </div>
+                              <p className="text-lg font-bold text-blue-900">${stats.noReceiptRequiredAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="text-xs text-blue-600">{stats.noReceiptRequiredCount} business charges</p>
+                            </div>
+                          )}
+                        </div>
 
                         {/* Action Buttons */}
                         <div className="flex gap-2">
