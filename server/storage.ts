@@ -81,6 +81,15 @@ export interface IStorage {
     statement: AmexStatement;
     charges: (AmexCharge & { receipt?: Receipt })[];
   } | null>;
+
+  // Date validation
+  validateStatementDates(startDate: Date, endDate: Date, existingStatements: AmexStatement[]): Promise<{
+    isValid: boolean;
+    message?: string;
+    overlaps?: AmexStatement[];
+    gaps?: { start: Date; end: Date; description: string }[];
+    suggestions?: { startDate: Date; endDate: Date };
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -382,7 +391,7 @@ export class DatabaseStorage implements IStorage {
       const result = await db
         .delete(amexStatements)
         .where(eq(amexStatements.id, id));
-      
+
       return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
     } catch (error) {
       console.error("Error in deleteAmexStatement:", error);
@@ -395,7 +404,7 @@ export class DatabaseStorage implements IStorage {
       const result = await db
         .delete(amexCharges)
         .where(eq(amexCharges.statementId, statementId));
-        
+
       return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
     } catch (error) {
       console.error("Error in deleteChargesByStatement:", error);
@@ -408,7 +417,7 @@ export class DatabaseStorage implements IStorage {
       const result = await db
         .delete(amexStatements)
         .where(eq(amexStatements.id, statementId));
-      
+
       return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
     } catch (error) {
       console.error("Error in deleteStatement:", error);
@@ -421,7 +430,7 @@ export class DatabaseStorage implements IStorage {
       const result = await db
         .delete(amexCharges)
         .where(eq(amexCharges.statementId, statementId));
-        
+
       return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
     } catch (error) {
       console.error("Error in deleteAmexChargesByStatement:", error);
@@ -473,7 +482,7 @@ export class DatabaseStorage implements IStorage {
 
       // Toggle the personal expense flag
       const newPersonalStatus = !charge.isPersonalExpense;
-      
+
       return await this.updateAmexCharge(chargeId, {
         isPersonalExpense: newPersonalStatus
       });
@@ -491,7 +500,7 @@ export class DatabaseStorage implements IStorage {
 
       // Toggle the no receipt required flag
       const newNoReceiptStatus = !charge.noReceiptRequired;
-      
+
       return await this.updateAmexCharge(chargeId, {
         noReceiptRequired: newNoReceiptStatus
       });
@@ -520,7 +529,7 @@ export class DatabaseStorage implements IStorage {
       // Delete the charge
       const result = await db.delete(amexCharges)
         .where(eq(amexCharges.id, chargeId));
-      
+
       return Array.isArray(result) ? result.length > 0 : (result as any).rowCount > 0;
     } catch (error) {
       console.error("Error in deleteAmexCharge:", error);
@@ -713,10 +722,10 @@ export class DatabaseStorage implements IStorage {
 
       // Get all charges for this statement
       const statementCharges = await this.getChargesByStatement(statementId);
-      
+
       // Get all receipts for this statement
       const statementReceipts = await this.getReceiptsByStatement(statementId);
-      
+
       // Create a map of charge ID to receipt for quick lookup
       const receiptMap = new Map<string, Receipt>();
       statementReceipts.forEach(receipt => {
@@ -868,6 +877,73 @@ export class DatabaseStorage implements IStorage {
       console.error("Error getting receipt download data:", error);
       return null;
     }
+  }
+  
+  // Date validation
+  async validateStatementDates(startDate: Date, endDate: Date, existingStatements: AmexStatement[]): Promise<{
+    isValid: boolean;
+    message?: string;
+    overlaps?: AmexStatement[];
+    gaps?: { start: Date; end: Date; description: string }[];
+    suggestions?: { startDate: Date; endDate: Date };
+  }> {
+    // Ensure start date is before end date
+    if (startDate > endDate) {
+      return {
+        isValid: false,
+        message: "Start date cannot be after end date.",
+        suggestions: { startDate: endDate, endDate: startDate }
+      };
+    }
+
+    const overlaps: AmexStatement[] = [];
+    const gaps: { start: Date; end: Date; description: string }[] = [];
+
+    // Check for overlaps and gaps with existing statements
+    for (const statement of existingStatements) {
+      // Check for overlap: new statement starts before existing ends AND new statement ends after existing starts
+      if (startDate < statement.endDate && endDate > statement.startDate) {
+        overlaps.push(statement);
+      }
+
+      // Check for gap before current statement: new statement ends exactly one day before existing starts
+      if (endDate.getTime() + 24 * 60 * 60 * 1000 === statement.startDate.getTime()) {
+        gaps.push({
+          start: endDate,
+          end: statement.startDate,
+          description: `Gap before statement "${statement.periodName}"`
+        });
+      }
+
+      // Check for gap after current statement: new statement starts exactly one day after existing ends
+      if (startDate.getTime() - 24 * 60 * 60 * 1000 === statement.endDate.getTime()) {
+        gaps.push({
+          start: statement.endDate,
+          end: startDate,
+          description: `Gap after statement "${statement.periodName}"`
+        });
+      }
+    }
+
+    // Simple overlap check: if any overlap is found, it's invalid
+    if (overlaps.length > 0) {
+      return {
+        isValid: false,
+        message: "The new statement period overlaps with existing statements.",
+        overlaps: overlaps,
+        gaps: gaps, // Include any gaps found even if overlaps exist
+        suggestions: { startDate: startDate, endDate: endDate } // Provide current dates as suggestions
+      };
+    }
+
+    // If no overlaps, return validity and any detected gaps
+    return {
+      isValid: true,
+      message: "Statement dates are valid.",
+      gaps: gaps.length > 0 ? gaps : undefined,
+      overlaps: undefined,
+      suggestions: { startDate: startDate, endDate: endDate } // Provide current dates as suggestions
+    };
   }
 }
 

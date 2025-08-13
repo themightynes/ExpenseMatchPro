@@ -19,6 +19,10 @@ export default function StatementsPage() {
 
   const [editingStatement, setEditingStatement] = useState<string | null>(null);
   const [editedName, setEditedName] = useState("");
+  const [editingDates, setEditingDates] = useState<string | null>(null);
+  const [editedStartDate, setEditedStartDate] = useState("");
+  const [editedEndDate, setEditedEndDate] = useState("");
+  const [dateValidation, setDateValidation] = useState<any>(null);
 
   const { data: statements = [], isLoading: statementsLoading } = useQuery<AmexStatement[]>({
     queryKey: ["/api/statements"],
@@ -66,25 +70,41 @@ export default function StatementsPage() {
   });
 
   const updateStatementMutation = useMutation({
-    mutationFn: async ({ id, periodName }: { id: string; periodName: string }) => {
-      const response = await apiRequest("PUT", `/api/statements/${id}`, {
-        periodName: periodName.trim(),
-      });
+    mutationFn: async ({ 
+      id, 
+      periodName, 
+      startDate, 
+      endDate 
+    }: { 
+      id: string; 
+      periodName?: string; 
+      startDate?: string; 
+      endDate?: string; 
+    }) => {
+      const updateData: any = {};
+      if (periodName !== undefined) updateData.periodName = periodName.trim();
+      if (startDate !== undefined) updateData.startDate = startDate;
+      if (endDate !== undefined) updateData.endDate = endDate;
+
+      const response = await apiRequest("PUT", `/api/statements/${id}`, updateData);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/statements"] });
       setEditingStatement(null);
+      setEditingDates(null);
+      setDateValidation(null);
       toast({
         title: "Statement Updated",
-        description: "Statement title has been updated successfully.",
+        description: "Statement has been updated successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error updating statement:", error);
+      const message = error?.message || "Failed to update statement. Please try again.";
       toast({
         title: "Error",
-        description: "Failed to update statement title. Please try again.",
+        description: message,
         variant: "destructive",
       });
     },
@@ -106,6 +126,64 @@ export default function StatementsPage() {
   const handleCancelEdit = () => {
     setEditingStatement(null);
     setEditedName("");
+  };
+
+  const validateDates = async (startDate: string, endDate: string, statementId: string) => {
+    try {
+      const response = await fetch('/api/statements/validate-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate, endDate, excludeStatementId: statementId })
+      });
+      
+      const validation = await response.json();
+      setDateValidation(validation);
+      return validation;
+    } catch (error) {
+      console.error("Error validating dates:", error);
+      return { isValid: false, message: "Failed to validate dates" };
+    }
+  };
+
+  const handleStartDateEdit = (statement: AmexStatement) => {
+    setEditingDates(statement.id);
+    setEditedStartDate(new Date(statement.startDate).toISOString().split('T')[0]);
+    setEditedEndDate(new Date(statement.endDate).toISOString().split('T')[0]);
+    setDateValidation(null);
+  };
+
+  const handleSaveDateEdit = async (statementId: string) => {
+    if (!editedStartDate || !editedEndDate) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide both start and end dates.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validation = await validateDates(editedStartDate, editedEndDate, statementId);
+    if (!validation.isValid && !validation.message?.includes("Warning")) {
+      toast({
+        title: "Invalid Dates",
+        description: validation.message || "Please fix the date conflicts before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateStatementMutation.mutate({ 
+      id: statementId, 
+      startDate: editedStartDate,
+      endDate: editedEndDate
+    });
+  };
+
+  const handleCancelDateEdit = () => {
+    setEditingDates(null);
+    setEditedStartDate("");
+    setEditedEndDate("");
+    setDateValidation(null);
   };
 
   const getStatementStats = (statementId: string) => {

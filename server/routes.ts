@@ -867,6 +867,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Validate date range before creating statement
+      if (!minDate || !maxDate) {
+        console.error("No valid dates found in CSV");
+        return res.status(400).json({ error: "No valid dates found in CSV file" });
+      }
+
+      if (minDate > maxDate) {
+        console.error("Invalid date range:", { minDate, maxDate });
+        return res.status(400).json({ error: "Invalid date range detected in CSV" });
+      }
+
+      // Check for gaps and overlaps with existing statements
+      const dateValidation = await storage.validateStatementDates(minDate, maxDate, existingStatements);
+      if (!dateValidation.isValid) {
+        return res.status(400).json({
+          error: "Statement period validation failed",
+          validation: dateValidation,
+          suggestedDates: {
+            startDate: minDate.toISOString().split('T')[0],
+            endDate: maxDate.toISOString().split('T')[0]
+          },
+          message: dateValidation.message
+        });
+      }
+
       // First pass: analyze CSV data to determine date range
       const charges = [];
       let minDate: Date | null = null; // Will be set to first valid date
@@ -1862,11 +1887,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Validate statement dates for gaps/overlaps
+  app.post("/api/statements/validate-dates", requireAuth, async (req, res) => {
+    try {
+      const { startDate, endDate, excludeStatementId } = req.body;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "startDate and endDate are required" });
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (start >= end) {
+        return res.status(400).json({ 
+          error: "Start date must be before end date",
+          isValid: false 
+        });
+      }
+
+      const existingStatements = await storage.getAllAmexStatements();
+      const otherStatements = excludeStatementId 
+        ? existingStatements.filter(s => s.id !== excludeStatementId)
+        : existingStatements;
+
+      const validation = await storage.validateStatementDates(start, end, otherStatements);
+      res.json(validation);
+    } catch (error) {
+      console.error("Error validating statement dates:", error);
+      res.status(500).json({ error: "Failed to validate dates" });
+    }
+  });
+
   // Update statement
   app.put("/api/statements/:id", async (req, res) => {
     try {
       const statementId = req.params.id;
       const updateData = req.body;
+
+      // If updating dates, validate them first
+      if (updateData.startDate || updateData.endDate) {
+        const statement = await storage.getAmexStatement(statementId);
+        if (!statement) {
+          return res.status(404).json({ error: "Statement not found" });
+        }
+
+        const startDate = updateData.startDate ? new Date(updateData.startDate) : statement.startDate;
+        const endDate = updateData.endDate ? new Date(updateData.endDate) : statement.endDate;
+
+        if (startDate >= endDate) {
+          return res.status(400).json({ 
+            error: "Start date must be before end date" 
+          });
+        }
+
+        const existingStatements = await storage.getAllAmexStatements();
+        const otherStatements = existingStatements.filter(s => s.id !== statementId);
+        
+        const validation = await storage.validateStatementDates(startDate, endDate, otherStatements);
+        if (!validation.isValid) {
+          return res.status(400).json({
+            error: "Statement date validation failed",
+            validation,
+            message: validation.message
+          });
+        }
+
+        // Convert dates to proper format
+        if (updateData.startDate) updateData.startDate = startDate;
+        if (updateData.endDate) updateData.endDate = endDate;
+      }
 
       // Update the statement
       const updatedStatement = await storage.updateAmexStatement(statementId, updateData);
