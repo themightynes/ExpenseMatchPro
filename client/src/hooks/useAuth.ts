@@ -16,8 +16,11 @@ interface AuthStatus {
 export function useAuth() {
   const { data, isLoading, error, refetch } = useQuery<AuthStatus>({
     queryKey: ['/api/auth/status'],
-    retry: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1, // Retry once on failure
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: true, // Always check on mount
   });
 
   const logout = () => {

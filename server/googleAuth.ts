@@ -47,9 +47,9 @@ export function setupGoogleAuth(app: Express) {
     saveUninitialized: false,
     rolling: true, // Reset expiration on each request
     cookie: {
-      secure: false, // Temporarily disable for debugging
+      secure: false, // Keep false for Replit dev environment
       httpOnly: true,
-      maxAge: 6 * 60 * 60 * 1000, // 6 hours (longer for upload workflows)
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days for better persistence
       sameSite: 'lax'
     },
     name: 'expense.session' // Custom session name
@@ -189,6 +189,13 @@ export function setupGoogleAuth(app: Express) {
   });
 
   app.get('/api/auth/status', (req, res) => {
+    console.log('Auth status check:', {
+      sessionID: req.sessionID,
+      isAuthenticated: req.isAuthenticated(),
+      hasUser: !!req.user,
+      sessionCookie: req.headers.cookie?.includes('expense.session')
+    });
+    
     if (req.isAuthenticated() && req.user) {
       res.json({ 
         authenticated: true, 
