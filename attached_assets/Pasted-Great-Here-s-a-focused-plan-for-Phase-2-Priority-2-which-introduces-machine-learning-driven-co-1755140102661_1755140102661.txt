@@ -1,0 +1,55 @@
+Great! Here’s a focused plan for **Phase 2 Priority 2**, which introduces machine‑learning‑driven confidence tuning, merchant normalization and pattern learning.  These enhancements will refine matching accuracy and reduce manual intervention over time.
+
+---
+
+### 🧭 Replit Agent Prompt – Phase 2 Priority 2 (Adaptive Confidence, Normalization & Learning)
+
+**Goal:** Incorporate intelligent, data‑driven techniques into the matching process to automatically adjust confidence thresholds, normalize merchant names and learn from user behavior.  Continue building upon the robust infrastructure established in previous phases.
+
+#### 🧠 Tasks
+
+1. **Adaptive confidence calibration**
+
+   * **Data collection:** Aggregate matching history (receipt–charge pairs), including `confidence` scores assigned during matching and whether users accepted, skipped or marked the suggestion for review.  Structure this data into a training set: features (`amountDiff`, `dateDiff`, `merchantSimilarity`, `userAction`) and label (`matchApproved: yes/no`).
+   * **Model selection:** Implement a simple model (e.g., logistic regression via `sklearn` in a separate Python service or `tensorflow.js` if staying in Node) to predict acceptance probability based on these features.
+   * **API integration:** Expose a service (e.g., `/api/confidence/predict`) that, given a receipt and charge, returns a recommended confidence threshold.  Use this predicted threshold in `fileOrganizer.attemptAutoMatch()` instead of static values.
+   * **Retraining:** Schedule periodic retraining (e.g., weekly) based on new match data.  Save model parameters to storage and load them on server startup.
+
+2. **Merchant normalization**
+
+   * **Alias table:** Create a configuration file or database table (`merchant_aliases`) mapping common abbreviations and misspellings (e.g., `{"AMZN","Amazon"}`, `{"SBX","Starbucks"}`, `{"UBER*EATS","Uber Eats"}`).
+   * **Normalization function:** Implement a helper that lowercases, trims and replaces known aliases in both receipt merchant names and charge descriptions prior to similarity calculations.
+   * **Updating suggestMatching logic:** Use the normalized strings for fuzzy matching.  If the normalized name is identical, add a significant confidence bonus.
+   * **Admin UI:** Provide a simple interface or JSON file for administrators to update aliases without redeploying.  Document how to add new mappings.
+
+3. **Pattern learning & feedback loops**
+
+   * **Skip/reject analytics:** Expand the skip analytics from Phase 2 Priority 1 by logging reasons when users reject or skip matches.  Include notes like “wrong merchant,” “date off by several days,” etc.
+   * **Feedback incorporation:** Feed skip/reject analytics into the adaptive model’s features (e.g., treat frequent skip reasons as negative weights).
+   * **Highlight problematic patterns:** Build a report (`/api/analytics/patterns`) that identifies recurring mismatches (e.g., certain merchants that frequently get corrected) and surface them in the admin dashboard for further action (like updating aliases or business rules).
+
+4. **Advanced testing & validation**
+
+   * **ML validation:** Write tests ensuring that the model API returns different thresholds for varying data and that outputs are within expected ranges.
+   * **Normalization tests:** Create unit tests for the alias replacement logic and fuzzy matching improvements to guarantee they handle edge cases (e.g., hyphens, special characters).
+   * **Regression tests:** Add integration tests to verify that the adaptive confidence threshold doesn’t reduce match accuracy—use historical acceptance data as a benchmark.
+
+5. **Documentation updates**
+
+   * Update `api-documentation.md` with endpoints for confidence prediction and pattern analytics.
+   * Document the merchant alias system, including how to modify or extend the alias list.
+   * Explain how the adaptive model works and provide instructions on retraining and maintenance.
+
+---
+
+#### 🎯 Completion Criteria
+
+* An adaptive confidence model that outputs dynamic thresholds based on historical acceptance/skipping patterns, fully integrated into the auto‑matching logic.
+* A robust merchant normalization system that standardizes common merchant name variations before similarity scoring.
+* Analytics capturing user behaviour (skip reasons, rejection notes) with endpoints for summarizing recurring mismatch patterns.
+* Comprehensive tests validating model output ranges, alias handling and regression behaviour.
+* All new endpoints and systems documented for maintainability.
+
+---
+
+Feel free to begin implementing these items, and let me know if you need deeper guidance on model training or merchant alias management. This phase will set the stage for sophisticated, self‑improving matching capabilities in later iterations.

@@ -45,6 +45,7 @@ Preferred communication style: Simple, everyday language.
 - **Enhanced PDF Processing (August 2025)**: Modern PDF processing using pdf-to-png-converter and enhanced pdf2pic with progressive fallback system. Includes OCR artifact cleaning and comprehensive error handling for reliable text extraction.
 - **Manual Review System (August 2025)**: Complete workflow for flagging complex matching scenarios with needsManualReview database field and dedicated API endpoints.
 - **Fuzzy Matching Enhancement (August 2025)**: Advanced merchant name matching using string-similarity library with support for common abbreviations (AMZN → Amazon, etc.).
+- **ML-Driven Matching System (August 2025 - Phase 2 Priority 2)**: Machine learning components for intelligent matching with confidence prediction, adaptive thresholds, merchant normalization service, and pattern analysis. Includes logistic regression model for confidence scoring, comprehensive merchant alias system, and pattern detection for common mismatches.
 
 ## Authentication & Authorization
 - **Google OAuth 2.0**: Single-user authentication.
@@ -60,6 +61,7 @@ Preferred communication style: Simple, everyday language.
 - Mobile-responsive design with optimized layouts (e.g., vertical card layout for expenses).
 - Visual status indicators for charges and expenses.
 - Enhanced PDF viewer using PDF.js with pan, zoom, and multi-page support.
+- ML Insights Dashboard (August 2025): Dedicated page for viewing pattern analysis, problematic merchants, and AI-generated recommendations.
 
 # External Dependencies
 
@@ -80,6 +82,7 @@ Preferred communication style: Simple, everyday language.
 ## Third-Party Libraries
 - **Uppy**: File upload handling.
 - **string-similarity**: Fuzzy matching for merchant names (August 2025).
+- **ML Services**: Custom confidence model, merchant normalizer, and pattern analyzer for intelligent matching (August 2025).
 - **Tesseract.js**: Client-side OCR.
 - **Radix UI**: Accessible component primitives.
 - **TanStack Query**: Server state synchronization.

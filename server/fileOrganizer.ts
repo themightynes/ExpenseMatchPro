@@ -1,5 +1,7 @@
 import { ObjectStorageService } from "./objectStorage";
 import { storage } from "./storage";
+import { confidenceModel } from "./services/confidenceModel";
+import { merchantNormalizer } from "./services/merchantNormalizer";
 import type { Receipt } from "@shared/schema";
 
 export class FileOrganizer {
@@ -91,8 +93,10 @@ export class FileOrganizer {
 
       const bestMatch = suggestions.suggestions[0];
       
-      // Progressive matching: lower threshold for early matching, but require higher confidence for fewer fields
-      const requiredConfidence = this.calculateRequiredConfidence(receipt);
+      // Use adaptive ML threshold instead of static calculation
+      const adaptiveThreshold = await confidenceModel.getAdaptiveThreshold();
+      const requiredConfidence = Math.min(adaptiveThreshold, this.calculateRequiredConfidence(receipt));
+      
       if (bestMatch.confidence >= requiredConfidence) {
         console.log(`Auto-matching receipt ${receiptId} to charge ${bestMatch.charge.id} with ${bestMatch.confidence}% confidence (required: ${requiredConfidence}%): ${bestMatch.reason}`);
         
@@ -168,6 +172,29 @@ export class FileOrganizer {
       const suggestions = [];
 
       for (const charge of charges) {
+        // Use ML model for confidence prediction
+        const amountDiff = receipt.amount && charge.amount
+          ? Math.abs(parseFloat(receipt.amount) - parseFloat(charge.amount))
+          : 999;
+        const dateDiff = receipt.date && charge.date
+          ? Math.abs((new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24))
+          : 999;
+        const merchantSimilarity = merchantNormalizer.calculateSimilarity(
+          receipt.merchant || '',
+          charge.description || ''
+        );
+        const categoryMatch = receipt.category === charge.category;
+
+        const features = {
+          amountDiff,
+          dateDiff,
+          merchantSimilarity,
+          categoryMatch
+        };
+
+        // Get ML-predicted confidence
+        const mlConfidence = confidenceModel.predictConfidence(features);
+        
         let confidence = 0;
         const reasons = [];
 
@@ -214,14 +241,10 @@ export class FileOrganizer {
           }
         }
 
-        // Merchant matching (fuzzy match using string similarity)
+        // Merchant matching using normalized names and ML similarity
         if (receipt.merchant && charge.description) {
-          const stringSimilarity = require('string-similarity');
-          const merchantLower = receipt.merchant.toLowerCase().trim();
-          const descriptionLower = charge.description.toLowerCase().trim();
-          
-          // Calculate similarity score
-          const similarity = stringSimilarity.compareTwoStrings(merchantLower, descriptionLower);
+          // Use merchant normalizer for better matching
+          const similarity = merchantSimilarity; // Already calculated above
           
           if (similarity >= 0.8) {
             confidence += 25;
@@ -232,53 +255,27 @@ export class FileOrganizer {
           } else if (similarity >= 0.4) {
             confidence += 15;
             reasons.push("Moderate similarity merchant match");
-          } else if (descriptionLower.includes(merchantLower) || merchantLower.includes(descriptionLower)) {
-            confidence += 25;
-            reasons.push("Merchant name match");
           } else {
-            // Check for partial matches and common abbreviations
-            const merchantWords = merchantLower.split(/\s+/);
-            const matchingWords = merchantWords.filter(word => 
-              word.length > 3 && descriptionLower.includes(word)
-            );
+            // Additional checks beyond normalizer
+            const merchantLower = receipt.merchant.toLowerCase().trim();
+            const descriptionLower = charge.description.toLowerCase().trim();
             
-            // Handle common merchant abbreviations (e.g., "AMZN" for "Amazon")
-            const commonAbbreviations: Record<string, string[]> = {
-              'amazon': ['amzn', 'amzn mktp'],
-              'walmart': ['wal-mart', 'wmt'],
-              'starbucks': ['sbux', 'sbk'],
-              'mcdonalds': ['mcd', 'mcdonald'],
-              'target': ['tgt'],
-              'costco': ['costco wholesale'],
-              'home depot': ['homedepot', 'home depot'],
-              'best buy': ['bestbuy', 'bby']
-            };
-            
-            for (const [fullName, abbrevs] of Object.entries(commonAbbreviations)) {
-              if (merchantLower.includes(fullName) && abbrevs.some(abbrev => descriptionLower.includes(abbrev))) {
-                confidence += 20;
-                reasons.push(`Merchant abbreviation match (${fullName})`);
-                break;
-              }
-              if (abbrevs.some(abbrev => merchantLower.includes(abbrev)) && descriptionLower.includes(fullName)) {
-                confidence += 20;
-                reasons.push(`Merchant abbreviation match (${fullName})`);
-                break;
-              }
+            if (descriptionLower.includes(merchantLower) || merchantLower.includes(descriptionLower)) {
+              confidence += 25;
+              reasons.push("Merchant name match");
             }
-            
-            if (matchingWords.length > 0) {
-              confidence += 15;
-              reasons.push(`Partial merchant match (${matchingWords.join(', ')})`);
-            }
+
           }
         }
 
-        if (confidence > 25) { // Include moderate-confidence matches for progressive matching
+        // Combine rule-based and ML confidence (weighted average)
+        const combinedConfidence = Math.round((confidence * 0.4) + (mlConfidence * 0.6));
+        
+        if (combinedConfidence > 25) { // Include moderate-confidence matches for progressive matching
           suggestions.push({
             charge,
-            confidence,
-            reason: reasons.join(", ")
+            confidence: combinedConfidence,
+            reason: reasons.join(", ") + ` (ML: ${mlConfidence}%)`
           });
         }
       }

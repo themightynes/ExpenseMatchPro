@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { DollarSign, Receipt as ReceiptIcon, CreditCard, TrendingUp, Upload, PlusCircle } from "lucide-react";
+import { DollarSign, Receipt as ReceiptIcon, CreditCard, TrendingUp, Upload, PlusCircle, Brain } from "lucide-react";
 import type { Receipt, AmexStatement } from "@shared/schema";
 
 export default function Dashboard() {
@@ -197,6 +197,27 @@ export default function Dashboard() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* ML Insights Quick Access */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="h-5 w-5" />
+                  ML Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-4">
+                  View machine learning insights and pattern analysis from your matching history.
+                </p>
+                <Link href="/ml-insights">
+                  <Button className="w-full" variant="outline">
+                    <Brain className="mr-2 h-4 w-4" />
+                    View ML Insights
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
             {/* AMEX Statement Periods */}
             <Card>
               <CardHeader>

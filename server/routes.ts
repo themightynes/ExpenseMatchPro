@@ -34,6 +34,9 @@ async function createStatementFolder(statementId: string | null) {
 }
 import { fileOrganizer } from "./fileOrganizer";
 import { fixReceiptsWithBadMerchants } from "./fixReceiptData";
+import { confidenceModel } from "./services/confidenceModel";
+import { merchantNormalizer } from "./services/merchantNormalizer";
+import { patternAnalyzer } from "./services/patternAnalyzer";
 import multer from "multer";
 
 // Configure multer for file uploads
@@ -1940,6 +1943,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ML Confidence Prediction API
+  app.post("/api/confidence/predict", requireAuth, async (req, res) => {
+    try {
+      const { receipt, charge } = req.body;
+      
+      if (!receipt || !charge) {
+        return res.status(400).json({ error: "Receipt and charge data required" });
+      }
+      
+      // Calculate features
+      const amountDiff = Math.abs(parseFloat(receipt.amount || '0') - parseFloat(charge.amount || '0'));
+      const dateDiff = receipt.date && charge.date 
+        ? Math.abs((new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24))
+        : 999;
+      const merchantSimilarity = merchantNormalizer.calculateSimilarity(
+        receipt.merchant || '',
+        charge.description || ''
+      );
+      const categoryMatch = receipt.category === charge.category;
+      
+      const features = {
+        amountDiff,
+        dateDiff,
+        merchantSimilarity,
+        categoryMatch
+      };
+      
+      const confidence = confidenceModel.predictConfidence(features);
+      const adaptiveThreshold = await confidenceModel.getAdaptiveThreshold();
+      
+      res.json({
+        confidence,
+        threshold: adaptiveThreshold,
+        shouldMatch: confidence >= adaptiveThreshold,
+        features
+      });
+    } catch (error) {
+      console.error("Error predicting confidence:", error);
+      res.status(500).json({ error: "Failed to predict confidence" });
+    }
+  });
+
+  // Train ML model endpoint
+  app.post("/api/confidence/train", requireAuth, async (req, res) => {
+    try {
+      await confidenceModel.train();
+      res.json({ message: "Model training completed successfully" });
+    } catch (error) {
+      console.error("Error training model:", error);
+      res.status(500).json({ error: "Failed to train model" });
+    }
+  });
+
+  // Merchant normalization API
+  app.post("/api/merchants/normalize", requireAuth, async (req, res) => {
+    try {
+      const { merchantName } = req.body;
+      
+      if (!merchantName) {
+        return res.status(400).json({ error: "Merchant name required" });
+      }
+      
+      const normalized = merchantNormalizer.normalize(merchantName);
+      
+      res.json({
+        original: merchantName,
+        normalized
+      });
+    } catch (error) {
+      console.error("Error normalizing merchant:", error);
+      res.status(500).json({ error: "Failed to normalize merchant" });
+    }
+  });
+
+  // Get merchant aliases
+  app.get("/api/merchants/aliases", requireAuth, async (req, res) => {
+    try {
+      const aliases = merchantNormalizer.getAliases();
+      res.json({ aliases, total: aliases.length });
+    } catch (error) {
+      console.error("Error getting aliases:", error);
+      res.status(500).json({ error: "Failed to get aliases" });
+    }
+  });
+
+  // Update merchant aliases
+  app.post("/api/merchants/aliases", requireAuth, async (req, res) => {
+    try {
+      const { pattern, normalized, isRegex } = req.body;
+      
+      if (!pattern || !normalized) {
+        return res.status(400).json({ error: "Pattern and normalized name required" });
+      }
+      
+      merchantNormalizer.addAlias(pattern, normalized, isRegex);
+      await merchantNormalizer.saveAliases();
+      
+      res.json({ 
+        message: "Alias added successfully",
+        alias: { pattern, normalized, isRegex }
+      });
+    } catch (error) {
+      console.error("Error adding alias:", error);
+      res.status(500).json({ error: "Failed to add alias" });
+    }
+  });
+
+  // Pattern analysis API
+  app.get("/api/analytics/patterns", requireAuth, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 30;
+      const patterns = await patternAnalyzer.analyzePatterns(days);
+      const problematicMerchants = await patternAnalyzer.getProblematicMerchants();
+      const recommendations = await patternAnalyzer.generateRecommendations();
+      
+      res.json({
+        patterns,
+        problematicMerchants,
+        recommendations,
+        analyzedPeriod: `${days} days`
+      });
+    } catch (error) {
+      console.error("Error analyzing patterns:", error);
+      res.status(500).json({ error: "Failed to analyze patterns" });
+    }
+  });
+
   // Enhanced unified search endpoint
   app.get("/api/search/unified", requireAuth, async (req, res) => {
     try {
@@ -2004,15 +2134,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const dateDiff = receipt.date && charge.date ? 
               Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
 
-            // Merchant similarity (simple contains check for now)
-            const merchantMatch = receipt.merchant && charge.description ?
-              (charge.description.toLowerCase().includes(receipt.merchant.toLowerCase()) ||
-               receipt.merchant.toLowerCase().includes(charge.description.toLowerCase())) : false;
+            // Use merchant normalizer for better similarity
+            const merchantSimilarity = receipt.merchant && charge.description
+              ? merchantNormalizer.calculateSimilarity(receipt.merchant, charge.description)
+              : 0;
+            const merchantMatch = merchantSimilarity >= 0.6;
 
-            // Calculate confidence score (lower is better)
-            let confidence = amountDiff * 10; // Amount difference weighted heavily
-            confidence += dateDiff * 2; // Date difference weighted moderately
-            confidence -= merchantMatch ? 50 : 0; // Merchant match is a big bonus
+            // Use ML confidence model for scoring
+            const features = {
+              amountDiff,
+              dateDiff,
+              merchantSimilarity,
+              categoryMatch: receipt.category === charge.category
+            };
+            
+            const mlConfidence = confidenceModel.predictConfidence(features);
+            
+            // Use ML confidence (higher is better, 0-100 scale)
+            let confidence = 100 - mlConfidence; // Invert for sorting (lower is better)
 
             return {
               receipt,
@@ -2020,7 +2159,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               confidence,
               amountDiff,
               dateDiff,
-              merchantMatch
+              merchantMatch,
+              merchantSimilarity,
+              mlConfidence
             };
           })
           .sort((a, b) => a.confidence - b.confidence); // Sort by best match first
@@ -2046,6 +2187,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           amountDiff: sortedPairs[0].amountDiff,
           dateDiff: Math.round(sortedPairs[0].dateDiff),
           merchantMatch: sortedPairs[0].merchantMatch,
+          merchantSimilarity: sortedPairs[0].merchantSimilarity,
+          mlConfidence: sortedPairs[0].mlConfidence,
           confidence: Math.round(sortedPairs[0].confidence)
         } : null
       });

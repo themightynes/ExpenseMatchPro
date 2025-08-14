@@ -12,6 +12,7 @@ import StatementsPage from "@/pages/statements";
 import StatementDetailPage from "@/pages/statement-detail";
 import ReceiptsPage from "@/pages/receipts";
 import EmailImport from "@/pages/EmailImport";
+import MLInsightsPage from "@/pages/ml-insights";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
             <Route path="/statements/:id" component={StatementDetailPage} />
             <Route path="/receipts" component={ReceiptsPage} />
             <Route path="/email-import" component={EmailImport} />
+            <Route path="/ml-insights" component={MLInsightsPage} />
             <Route component={NotFound} />
           </Switch>
         </div>
