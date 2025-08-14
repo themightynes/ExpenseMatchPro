@@ -16,10 +16,12 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  // Don't send body for GET/HEAD requests
+  const isGetOrHead = method === "GET" || method === "HEAD";
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    headers: data && !isGetOrHead ? { "Content-Type": "application/json" } : {},
+    body: data && !isGetOrHead ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
 

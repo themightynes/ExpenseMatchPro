@@ -39,7 +39,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
   const { data: candidates, isLoading } = useQuery({
     queryKey: ["/api/matching/candidates", statementId, matchingScope],
     queryFn: async () => {
-      const response = await apiRequest("GET", `/api/matching/candidates/${statementId}?scope=${matchingScope}`, {});
+      const response = await apiRequest("GET", `/api/matching/candidates/${statementId}?scope=${matchingScope}`);
       return response.json();
     },
   });
