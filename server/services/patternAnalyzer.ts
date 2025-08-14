@@ -72,8 +72,8 @@ export class PatternAnalyzer {
       })
         .from(skipAnalytics)
         .where(and(
-          gte(skipAnalytics.createdAt, startDate),
-          sql`${skipAnalytics.merchantSimilarity}::float < 0.5`
+          gte(skipAnalytics.skippedAt, startDate),
+          sql`CAST(${skipAnalytics.merchantSimilarity} AS FLOAT) < 0.5`
         ))
         .limit(100);
       
@@ -128,8 +128,8 @@ export class PatternAnalyzer {
       })
         .from(skipAnalytics)
         .where(and(
-          gte(skipAnalytics.createdAt, startDate),
-          sql`${skipAnalytics.dateDiff} > 7`
+          gte(skipAnalytics.skippedAt, startDate),
+          sql`CAST(${skipAnalytics.dateDiff} AS INTEGER) > 7`
         ))
         .groupBy(skipAnalytics.dateDiff);
       
@@ -170,8 +170,8 @@ export class PatternAnalyzer {
       })
         .from(skipAnalytics)
         .where(and(
-          gte(skipAnalytics.createdAt, startDate),
-          sql`cast(${skipAnalytics.amountDiff} as float) > 5`
+          gte(skipAnalytics.skippedAt, startDate),
+          sql`CAST(${skipAnalytics.amountDiff} AS FLOAT) > 5`
         ))
         .groupBy(skipAnalytics.amountDiff)
         .orderBy(desc(sql`count(*)`))
@@ -217,7 +217,7 @@ export class PatternAnalyzer {
         chargeId: skipAnalytics.chargeId
       })
         .from(skipAnalytics)
-        .where(gte(skipAnalytics.createdAt, startDate))
+        .where(gte(skipAnalytics.skippedAt, startDate))
         .limit(100);
       
       const categoryConfusion: Record<string, Record<string, number>> = {};
@@ -286,7 +286,7 @@ export class PatternAnalyzer {
         dateDiff: skipAnalytics.dateDiff
       })
         .from(skipAnalytics)
-        .where(gte(skipAnalytics.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)))
+        .where(gte(skipAnalytics.skippedAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)))
         .limit(200);
       
       const merchantPairs: Record<string, {
@@ -312,8 +312,8 @@ export class PatternAnalyzer {
             merchantPairs[key] = { count: 0, totalAmountDiff: 0, totalDateDiff: 0 };
           }
           merchantPairs[key].count++;
-          merchantPairs[key].totalAmountDiff += parseFloat(skip.amountDiff || '0');
-          merchantPairs[key].totalDateDiff += skip.dateDiff || 0;
+          merchantPairs[key].totalAmountDiff += parseFloat(String(skip.amountDiff || 0));
+          merchantPairs[key].totalDateDiff += Number(skip.dateDiff || 0);
         }
       }
       
