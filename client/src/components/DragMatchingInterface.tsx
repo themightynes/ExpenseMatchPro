@@ -36,6 +36,7 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
   const [draggedReceipt, setDraggedReceipt] = useState<Receipt | null>(null);
   const [hoveredCharge, setHoveredCharge] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [matchingScope, setMatchingScope] = useState<'global' | 'statement'>('global');
   const [filters, setFilters] = useState<FilterState>({
     receipts: {
       minAmount: "",
@@ -55,7 +56,11 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
   const { toast } = useToast();
 
   const { data: candidates, isLoading } = useQuery({
-    queryKey: ["/api/matching/candidates", statementId],
+    queryKey: ["/api/matching/candidates", statementId, matchingScope],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/matching/candidates/${statementId}?scope=${matchingScope}`);
+      return response.json();
+    },
   });
 
   const matchMutation = useMutation({
@@ -64,7 +69,7 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/matching/candidates", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/matching/candidates", statementId, matchingScope] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       toast({
         title: "Match successful",
@@ -269,6 +274,37 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
             </div>
           </CardHeader>
           <CardContent>
+            {/* Cross-Statement Matching Scope */}
+            <div className="mb-6 pb-4 border-b border-gray-100">
+              <Label className="text-sm font-medium mb-2 block">Matching Scope</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={matchingScope === 'global' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMatchingScope('global')}
+                  className="flex-1"
+                >
+                  <i className="fas fa-globe w-3 h-3 mr-1" />
+                  All Statements
+                </Button>
+                <Button
+                  variant={matchingScope === 'statement' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMatchingScope('statement')}
+                  className="flex-1"
+                >
+                  <i className="fas fa-file-invoice w-3 h-3 mr-1" />
+                  Current Statement
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {matchingScope === 'global' 
+                  ? 'Search charges across all statement periods' 
+                  : 'Only search charges in the current statement'
+                }
+              </p>
+            </div>
+            
             <div className="grid grid-cols-2 gap-8">
               {/* Receipt Filters */}
               <div>

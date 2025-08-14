@@ -241,11 +241,13 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
     );
   }
 
-  // Use intelligent pairs if available, otherwise fall back to first charge
-  const totalItems = Math.max(pairs.length, filteredReceipts.length);
-  const currentPair = pairs[currentIndex];
-  const currentReceipt = currentPair?.receipt || filteredReceipts[currentIndex];
-  const currentCharge = currentPair?.charge || allCharges[0]; // Use suggested charge or first available
+  // Use filtered receipts for the current display
+  const totalItems = filteredReceipts.length;
+  const currentReceipt = filteredReceipts[currentIndex];
+  
+  // Find the best matching charge for the current receipt from pairs or use first unmatched charge
+  const currentPair = pairs.find((p: any) => p.receipt?.id === currentReceipt?.id);
+  const currentCharge = currentPair?.charge || allCharges[0];
 
   if (currentIndex >= totalItems) {
     return (
@@ -254,9 +256,25 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
           <i className="fas fa-flag-checkered text-4xl text-primary mb-4"></i>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Matching Complete!</h2>
           <p className="text-gray-600 mb-4">
-            You've reviewed all available receipts for this statement period.
+            You've reviewed all {totalItems} available receipt{totalItems !== 1 ? 's' : ''} {filters.merchant || filters.minAmount || filters.maxAmount || filters.startDate || filters.endDate ? 'matching your filters' : ''}.
           </p>
-          <Button onClick={onBack}>Back to Statement Selection</Button>
+          <div className="flex gap-2 justify-center">
+            {(filters.merchant || filters.minAmount || filters.maxAmount || filters.startDate || filters.endDate) && (
+              <Button onClick={() => {
+                setFilters({
+                  minAmount: "",
+                  maxAmount: "",
+                  startDate: "",
+                  endDate: "",
+                  merchant: "",
+                });
+                setCurrentIndex(0);
+              }} variant="outline">
+                Clear Filters
+              </Button>
+            )}
+            <Button onClick={onBack}>Back to Statement Selection</Button>
+          </div>
         </CardContent>
       </Card>
     );
