@@ -159,6 +159,36 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <Link href="/ml-insights">
+            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
+              <Brain className="h-5 w-5" />
+              <span className="text-sm">ML Insights</span>
+            </Button>
+          </Link>
+          <Link href="/statements">
+            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
+              <CreditCard className="h-5 w-5" />
+              <span className="text-sm">Statements</span>
+            </Button>
+          </Link>
+          <Link href="/receipts">
+            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
+              <ReceiptIcon className="h-5 w-5" />
+              <span className="text-sm">All Receipts</span>
+            </Button>
+          </Link>
+          <Button 
+            variant="outline" 
+            className="w-full h-16 flex flex-col items-center justify-center gap-1"
+            onClick={() => setShowCsvModal(true)}
+          >
+            <Upload className="h-5 w-5" />
+            <span className="text-sm">Import CSV</span>
+          </Button>
+        </div>
+
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Upload Section */}
