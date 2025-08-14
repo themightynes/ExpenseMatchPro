@@ -830,7 +830,7 @@ export class DatabaseStorage implements IStorage {
 
   async assignReceiptToStatement(receiptId: string, statementId: string): Promise<Receipt | undefined> {
     try {
-      const updated = await this.db
+      const updated = await db
         .update(receipts)
         .set({ statementId: statementId })
         .where(eq(receipts.id, receiptId))
