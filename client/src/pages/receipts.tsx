@@ -214,6 +214,11 @@ export default function ReceiptsPage() {
                       {receipt.merchant && (
                         <span className="text-sm text-gray-600 truncate">{receipt.merchant}</span>
                       )}
+                      {receipt.date && (
+                        <span className="text-sm text-blue-600 font-medium">
+                          {new Date(receipt.date).toLocaleDateString()}
+                        </span>
+                      )}
                     </div>
                     {receipt.amount && (
                       <div className="mt-1">
