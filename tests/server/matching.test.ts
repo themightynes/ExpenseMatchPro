@@ -1,17 +1,18 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-// Mock the storage and dependencies
+// Mock the storage and dependencies with proper typing
 const mockStorage = {
-  getReceipt: jest.fn(),
-  getUnmatchedCharges: jest.fn(),
-  updateReceipt: jest.fn(),
-  updateAmexCharge: jest.fn(),
+  getReceipt: jest.fn() as jest.MockedFunction<any>,
+  getUnmatchedCharges: jest.fn() as jest.MockedFunction<any>,
+  updateReceipt: jest.fn() as jest.MockedFunction<any>,
+  updateAmexCharge: jest.fn() as jest.MockedFunction<any>,
 };
 
 const mockObjectStorage = {
   moveObject: jest.fn(),
 };
 
+// Mock modules before importing
 jest.mock('../../server/storage', () => ({
   storage: mockStorage,
 }));
@@ -20,7 +21,8 @@ jest.mock('../../server/objectStorage', () => ({
   ObjectStorageService: jest.fn().mockImplementation(() => mockObjectStorage),
 }));
 
-import { FileOrganizer } from '../../server/fileOrganizer';
+// Import after mocking
+const { FileOrganizer } = jest.requireActual('../../server/fileOrganizer') as any;
 
 describe('FileOrganizer', () => {
   let fileOrganizer: FileOrganizer;

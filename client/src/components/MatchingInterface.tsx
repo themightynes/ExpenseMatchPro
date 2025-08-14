@@ -26,6 +26,7 @@ interface FilterState {
 export default function MatchingInterface({ statementId, onBack }: MatchingInterfaceProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+  const [matchingScope, setMatchingScope] = useState<'global' | 'statement'>('global');
   const [filters, setFilters] = useState<FilterState>({
     minAmount: "",
     maxAmount: "",
@@ -36,7 +37,11 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
   const { toast } = useToast();
 
   const { data: candidates, isLoading } = useQuery({
-    queryKey: ["/api/matching/candidates", statementId],
+    queryKey: ["/api/matching/candidates", statementId, matchingScope],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/matching/candidates/${statementId}?scope=${matchingScope}`, {});
+      return response.json();
+    },
   });
 
   // Extract data from candidates (must be called before any early returns)
@@ -66,7 +71,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/matching/candidates", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/matching/candidates", statementId, matchingScope] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setCurrentIndex(prev => prev + 1);
       toast({
@@ -74,17 +79,69 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
         description: "Receipt has been matched to the AMEX charge.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error matching:", error);
+      
+      // Enhanced error messages based on error type
+      let errorTitle = "Match failed";
+      let errorDescription = "There was an error matching the receipt. Please try again.";
+      
+      if (error.message?.includes('not found')) {
+        errorTitle = "Receipt or Charge Not Found";
+        errorDescription = "The receipt or charge could not be found. It may have been deleted or modified.";
+      } else if (error.message?.includes('already matched')) {
+        errorTitle = "Already Matched";
+        errorDescription = "This receipt or charge has already been matched to another transaction.";
+      } else if (error.message?.includes('Invalid matching configuration')) {
+        errorTitle = "Invalid Match Configuration";
+        errorDescription = "The selected matching configuration is not supported. Please try a different combination.";
+      } else if (error.message?.includes('network')) {
+        errorTitle = "Connection Error";
+        errorDescription = "Unable to connect to the server. Please check your internet connection and try again.";
+      } else if (error.message?.includes('timeout')) {
+        errorTitle = "Request Timeout";
+        errorDescription = "The matching process took too long. Please try again or contact support.";
+      }
+      
       toast({
-        title: "Match failed",
-        description: "There was an error matching the receipt. Please try again.",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
       });
     },
   });
 
-  const skipMatch = () => {
+  const skipMatch = async () => {
+    console.log("Skipping match for receipt:", filteredReceipts[currentIndex]?.id);
+    
+    // Record skip analytics if we have a suggested charge
+    const currentReceiptData = filteredReceipts[currentIndex];
+    const currentChargeData = pairs[currentIndex]?.charge || allCharges[0];
+    
+    if (currentReceiptData && currentChargeData) {
+      try {
+        const matchScores = calculateMatchScore(currentReceiptData, currentChargeData);
+        const confidence = matchScores.reduce((sum, score) => sum + (score.matches ? 100 : 0), 0) / matchScores.length;
+        
+        await fetch('/api/matching/skip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receiptId: currentReceiptData.id,
+            chargeId: currentChargeData.id,
+            reason: 'manual_skip',
+            sessionId: 'current-session',
+            confidenceScore: confidence,
+            amountDiff: Math.abs(parseFloat(currentReceiptData.amount || '0') - parseFloat(currentChargeData.amount || '0')),
+            dateDiff: Math.abs((new Date(currentReceiptData.date || '').getTime() - new Date(currentChargeData.date).getTime()) / (1000 * 60 * 60 * 24)),
+            merchantSimilarity: calculateStringSimilarity(currentReceiptData.merchant || '', currentChargeData.description || '')
+          })
+        });
+      } catch (error) {
+        console.error("Failed to record skip analytics:", error);
+      }
+    }
+    
     setCurrentIndex(prev => prev + 1);
   };
 
@@ -94,7 +151,7 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/matching/candidates", statementId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/matching/candidates", statementId, matchingScope] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setCurrentIndex(prev => prev + 1);
       toast({
@@ -102,11 +159,30 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
         description: "This receipt has been marked for manual review.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error marking for review:", error);
+      
+      // Enhanced error messages for review marking
+      let errorTitle = "Review Marking Failed";
+      let errorDescription = "Failed to mark receipt for review. Please try again.";
+      
+      if (error.message?.includes('not found')) {
+        errorTitle = "Receipt Not Found";
+        errorDescription = "The receipt could not be found. It may have been deleted or moved.";
+      } else if (error.message?.includes('already marked')) {
+        errorTitle = "Already Marked for Review";
+        errorDescription = "This receipt is already marked for manual review.";
+      } else if (error.message?.includes('permission')) {
+        errorTitle = "Permission Denied";
+        errorDescription = "You don't have permission to mark this receipt for review.";
+      } else if (error.message?.includes('network')) {
+        errorTitle = "Connection Error";
+        errorDescription = "Unable to connect to the server. Please check your internet connection.";
+      }
+      
       toast({
-        title: "Error",
-        description: "Failed to mark receipt for review. Please try again.",
+        title: errorTitle,
+        description: errorDescription,
         variant: "destructive",
       });
     },
@@ -322,6 +398,37 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
             </div>
           </CardHeader>
           <CardContent>
+            {/* Cross-Statement Matching Scope */}
+            <div className="mb-4 pb-4 border-b border-gray-100">
+              <Label className="text-sm font-medium mb-2 block">Matching Scope</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={matchingScope === 'global' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMatchingScope('global')}
+                  className="flex-1"
+                >
+                  <i className="fas fa-globe w-3 h-3 mr-1" />
+                  All Statements
+                </Button>
+                <Button
+                  variant={matchingScope === 'statement' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMatchingScope('statement')}
+                  className="flex-1"
+                >
+                  <i className="fas fa-file-invoice w-3 h-3 mr-1" />
+                  Current Statement
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {matchingScope === 'global' 
+                  ? 'Search charges across all statement periods' 
+                  : 'Only search charges in the current statement'
+                }
+              </p>
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="grid grid-cols-2 gap-2">
                 <div>

@@ -85,6 +85,21 @@ export const expenseTemplates = pgTable("expense_templates", {
   generatedAt: timestamp("generated_at").default(sql`now()`),
 });
 
+// Skip analytics for improving matching algorithm
+export const skipAnalytics = pgTable("skip_analytics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  receiptId: varchar("receipt_id").notNull().references(() => receipts.id),
+  chargeId: varchar("charge_id").notNull().references(() => amexCharges.id),
+  skipReason: text("skip_reason"), // 'manual_skip', 'low_confidence', 'user_preference'
+  confidenceScore: decimal("confidence_score", { precision: 5, scale: 2 }),
+  amountDiff: decimal("amount_diff", { precision: 10, scale: 2 }),
+  dateDiff: decimal("date_diff", { precision: 5, scale: 1 }), // Days
+  merchantSimilarity: decimal("merchant_similarity", { precision: 3, scale: 2 }),
+  userAction: text("user_action"), // 'skip', 'manual_review', 'force_match'
+  sessionId: text("session_id"), // Track matching sessions
+  skippedAt: timestamp("skipped_at").default(sql`now()`),
+});
+
 // Insert schemas
 export const insertReceiptSchema = createInsertSchema(receipts).omit({
   id: true,
@@ -100,6 +115,11 @@ export const insertAmexStatementSchema = createInsertSchema(amexStatements).omit
 export const insertAmexChargeSchema = createInsertSchema(amexCharges).omit({
   id: true,
   createdAt: true,
+});
+
+export const insertSkipAnalyticsSchema = createInsertSchema(skipAnalytics).omit({
+  id: true,
+  skippedAt: true,
 });
 
 // CSV import schema for AMEX charges

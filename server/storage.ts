@@ -4,6 +4,7 @@ import {
   amexCharges,
   expenseTemplates,
   users,
+  skipAnalytics,
   type User, 
   type InsertUser,
   type Receipt,
@@ -90,6 +91,14 @@ export interface IStorage {
     gaps?: { start: Date; end: Date; description: string }[];
     suggestions?: { startDate: Date; endDate: Date };
   }>;
+
+  // Skip analytics methods
+  createSkipAnalytics(skipData: any): Promise<any>;
+  getSkipAnalytics(): Promise<any[]>;
+  
+  // Advanced search methods
+  searchReceipts(query: string, filters?: any): Promise<Receipt[]>;
+  searchCharges(query: string, filters?: any): Promise<AmexCharge[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -944,6 +953,169 @@ export class DatabaseStorage implements IStorage {
       overlaps: undefined,
       suggestions: { startDate: startDate, endDate: endDate } // Provide current dates as suggestions
     };
+  }
+
+  // Skip analytics methods
+  async createSkipAnalytics(skipData: any): Promise<any> {
+    try {
+      console.log("Creating skip analytics:", skipData);
+      // For now, return a mock response since we haven't migrated the table yet
+      return {
+        id: "skip-" + Date.now(),
+        ...skipData,
+        skippedAt: new Date()
+      };
+    } catch (error) {
+      console.error("Error creating skip analytics:", error);
+      throw error;
+    }
+  }
+
+  async getSkipAnalytics(): Promise<any[]> {
+    try {
+      // For now, return empty array since table doesn't exist yet
+      console.log("Getting skip analytics...");
+      return [];
+    } catch (error) {
+      console.error("Error getting skip analytics:", error);
+      return [];
+    }
+  }
+
+  // Advanced search methods
+  async searchReceipts(query: string, filters: any = {}): Promise<Receipt[]> {
+    try {
+      const allReceipts = await this.getAllReceipts();
+      let filteredReceipts = allReceipts;
+      
+      // Apply text search across merchant, category, fileName
+      if (query && query.trim().length > 0) {
+        const searchTerm = query.toLowerCase();
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.merchant?.toLowerCase().includes(searchTerm) ||
+          receipt.category?.toLowerCase().includes(searchTerm) ||
+          receipt.fileName?.toLowerCase().includes(searchTerm) ||
+          receipt.originalFileName?.toLowerCase().includes(searchTerm)
+        );
+      }
+      
+      // Apply amount range filters
+      if (filters.minAmount) {
+        const minAmount = parseFloat(filters.minAmount);
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.amount && parseFloat(receipt.amount) >= minAmount
+        );
+      }
+      if (filters.maxAmount) {
+        const maxAmount = parseFloat(filters.maxAmount);
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.amount && parseFloat(receipt.amount) <= maxAmount
+        );
+      }
+      
+      // Apply date range filters
+      if (filters.startDate) {
+        const startDate = new Date(filters.startDate);
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.date && new Date(receipt.date) >= startDate
+        );
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.date && new Date(receipt.date) <= endDate
+        );
+      }
+      
+      // Apply status filters
+      if (filters.status) {
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.processingStatus === filters.status
+        );
+      }
+      if (filters.isMatched !== undefined) {
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.isMatched === filters.isMatched
+        );
+      }
+      if (filters.statementId) {
+        filteredReceipts = filteredReceipts.filter(receipt => 
+          receipt.statementId === filters.statementId
+        );
+      }
+      
+      return filteredReceipts.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    } catch (error) {
+      console.error("Error searching receipts:", error);
+      return [];
+    }
+  }
+
+  async searchCharges(query: string, filters: any = {}): Promise<AmexCharge[]> {
+    try {
+      const allCharges = await this.getAllCharges();
+      let filteredCharges = allCharges;
+      
+      // Apply text search across description
+      if (query && query.trim().length > 0) {
+        const searchTerm = query.toLowerCase();
+        filteredCharges = filteredCharges.filter(charge => 
+          charge.description?.toLowerCase().includes(searchTerm) ||
+          charge.cardMember?.toLowerCase().includes(searchTerm) ||
+          charge.category?.toLowerCase().includes(searchTerm) ||
+          charge.address?.toLowerCase().includes(searchTerm)
+        );
+      }
+      
+      // Apply amount range filters
+      if (filters.minAmount) {
+        const minAmount = parseFloat(filters.minAmount);
+        filteredCharges = filteredCharges.filter(charge => 
+          charge.amount && parseFloat(charge.amount) >= minAmount
+        );
+      }
+      if (filters.maxAmount) {
+        const maxAmount = parseFloat(filters.maxAmount);
+        filteredCharges = filteredCharges.filter(charge => 
+          charge.amount && parseFloat(charge.amount) <= maxAmount
+        );
+      }
+      
+      // Apply date range filters
+      if (filters.startDate) {
+        const startDate = new Date(filters.startDate);
+        filteredCharges = filteredCharges.filter(charge => 
+          charge.date && new Date(charge.date) >= startDate
+        );
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        filteredCharges = filteredCharges.filter(charge => 
+          charge.date && new Date(charge.date) <= endDate
+        );
+      }
+      
+      // Apply status filters
+      if (filters.isMatched !== undefined) {
+        filteredCharges = filteredCharges.filter(charge => 
+          charge.isMatched === filters.isMatched
+        );
+      }
+      if (filters.statementId) {
+        filteredCharges = filteredCharges.filter(charge => 
+          charge.statementId === filters.statementId
+        );
+      }
+      
+      return filteredCharges.sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+    } catch (error) {
+      console.error("Error searching charges:", error);
+      return [];
+    }
   }
 }
 

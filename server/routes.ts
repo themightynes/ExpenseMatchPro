@@ -876,6 +876,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Period name is required" });
       }
 
+      // First pass: analyze CSV data to determine date range
+      const charges = [];
+      let minDate: Date | null = null; // Will be set to first valid date
+      let maxDate: Date | null = null; // Will be set to first valid date
+      let imported = 0;
+      let errors = 0;
+      let skipped = 0;
+      const skippedReasons: string[] = [];
+
+      // Parse CSV to get date range
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        try {
+          const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+          const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
+
+          const rowData: any = {};
+          headers.forEach((header: string, index: number) => {
+            rowData[header] = cleanValues[index] || '';
+          });
+
+          if (rowData.Date) {
+            const dateParts = rowData.Date.split('/');
+            if (dateParts.length === 3) {
+              const month = parseInt(dateParts[0]);
+              const day = parseInt(dateParts[1]);
+              const year = parseInt(dateParts[2]);
+
+              if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+                const chargeDate = new Date(year, month - 1, day);
+                
+                if (!minDate || chargeDate < minDate) {
+                  minDate = chargeDate;
+                }
+                if (!maxDate || chargeDate > maxDate) {
+                  maxDate = chargeDate;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      // Validate date range after parsing
+      if (!minDate || !maxDate) {
+        console.error("No valid dates found in CSV");
+        return res.status(400).json({ error: "No valid dates found in CSV file" });
+      }
+
+      if (minDate > maxDate) {
+        console.error("Invalid date range:", { minDate, maxDate });
+        return res.status(400).json({ error: "Invalid date range detected in CSV" });
+      }
+
       // Check for duplicate statements before processing
       const existingStatements = await storage.getAllAmexStatements();
       const potentialDuplicates = await checkForDuplicateStatements(csvContent, existingStatements);
@@ -886,17 +944,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           duplicates: potentialDuplicates,
           message: `Found ${potentialDuplicates.length} potential duplicate statement(s). Please review before uploading.`
         });
-      }
-
-      // Validate date range before creating statement
-      if (!minDate || !maxDate) {
-        console.error("No valid dates found in CSV");
-        return res.status(400).json({ error: "No valid dates found in CSV file" });
-      }
-
-      if (minDate > maxDate) {
-        console.error("Invalid date range:", { minDate, maxDate });
-        return res.status(400).json({ error: "Invalid date range detected in CSV" });
       }
 
       // Check for gaps and overlaps with existing statements
@@ -913,14 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // First pass: analyze CSV data to determine date range
-      const charges = [];
-      let minDate: Date | null = null; // Will be set to first valid date
-      let maxDate: Date | null = null; // Will be set to first valid date
-      let imported = 0;
-      let errors = 0;
-      let skipped = 0;
-      const skippedReasons: string[] = [];
+      // Second pass: process CSV data to create charges
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -1597,79 +1637,337 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Enhanced matching endpoint supporting 1:1, 1:many, many:1 relationships
   app.post("/api/matching/match", async (req, res) => {
     try {
-      const { receiptId, chargeId } = req.body;
+      // Support both single and multiple matching
+      const receiptIds = Array.isArray(req.body.receiptIds) ? req.body.receiptIds : 
+                        req.body.receiptId ? [req.body.receiptId] : [];
+      const chargeIds = Array.isArray(req.body.chargeIds) ? req.body.chargeIds : 
+                       req.body.chargeId ? [req.body.chargeId] : [];
 
-      if (!receiptId || !chargeId) {
-        return res.status(400).json({ error: "receiptId and chargeId are required" });
+      if (receiptIds.length === 0 || chargeIds.length === 0) {
+        return res.status(400).json({ error: "At least one receiptId and chargeId are required" });
       }
 
-      // Get the charge first to determine the statement ID
-      const charge = await storage.getAmexCharge(chargeId);
-      if (!charge) {
-        return res.status(404).json({ error: "Charge not found" });
+      console.log(`Enhanced matching: ${receiptIds.length} receipt(s) to ${chargeIds.length} charge(s)`);
+      
+      const updatedReceipts = [];
+      const updatedCharges = [];
+
+      // Handle one-to-many: Single receipt to multiple charges (split transaction)
+      if (receiptIds.length === 1 && chargeIds.length > 1) {
+        const receiptId = receiptIds[0];
+        console.log("One-to-many matching: split transaction");
+        
+        for (const chargeId of chargeIds) {
+          const charge = await storage.getAmexCharge(chargeId);
+          if (!charge) continue;
+
+          const currentReceipt = await storage.getReceipt(receiptId);
+          if (!currentReceipt) continue;
+
+          // Auto-populate missing data from first charge
+          const updateData: any = {
+            isMatched: true,
+            statementId: charge.statementId
+          };
+
+          if (!currentReceipt.merchant && charge.description) {
+            updateData.merchant = charge.description;
+          }
+          if (!currentReceipt.date && charge.date) {
+            updateData.date = charge.date;
+          }
+
+          const receipt = await storage.updateReceipt(receiptId, updateData);
+          const updatedCharge = await storage.updateAmexCharge(chargeId, { 
+            isMatched: true,
+            receiptId: receiptId 
+          });
+
+          if (receipt && !updatedReceipts.find(r => r.id === receiptId)) {
+            updatedReceipts.push(receipt);
+          }
+          if (updatedCharge) updatedCharges.push(updatedCharge);
+        }
+      }
+      // Handle many-to-one: Multiple receipts to single charge (combined purchase)
+      else if (receiptIds.length > 1 && chargeIds.length === 1) {
+        const chargeId = chargeIds[0];
+        console.log("Many-to-one matching: combined purchase");
+        
+        const charge = await storage.getAmexCharge(chargeId);
+        if (!charge) {
+          return res.status(404).json({ error: "Charge not found" });
+        }
+
+        for (const receiptId of receiptIds) {
+          const currentReceipt = await storage.getReceipt(receiptId);
+          if (!currentReceipt) continue;
+
+          const updateData: any = {
+            isMatched: true,
+            matchedChargeId: chargeId,
+            statementId: charge.statementId
+          };
+
+          if (!currentReceipt.merchant && charge.description) {
+            updateData.merchant = charge.description;
+          }
+          if (!currentReceipt.date && charge.date) {
+            updateData.date = charge.date;
+          }
+
+          const receipt = await storage.updateReceipt(receiptId, updateData);
+          if (receipt) updatedReceipts.push(receipt);
+        }
+
+        const updatedCharge = await storage.updateAmexCharge(chargeId, { 
+          isMatched: true,
+          receiptId: receiptIds[0] // Primary receipt
+        });
+        if (updatedCharge) updatedCharges.push(updatedCharge);
+      }
+      // Handle one-to-one: Standard single matching
+      else if (receiptIds.length === 1 && chargeIds.length === 1) {
+        const receiptId = receiptIds[0];
+        const chargeId = chargeIds[0];
+        console.log("Standard one-to-one matching");
+
+        const charge = await storage.getAmexCharge(chargeId);
+        if (!charge) {
+          return res.status(404).json({ error: "Charge not found" });
+        }
+
+        const currentReceipt = await storage.getReceipt(receiptId);
+        if (!currentReceipt) {
+          return res.status(404).json({ error: "Receipt not found" });
+        }
+
+        const updateData: any = {
+          isMatched: true,
+          matchedChargeId: chargeId,
+          statementId: charge.statementId
+        };
+
+        if (!currentReceipt.merchant && charge.description) {
+          updateData.merchant = charge.description;
+        }
+        if (!currentReceipt.amount && charge.amount) {
+          updateData.amount = charge.amount;
+        }
+        if (!currentReceipt.date && charge.date) {
+          updateData.date = charge.date;
+        }
+
+        const receipt = await storage.updateReceipt(receiptId, updateData);
+        const updatedCharge = await storage.updateAmexCharge(chargeId, { 
+          isMatched: true,
+          receiptId: receiptId 
+        });
+
+        if (receipt) updatedReceipts.push(receipt);
+        if (updatedCharge) updatedCharges.push(updatedCharge);
+      } else {
+        return res.status(400).json({ 
+          error: "Invalid matching configuration. Supported: 1:1, 1:many, many:1" 
+        });
       }
 
-      // Get current receipt to check for missing data
-      const currentReceipt = await storage.getReceipt(receiptId);
-      if (!currentReceipt) {
-        return res.status(404).json({ error: "Receipt not found" });
-      }
-
-      // Auto-populate missing data from charge
-      const updateData: any = {
-        isMatched: true,
-        matchedChargeId: chargeId,
-        statementId: charge.statementId
-      };
-
-      // Fill missing fields with charge data
-      if (!currentReceipt.merchant && charge.description) {
-        updateData.merchant = charge.description;
-      }
-      if (!currentReceipt.amount && charge.amount) {
-        updateData.amount = charge.amount;
-      }
-      if (!currentReceipt.date && charge.date) {
-        updateData.date = charge.date;
-      }
-
-      // Update receipt with all data
-      const receipt = await storage.updateReceipt(receiptId, updateData);
-
-      // Update charge as matched
-      const updatedCharge = await storage.updateAmexCharge(chargeId, { 
-        isMatched: true,
-        receiptId: receiptId 
-      });
-
-      // Move receipt to matched folder when it gets matched
-      if (receipt && receipt.statementId) {
-        try {
-          const organizedPath = storage.getOrganizedPath(receipt);
-          await storage.updateReceiptPath(receiptId, organizedPath);
-
-          // Create statement folder if it doesn't exist
-          await createStatementFolder(receipt.statementId);
-        } catch (orgError) {
-          console.error("Error organizing matched receipt:", orgError);
+      // Organize all matched receipts
+      for (const receipt of updatedReceipts) {
+        if (receipt && receipt.statementId) {
+          try {
+            const organizedPath = storage.getOrganizedPath(receipt);
+            await storage.updateReceiptPath(receipt.id, organizedPath);
+            await createStatementFolder(receipt.statementId);
+            await fileOrganizer.organizeReceipt(receipt);
+          } catch (orgError) {
+            console.error("Error organizing matched receipt:", orgError);
+          }
         }
       }
 
-      if (!receipt || !updatedCharge) {
-        return res.status(404).json({ error: "Receipt or charge not found" });
-      }
-
-      // Reorganize file after matching (receipt now has correct statementId)
-      if (receipt) {
-        await fileOrganizer.organizeReceipt(receipt);
-      }
-
-      res.json({ receipt, charge: updatedCharge });
+      res.json({ 
+        receipts: updatedReceipts, 
+        charges: updatedCharges,
+        matchType: receiptIds.length === 1 && chargeIds.length === 1 ? '1:1' : 
+                   receiptIds.length === 1 ? '1:many' : 'many:1',
+        totalMatched: updatedReceipts.length + updatedCharges.length
+      });
     } catch (error) {
-      console.error("Error matching receipt to charge:", error);
-      res.status(500).json({ error: "Failed to match receipt to charge" });
+      console.error("Error in enhanced matching:", error);
+      res.status(500).json({ error: "Failed to match receipt(s) to charge(s)" });
+    }
+  });
+
+  // Skip analytics endpoint for tracking user behavior
+  app.post("/api/matching/skip", async (req, res) => {
+    try {
+      const { receiptId, chargeId, reason, sessionId, confidenceScore, amountDiff, dateDiff, merchantSimilarity } = req.body;
+      
+      // Record skip analytics
+      const skipRecord = await storage.createSkipAnalytics({
+        receiptId,
+        chargeId,
+        skipReason: reason || 'manual_skip',
+        confidenceScore: confidenceScore?.toString(),
+        amountDiff: amountDiff?.toString(),
+        dateDiff: dateDiff?.toString(),
+        merchantSimilarity: merchantSimilarity?.toString(),
+        userAction: 'skip',
+        sessionId: sessionId
+      });
+      
+      console.log(`Skip analytics recorded: Receipt ${receiptId} skipped Charge ${chargeId}, reason: ${reason}`);
+      
+      res.json({ 
+        message: "Skip recorded successfully",
+        analytics: skipRecord
+      });
+    } catch (error) {
+      console.error("Error recording skip analytics:", error);
+      res.status(500).json({ error: "Failed to record skip analytics" });
+    }
+  });
+
+  // Analytics insights endpoint
+  app.get("/api/analytics/skip-patterns", async (req, res) => {
+    try {
+      const skipPatterns = await storage.getSkipAnalytics();
+      
+      // Analyze patterns
+      const insights = {
+        totalSkips: skipPatterns.length,
+        commonReasons: {},
+        averageConfidenceSkipped: 0,
+        frequentSkipMerchants: {},
+        dateRange: {
+          earliest: null,
+          latest: null
+        }
+      };
+      
+      let totalConfidence = 0;
+      let confidenceCount = 0;
+      
+      for (const skip of skipPatterns) {
+        // Count reasons
+        const reason = skip.skipReason || 'unknown';
+        insights.commonReasons[reason] = (insights.commonReasons[reason] || 0) + 1;
+        
+        // Calculate average confidence
+        if (skip.confidenceScore) {
+          totalConfidence += parseFloat(skip.confidenceScore);
+          confidenceCount++;
+        }
+        
+        // Track date range
+        if (!insights.dateRange.earliest || skip.skippedAt < insights.dateRange.earliest) {
+          insights.dateRange.earliest = skip.skippedAt;
+        }
+        if (!insights.dateRange.latest || skip.skippedAt > insights.dateRange.latest) {
+          insights.dateRange.latest = skip.skippedAt;
+        }
+      }
+      
+      insights.averageConfidenceSkipped = confidenceCount > 0 ? totalConfidence / confidenceCount : 0;
+      
+      res.json({
+        insights,
+        recentSkips: skipPatterns.slice(-10) // Last 10 skips
+      });
+    } catch (error) {
+      console.error("Error getting skip analytics:", error);
+      res.status(500).json({ error: "Failed to get skip patterns" });
+    }
+  });
+
+  // Advanced search endpoints
+  app.get("/api/search/receipts", requireAuth, async (req, res) => {
+    try {
+      const { q, minAmount, maxAmount, startDate, endDate, status, isMatched, statementId } = req.query;
+      
+      const filters = {
+        minAmount: minAmount as string,
+        maxAmount: maxAmount as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+        status: status as string,
+        isMatched: isMatched === 'true' ? true : isMatched === 'false' ? false : undefined,
+        statementId: statementId as string
+      };
+      
+      const results = await storage.searchReceipts(q as string || '', filters);
+      
+      res.json({
+        results,
+        total: results.length,
+        query: q || '',
+        filters: filters
+      });
+    } catch (error) {
+      console.error("Error in receipt search:", error);
+      res.status(500).json({ error: "Failed to search receipts" });
+    }
+  });
+
+  app.get("/api/search/charges", requireAuth, async (req, res) => {
+    try {
+      const { q, minAmount, maxAmount, startDate, endDate, isMatched, statementId } = req.query;
+      
+      const filters = {
+        minAmount: minAmount as string,
+        maxAmount: maxAmount as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+        isMatched: isMatched === 'true' ? true : isMatched === 'false' ? false : undefined,
+        statementId: statementId as string
+      };
+      
+      const results = await storage.searchCharges(q as string || '', filters);
+      
+      res.json({
+        results,
+        total: results.length,
+        query: q || '',
+        filters: filters
+      });
+    } catch (error) {
+      console.error("Error in charge search:", error);
+      res.status(500).json({ error: "Failed to search charges" });
+    }
+  });
+
+  // Enhanced unified search endpoint
+  app.get("/api/search/unified", requireAuth, async (req, res) => {
+    try {
+      const { q, ...filters } = req.query;
+      const query = q as string || '';
+      
+      const [receipts, charges] = await Promise.all([
+        storage.searchReceipts(query, filters),
+        storage.searchCharges(query, filters)
+      ]);
+      
+      // Combine and sort by relevance/date
+      const combined = [
+        ...receipts.map(r => ({ type: 'receipt', data: r, date: r.date || r.createdAt })),
+        ...charges.map(c => ({ type: 'charge', data: c, date: c.date }))
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      res.json({
+        results: combined,
+        total: combined.length,
+        receipts: receipts.length,
+        charges: charges.length,
+        query,
+        filters
+      });
+    } catch (error) {
+      console.error("Error in unified search:", error);
+      res.status(500).json({ error: "Failed to perform unified search" });
     }
   });
 
@@ -1677,6 +1975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/matching/candidates/:statementId", async (req, res) => {
     try {
       const statementId = req.params.statementId;
+      const scope = req.query.scope as string || 'global'; // 'global' or 'statement'
 
       // Get ALL unmatched receipts (not restricted to statement) - let users match across all periods
       const allReceipts = await storage.getAllReceipts();
@@ -1687,9 +1986,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parseFloat(r.amount) > 0 // Exclude zero or negative amounts
       );
 
-      // Get ALL unmatched charges across ALL statements - not just the current one
+      // Get unmatched charges based on scope
       const allCharges = await storage.getAllCharges();
-      const unmatchedCharges = allCharges.filter(c => !c.isMatched);
+      let unmatchedCharges;
+      if (scope === 'statement') {
+        unmatchedCharges = allCharges.filter(c => !c.isMatched && c.statementId === statementId);
+      } else {
+        unmatchedCharges = allCharges.filter(c => !c.isMatched);
+      }
 
       // Create intelligent receipt-charge pairs
       const pairs = [];
@@ -1730,10 +2034,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sortedPairs = pairs.sort((a, b) => a.confidence - b.confidence);
 
       console.log("Intelligent matching candidates:", { 
-        statementId, 
+        statementId,
+        scope,
         totalReceipts: allReceipts.length,
         unmatchedReceipts: unmatchedReceipts.length, 
-        unmatchedChargesAllStatements: unmatchedCharges.length,
+        unmatchedCharges: unmatchedCharges.length,
         pairsGenerated: sortedPairs.length,
         bestMatch: sortedPairs.length > 0 ? {
           receiptAmount: sortedPairs[0].receipt.amount,
@@ -1749,6 +2054,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pairs: sortedPairs,
         receipts: unmatchedReceipts,
         charges: unmatchedCharges,
+        scope,
+        statementId,
+        sessionId: sql`gen_random_uuid()` // Generate session ID for analytics
       });
     } catch (error) {
       console.error("Error getting matching candidates:", error);

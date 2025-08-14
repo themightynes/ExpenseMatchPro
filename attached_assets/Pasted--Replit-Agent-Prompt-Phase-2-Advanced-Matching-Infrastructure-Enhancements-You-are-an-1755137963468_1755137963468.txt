@@ -1,0 +1,89 @@
+### 🧭 Replit Agent Prompt – Phase 2 (Advanced Matching & Infrastructure Enhancements)
+
+You are an AI code assistant continuing development on the Work Expense App in Replit.  Phase 1 delivered a robust manual review workflow, fuzzy merchant matching and a solid test suite.  **Phase 2** focuses on expanding matching flexibility, enhancing performance and security, and implementing advanced search and analytics.  This phase is more ambitious, so break tasks into manageable commits and verify each change via tests.
+
+#### 🔧 Tasks
+
+1. **Resolve LSP diagnostics and clean up code quality (P0)**
+
+   * Review any remaining variable scope or type issues flagged by the language server in `server/routes.ts` and other files.
+   * Refactor ambiguous or unused variables, ensure proper async error handling, and update TypeScript types where needed.
+   * Run `npm run lint` and `npm run test` to ensure a clean build.
+
+2. **Database performance optimization (P0)**
+
+   * Analyze query patterns on the `receipts` and `amexCharges` tables.  Add database indexes on high‑cardinality fields used in matching (e.g., `receipts.amount`, `receipts.date`, `receipts.merchant`, `amexCharges.amount`, `amexCharges.date`, `amexCharges.description`).
+   * Write migration scripts to create these indexes in Drizzle ORM.
+   * Update the README or a new `docs/performance.md` detailing indexing strategy and its expected impact.
+
+3. **Security audit (P0)**
+
+   * Review the entire codebase for potential injection points or insecure defaults:
+
+     * Ensure all SQL queries use parameterized queries (Drizzle ORM already helps, but check raw queries if any).
+     * Verify that secrets (API keys, DB passwords) are stored in environment variables and not committed.
+     * Confirm CORS settings are strict and only allow requests from your front‑end domain.
+   * Document any risks found and remediate them immediately.  Summarize the audit in `analysis/security-report.md`.
+
+4. **Cross‑statement matching options (P1)**
+
+   * Add an optional query parameter to `/api/matching/candidates` such as `?scope=global|statement`.
+   * When `scope=global` (default), keep current behavior: return best matches across all statements.
+   * When `scope=statement`, restrict unmatched charges to the same statement as the receipt’s `statementId`.
+   * Update the front‑end to allow users to toggle between “All Statements” and “Current Statement” in the matching interface.  Persist their choice in local state or via URL params.
+
+5. **One‑to‑many / many‑to‑one matching (P1)**
+
+   * **Schema changes**: Introduce a join table (e.g., `receipt_charge_links`) with `receiptId`, `chargeId` and `matchFraction` (a decimal representing partial allocation, default 1.0).
+   * Modify matching endpoints:
+
+     * `POST /api/matching/match` should accept optional `fraction` parameter and create/update the join table.
+     * For full (1.0) matches, still mark both receipt and charge as fully matched.
+   * Update the client:
+
+     * Allow selecting multiple receipts per charge and vice versa, with an input to specify split fractions (default 50/50 for two receipts).
+     * Display aggregated match status (e.g., show a charge as partially matched until all fractions sum to 1.0).
+   * Adjust exports to Oracle and dashboard stats to compute totals based on fractional matches.
+
+6. **Skip analytics and pattern tracking (P1)**
+
+   * Extend the `Receipt` schema (or create a new `skip_events` table) to record each skip action with `receiptId`, `timestamp`, `userId` (if available) and optionally a reason.
+   * Update the `POST /api/matching/skip` endpoint (created in Phase 1) to insert a record into this table.
+   * Build a simple admin API (e.g., `GET /api/analytics/skip-stats`) that returns aggregate skip counts per receipt and by user.
+   * Later phases can use this data to improve matching algorithms.
+
+7. **Advanced search across receipts and charges (P1)**
+
+   * Implement a new endpoint `GET /api/search` with query parameters like `term`, `dateFrom`, `dateTo`, `minAmount`, `maxAmount`.
+   * Use full‑text search or simple `ILIKE` queries on merchants, descriptions and categories.
+   * Paginate results and return combined objects (receipts and charges) with clear labels.
+   * Integrate a search bar in the dashboard that calls this endpoint and displays results in a list or table with filters.
+   * Add unit tests for the search API covering various filters and edge cases.
+
+8. **Enhanced error messages (P1)**
+
+   * Audit all API responses to ensure errors include user‑friendly descriptions and HTTP status codes.
+   * For common issues (e.g., “receipt not found,” “invalid date format,” “fraction must sum to 1.0”), create standardized error messages in a utility (e.g., `errors.ts`).
+   * Update client components to display these messages clearly with appropriate styling and call‑to‑action suggestions.
+
+9. **Documentation updates**
+
+   * Update API documentation (`api-documentation.md`) with all new endpoints and parameters introduced in Phase 2 (cross‑statement scope, split matching, skip analytics, search).
+   * Add examples of using the one‑to‑many matching API and cross‑statement toggles.
+   * Document new migrations and environment variables for indexing and security fixes.
+
+#### ✅ Completion Criteria
+
+* All lint and test tasks pass with no TypeScript or LSP errors.
+* Database indexes exist and demonstrably improve query performance (use an explanation of expected improvements).
+* Security audit report is present and vulnerabilities addressed.
+* Cross‑statement scope toggle works in the UI and API.
+* One‑to‑many matching is supported end‑to‑end (DB, API, UI, export).
+* Skip analytics collect data and an admin endpoint exposes basic stats.
+* Advanced search endpoint returns combined receipt/charge results with filters.
+* Enhanced error messages are standardized across the application.
+* Documentation fully updated to reflect new features.
+
+---
+
+Proceed through these tasks incrementally, committing small changes with clear messages.  Validate each new feature with unit tests and update the documentation accordingly.  Once Phase 2 is complete, we will assess readiness for machine‑learning enhancements and deeper analytics in Phase 3.
