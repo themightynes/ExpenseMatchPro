@@ -81,21 +81,14 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-        <p className="mt-4 text-gray-600">Loading matching candidates...</p>
-      </div>
-    );
-  }
-
+  // Prepare data (must be before early returns to maintain hook order)
   const pairs = (candidates as any)?.pairs || [];
   const allReceipts: Receipt[] = (candidates as any)?.receipts || [];
   const allCharges: AmexCharge[] = (candidates as any)?.charges || [];
 
-  // Apply filters
+  // Apply filters (these are hooks, must be called consistently)
   const filteredReceipts = useMemo(() => {
+    if (!candidates) return [];
     return allReceipts.filter(receipt => {
       const amount = parseFloat(receipt.amount);
       const date = receipt.date ? new Date(receipt.date) : null;
@@ -113,9 +106,10 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
       
       return true;
     });
-  }, [allReceipts, filters.receipts]);
+  }, [allReceipts, filters.receipts, candidates]);
 
   const filteredCharges = useMemo(() => {
+    if (!candidates) return [];
     return allCharges.filter(charge => {
       const amount = parseFloat(charge.amount);
       const date = new Date(charge.date);
@@ -133,7 +127,17 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
       
       return true;
     });
-  }, [allCharges, filters.charges]);
+  }, [allCharges, filters.charges, candidates]);
+
+  // Early returns after all hooks have been called
+  if (isLoading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading matching candidates...</p>
+      </div>
+    );
+  }
 
   const receipts = filteredReceipts;
   const charges = filteredCharges;

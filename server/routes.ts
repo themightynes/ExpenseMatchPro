@@ -2056,7 +2056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         charges: unmatchedCharges,
         scope,
         statementId,
-        sessionId: sql`gen_random_uuid()` // Generate session ID for analytics
+        sessionId: randomUUID() // Generate session ID for analytics
       });
     } catch (error) {
       console.error("Error getting matching candidates:", error);
