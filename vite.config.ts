@@ -16,6 +16,12 @@ export default defineConfig({
         ]
       : []),
   ],
+  define: {
+    // Inject CLERK_PUBLISHABLE_KEY as VITE_CLERK_PUBLISHABLE_KEY for build time
+    'import.meta.env.VITE_CLERK_PUBLISHABLE_KEY': JSON.stringify(
+      process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY
+    ),
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
