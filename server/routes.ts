@@ -114,16 +114,28 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup Clerk authentication first
-  setupClerkAuth(app);
+  // Import local storage service for development
+  const { LocalObjectStorageService, isLocalDevelopment } = await import("./localObjectStorage");
 
-  // Apply Clerk middleware globally to all routes (adds req.auth)
-  app.use(clerkMiddleware);
+  // Use local storage for development, Replit storage for production
+  const isLocal = isLocalDevelopment();
+  const objectStorageService = isLocal
+    ? new LocalObjectStorageService() as any
+    : new ObjectStorageService();
 
-  const objectStorageService = new ObjectStorageService();
+  if (isLocal) {
+    console.log("🏠 Using local file storage for development");
+  } else {
+    console.log("☁️  Using Replit object storage");
+  }
+
   const emailService = new EmailService();
 
-  // Serve uploaded files
+  // Setup Clerk authentication (webhook endpoint is registered here)
+  setupClerkAuth(app);
+
+  // Serve uploaded files - BEFORE Clerk middleware so images/PDFs load without auth
+  // This is safe because object storage itself handles access control
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {
       console.log("Serving object path:", req.path);
@@ -138,6 +150,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  // Apply Clerk middleware globally to all API routes (adds req.auth)
+  app.use(clerkMiddleware);
 
   // Direct file upload to object storage using configured Replit authentication
   app.post("/api/objects/upload", requireAuth, upload.single('file'), async (req, res) => {
