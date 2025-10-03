@@ -1119,4 +1119,18 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Lazy initialization - only create storage when accessed (not during build)
+let _storage: DatabaseStorage | null = null;
+
+function getStorage() {
+  if (!_storage) {
+    _storage = new DatabaseStorage();
+  }
+  return _storage;
+}
+
+export const storage = new Proxy({} as DatabaseStorage, {
+  get(target, prop) {
+    return (getStorage() as any)[prop];
+  }
+});
