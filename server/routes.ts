@@ -248,6 +248,11 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint - must be first, before any middleware
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // Import storage factory that auto-selects between Local/R2 storage
   const { getStorage, StorageFactory } = await import("./storageFactory");
 
