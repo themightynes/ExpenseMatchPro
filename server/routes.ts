@@ -1393,36 +1393,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let addedFiles = 0;
       let skippedFiles = 0;
 
-      // Add receipts to ZIP
-      for (const receipt of receipts) {
+      // Add receipts to ZIP - collect all promises to ensure they complete before finalization
+      const filePromises = receipts.map(async (receipt) => {
         try {
           if (!receipt.fileUrl) {
             console.log(`Skipping receipt ${receipt.id} - no file URL`);
             skippedFiles++;
-            continue;
+            return;
           }
-          
+
           // Find associated charge to determine if non-AMEX
           const associatedCharge = charges.find(c => c.receiptId === receipt.id);
-          
+
           // Skip personal expenses
           if (associatedCharge?.isPersonalExpense) {
             console.log(`Skipping receipt ${receipt.id} - personal expense`);
             skippedFiles++;
-            continue;
+            return;
           }
-          
+
           console.log(`Adding receipt ${receipt.id} with fileUrl: ${receipt.fileUrl}`);
-          
+
           // Get receipt file from object storage
           const objectFile = await objectStorageService.getObjectEntityFile(receipt.fileUrl);
-          
+
           // Use the file's download stream method directly
           const [fileBuffer] = await objectFile.download();
-          
+
           const filename = createReceiptFilename(receipt, associatedCharge);
           console.log(`Adding file to ZIP: ${filename}`);
-          
+
           archive.append(fileBuffer, { name: filename });
           addedFiles++;
         } catch (error) {
@@ -1430,7 +1430,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           skippedFiles++;
           // Continue with other receipts even if one fails
         }
-      }
+      });
+
+      // Wait for all files to be processed before finalizing
+      await Promise.all(filePromises);
 
       console.log(`ZIP creation: ${addedFiles} files added, ${skippedFiles} files skipped`);
 

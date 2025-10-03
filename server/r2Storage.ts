@@ -67,13 +67,22 @@ export class R2StorageService {
   /**
    * Get file information from R2
    * @param objectPath Path in format /objects/uploads/{uuid}
-   * @returns File metadata including content type
+   * @returns File-like object with download() method for compatibility
    */
-  async getObjectEntityFile(objectPath: string): Promise<{ key: string; contentType: string; metadata?: Record<string, string> }> {
+  async getObjectEntityFile(objectPath: string): Promise<{
+    key: string;
+    contentType: string;
+    metadata?: Record<string, string>;
+    download: () => Promise<[Buffer]>;
+  }> {
     // Remove /objects/ prefix to get the R2 key
     let key = objectPath.replace(/^\/objects\//, "");
 
     // Try to find the file - first try exact match
+    let finalKey: string;
+    let contentType: string;
+    let metadata: Record<string, string> | undefined;
+
     try {
       const headCommand = new HeadObjectCommand({
         Bucket: this.bucketName,
@@ -81,16 +90,14 @@ export class R2StorageService {
       });
 
       const headResponse = await this.s3Client.send(headCommand);
-
-      return {
-        key,
-        contentType: headResponse.ContentType || "application/octet-stream",
-        metadata: headResponse.Metadata,
-      };
+      finalKey = key;
+      contentType = headResponse.ContentType || "application/octet-stream";
+      metadata = headResponse.Metadata;
     } catch (error: any) {
       // If not found and key doesn't have an extension, try common extensions
       if ((error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) && !key.match(/\.\w+$/)) {
         const extensions = [".jpg", ".jpeg", ".png", ".pdf", ".gif", ".webp"];
+        let found = false;
 
         for (const ext of extensions) {
           try {
@@ -102,25 +109,59 @@ export class R2StorageService {
 
             const headResponse = await this.s3Client.send(headCommand);
 
-            // Found it! Return with the correct key
-            return {
-              key: keyWithExt,
-              contentType: headResponse.ContentType || "application/octet-stream",
-              metadata: headResponse.Metadata,
-            };
+            // Found it! Use this key
+            finalKey = keyWithExt;
+            contentType = headResponse.ContentType || "application/octet-stream";
+            metadata = headResponse.Metadata;
+            found = true;
+            break;
           } catch {
             // Try next extension
             continue;
           }
         }
-      }
 
-      // Still not found
-      if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) {
-        throw new Error("Object not found");
+        if (!found) {
+          throw new Error("Object not found");
+        }
+      } else {
+        // Still not found
+        if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) {
+          throw new Error("Object not found");
+        }
+        throw error;
       }
-      throw error;
     }
+
+    // Return object with download() method for compatibility with existing code
+    return {
+      key: finalKey,
+      contentType,
+      metadata,
+      download: async (): Promise<[Buffer]> => {
+        const command = new GetObjectCommand({
+          Bucket: this.bucketName,
+          Key: finalKey,
+        });
+
+        const response = await this.s3Client.send(command);
+
+        if (!response.Body) {
+          throw new Error("Empty response body");
+        }
+
+        // Convert stream to buffer
+        const chunks: Uint8Array[] = [];
+        const stream = response.Body as any;
+
+        for await (const chunk of stream) {
+          chunks.push(chunk);
+        }
+
+        const buffer = Buffer.concat(chunks);
+        return [buffer];
+      },
+    };
   }
 
   /**
