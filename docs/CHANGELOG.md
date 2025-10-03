@@ -126,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User authentication system
 
 ### Technical
-- PostgreSQL database setup with Neon
+- PostgreSQL database setup with Railway
 - Express.js API server configuration
 - React frontend initialization
 - File upload infrastructure

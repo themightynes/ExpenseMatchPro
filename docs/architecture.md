@@ -13,8 +13,8 @@ The Receipt Manager follows a modern full-stack architecture with clear separati
 │   (React/TS)    │◄──►│   (Node.js/TS)  │◄──►│  Services       │
 │                 │    │                 │    │                 │
 │ • React 18      │    │ • Express.js    │    │ • Google Cloud  │
-│ • TypeScript    │    │ • TypeScript    │    │ • Neon DB       │
-│ • Vite Build    │    │ • Drizzle ORM   │    │ • Replit Auth   │
+│ • TypeScript    │    │ • TypeScript    │    │ • Railway DB    │
+│ • Vite Build    │    │ • Drizzle ORM   │    │                 │
 │ • TanStack      │    │ • PostgreSQL    │    │                 │
 │ • Tailwind CSS  │    │ • Object Store  │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
@@ -65,7 +65,7 @@ src/
 - **Language**: TypeScript with ES modules
 - **Database ORM**: Drizzle ORM with PostgreSQL
 - **File Storage**: Google Cloud Storage with custom ACL
-- **Authentication**: Replit Auth integration
+- **Authentication**: Clerk integration
 - **Session Management**: Memory-based sessions
 
 ### Service Architecture
@@ -225,16 +225,16 @@ Project Structure
 ## Deployment Architecture
 
 ### Hosting Platform
-- **Replit Platform**: Managed hosting with integrated development
-- **Automatic Deployment**: Git-based deployment pipeline
+- **Local Development**: Development on local machine
+- **Database Hosting**: Railway for PostgreSQL
 - **Environment Management**: Development and production environments
-- **Monitoring**: Built-in application monitoring
+- **Monitoring**: Application monitoring
 
 ### Infrastructure Components
 - **Application Server**: Node.js Express application
-- **Database**: Neon serverless PostgreSQL
-- **File Storage**: Google Cloud Storage buckets
-- **CDN**: Replit's content delivery network
+- **Database**: Railway PostgreSQL
+- **File Storage**: Local storage (development), Cloud storage (production TBD)
+- **CDN**: To be determined
 
 ### Configuration Management
 - **Environment Variables**: Secure configuration storage
@@ -247,10 +247,10 @@ Project Structure
 ### External Service Integration
 ```
 Receipt Manager
-├── Google Cloud Storage  # File storage and CDN
-├── Neon Database        # PostgreSQL hosting
-├── Replit Auth          # Authentication service
-└── Future Integrations  # Oracle, QuickBooks, etc.
+├── Local Storage        # File storage (development)
+├── Railway Database     # PostgreSQL hosting
+├── Clerk               # Authentication service
+└── Future Integrations # Oracle, QuickBooks, etc.
 ```
 
 ### API Design

@@ -192,16 +192,16 @@ An integrated web application that:
 #### 5.1.2 Backend Stack
 - **Runtime**: Node.js with Express.js framework
 - **Language**: TypeScript with ES modules
-- **Database**: PostgreSQL via Neon serverless
+- **Database**: PostgreSQL via Railway
 - **ORM**: Drizzle ORM with type-safe queries
-- **File Storage**: Google Cloud Storage with custom ACL
+- **File Storage**: Local storage (development), Cloud storage (production TBD)
 
 #### 5.1.3 Infrastructure
-- **Deployment**: Replit hosting platform
-- **Database**: Neon serverless PostgreSQL
-- **File Storage**: Google Cloud Storage buckets
-- **Authentication**: Replit Auth integration
-- **Monitoring**: Built-in Replit monitoring tools
+- **Deployment**: Local development
+- **Database**: Railway PostgreSQL
+- **File Storage**: Local storage (development)
+- **Authentication**: Clerk integration
+- **Monitoring**: Application monitoring
 
 ### 5.2 Data Models ✅
 
@@ -259,7 +259,7 @@ An integrated web application that:
 ### 6.2 Internal Integrations
 
 #### 6.2.1 Authentication System ✅
-- **Replit Auth**: Primary authentication provider
+- **Clerk**: Primary authentication provider
 - **Session Management**: Secure session handling
 - **User Profiles**: Basic user information storage
 - **Permission System**: Role-based access control

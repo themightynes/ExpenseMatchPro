@@ -57,7 +57,7 @@ A modern web application that automates receipt processing, AMEX statement integ
 - **Custom ACL System** for granular file permissions
 
 ### Database
-- **PostgreSQL** via Neon Database (serverless)
+- **PostgreSQL** via Railway
 - **Drizzle Migrations** for schema management
 - **Optimized Queries** with proper indexing for performance
 
@@ -65,7 +65,7 @@ A modern web application that automates receipt processing, AMEX statement integ
 
 ### Prerequisites
 - Node.js 18+ installed
-- PostgreSQL database (or Neon account)
+- PostgreSQL database (or Railway account)
 - Google Cloud Storage bucket (optional)
 
 ### Installation
@@ -278,7 +278,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Radix UI** for accessible component primitives
 - **Drizzle ORM** for type-safe database operations
 - **TanStack Query** for excellent server state management
-- **Neon Database** for serverless PostgreSQL hosting
+- **Railway** for PostgreSQL hosting
 
 ---
 
