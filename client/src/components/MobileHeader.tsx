@@ -1,5 +1,6 @@
 import { User, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { UserButton } from "@clerk/clerk-react";
 
 interface MobileHeaderProps {
   title?: string;
@@ -8,11 +9,11 @@ interface MobileHeaderProps {
   actions?: React.ReactNode;
 }
 
-export default function MobileHeader({ 
-  title = "Receipt Manager", 
-  showBack = false, 
+export default function MobileHeader({
+  title = "Receipt Manager",
+  showBack = false,
   onBack,
-  actions 
+  actions
 }: MobileHeaderProps) {
   return (
     <header className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-200 z-40 safe-area-pt">
@@ -43,6 +44,7 @@ export default function MobileHeader({
         {/* Right side */}
         <div className="flex items-center space-x-2">
           {actions}
+          <UserButton afterSignOutUrl="/" />
         </div>
       </div>
     </header>

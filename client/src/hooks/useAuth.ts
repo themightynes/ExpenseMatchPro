@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useUser, useClerk } from "@clerk/clerk-react";
 
 interface User {
   id: string;
@@ -14,23 +15,32 @@ interface AuthStatus {
 }
 
 export function useAuth() {
-  const { data, isLoading, error, refetch } = useQuery<AuthStatus>({
+  const { isLoaded: clerkLoaded, isSignedIn, user: clerkUser } = useUser();
+  const { signOut } = useClerk();
+
+  // Query our backend to get authorization status and synced user data
+  const { data, isLoading: queryLoading, error, refetch } = useQuery<AuthStatus>({
     queryKey: ['/api/auth/status'],
-    retry: 1, // Retry once on failure
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnMount: true, // Always check on mount
+    retry: 1,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    enabled: clerkLoaded && isSignedIn, // Only fetch if Clerk is loaded and user is signed in
   });
 
-  const logout = () => {
-    window.location.href = '/auth/logout';
+  const logout = async () => {
+    await signOut();
+    window.location.href = '/';
   };
+
+  // Combine Clerk loading state with our backend query loading
+  const isLoading = !clerkLoaded || (isSignedIn && queryLoading);
 
   return {
     user: data?.user || null,
     isLoading,
-    isAuthenticated: data?.authenticated || false,
+    isAuthenticated: clerkLoaded && isSignedIn && data?.authenticated || false,
     isAuthorized: data?.user?.isAuthorized || false,
     error,
     refetch,

@@ -2,7 +2,7 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { randomUUID } from "crypto";
 import { storage } from "./storage";
-import { setupGoogleAuth, requireAuth } from "./googleAuth";
+import { setupClerkAuth, requireAuth, clerkMiddleware } from "./clerkAuth";
 import { 
   insertReceiptSchema, 
   insertAmexStatementSchema, 
@@ -114,8 +114,11 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup Google authentication first
-  setupGoogleAuth(app);
+  // Setup Clerk authentication first
+  setupClerkAuth(app);
+
+  // Apply Clerk middleware globally to all routes (adds req.auth)
+  app.use(clerkMiddleware);
 
   const objectStorageService = new ObjectStorageService();
   const emailService = new EmailService();
