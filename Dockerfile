@@ -30,9 +30,7 @@ RUN npm ci
 COPY --from=builder /app/dist ./dist
 
 # DATABASE_URL will be available at runtime from Railway environment variables
-# Default to Railway's expected port when none provided
-ENV PORT=8080
-# Railway injects the runtime port via PORT (commonly 8080), so expose it here
+# Don't set PORT - let Railway inject it dynamically
 EXPOSE 8080
 
 CMD ["npm", "start"]
