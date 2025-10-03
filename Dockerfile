@@ -20,9 +20,10 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Copy package files and install production dependencies only
+# Copy package files and install all dependencies
+# Note: We need devDependencies (like vite) because the bundled server code imports them
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Copy built application from builder
 # Vite builds client to dist/public, server to dist/index.js
