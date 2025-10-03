@@ -42,13 +42,31 @@ export class LocalObjectStorageService {
   async getObjectEntityFile(objectPath: string): Promise<{ path: string; contentType: string }> {
     // Remove /objects/ prefix
     const cleanPath = objectPath.replace(/^\/objects\//, "");
-    const filePath = path.join(LOCAL_STORAGE_DIR, cleanPath);
+    let filePath = path.join(LOCAL_STORAGE_DIR, cleanPath);
 
-    // Check if file exists
+    // Check if file exists as-is
     try {
       await fs.access(filePath);
     } catch {
-      throw new Error("Object not found");
+      // File not found without extension, try to find it with common extensions
+      const extensions = [".jpg", ".jpeg", ".png", ".pdf", ".gif", ".webp"];
+      let found = false;
+
+      for (const ext of extensions) {
+        try {
+          const pathWithExt = `${filePath}${ext}`;
+          await fs.access(pathWithExt);
+          filePath = pathWithExt;
+          found = true;
+          break;
+        } catch {
+          // Try next extension
+        }
+      }
+
+      if (!found) {
+        throw new Error("Object not found");
+      }
     }
 
     // Try to get metadata

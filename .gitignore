@@ -5,3 +5,9 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .env
+
+# Local file storage (contains uploaded receipts/PDFs)
+.local-storage/
+
+# Data migration files
+*.json
