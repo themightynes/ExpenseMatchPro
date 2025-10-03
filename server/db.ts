@@ -10,7 +10,13 @@ let _db: ReturnType<typeof drizzle> | null = null;
 
 function getPool() {
   if (!_pool) {
+    // Debug: log available env vars
+    console.log('[DB] DATABASE_URL present:', !!process.env.DATABASE_URL);
+    console.log('[DB] NODE_ENV:', process.env.NODE_ENV);
+    console.log('[DB] Env keys with DATABASE or PORT:', Object.keys(process.env).filter(k => k.includes('DATABASE') || k.includes('PORT')));
+
     if (!process.env.DATABASE_URL) {
+      console.error('[DB] All environment variables:', Object.keys(process.env));
       throw new Error(
         "DATABASE_URL must be set. Did you forget to provision a database?",
       );
