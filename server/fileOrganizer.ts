@@ -1,14 +1,15 @@
-import { ObjectStorageService } from "./objectStorage";
+import { getStorage } from "./storageFactory";
+import type { IStorageService } from "./storageFactory";
 import { storage } from "./storage";
 import { confidenceModel } from "./services/confidenceModel";
 import { merchantNormalizer } from "./services/merchantNormalizer";
 import type { Receipt } from "@shared/schema";
 
 export class FileOrganizer {
-  private objectStorage: ObjectStorageService;
+  private objectStorage: IStorageService;
 
   constructor() {
-    this.objectStorage = new ObjectStorageService();
+    this.objectStorage = getStorage();
   }
 
   /**

@@ -254,7 +254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import storage factory that auto-selects between Local/R2 storage
-  const { getStorage, StorageFactory } = await import("./storageFactory");
+  const { getStorage, StorageFactory, normalizeObjectEntityPath, trySetObjectEntityAclPolicy } = await import("./storageFactory");
 
   // Get the appropriate storage service based on environment
   const objectStorageService = getStorage() as any;
@@ -600,7 +600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "fileUrl is required" });
       }
 
-      const objectPath = objectStorageService.normalizeObjectEntityPath(req.body.fileUrl);
+      const objectPath = normalizeObjectEntityPath(req.body.fileUrl);
 
       // Create receipt record and start OCR processing
       const receipt = await storage.createReceipt({
@@ -655,10 +655,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         });
 
-      // Set ACL policy for the uploaded receipt
+      // Set ACL policy for the uploaded receipt (NO-OP for R2/Local, handled at bucket/route level)
       try {
-        await objectStorageService.trySetObjectEntityAclPolicy(req.body.fileUrl, {
-          owner: "system", // Or use authenticated user ID when auth is implemented
+        await trySetObjectEntityAclPolicy(req.body.fileUrl, {
+          owner: "system",
           visibility: "private",
         });
       } catch (aclError) {

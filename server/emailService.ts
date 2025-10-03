@@ -1,6 +1,7 @@
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import axios from 'axios';
-import { ObjectStorageService } from './objectStorage';
+import { getStorage } from './storageFactory';
+import type { IStorageService } from './storageFactory';
 import { OCRService } from './ocrService';
 import type { InsertReceipt } from '@shared/schema';
 
@@ -31,12 +32,12 @@ interface ProcessedReceipt {
 
 export class EmailService {
   private msalClient: ConfidentialClientApplication | null = null;
-  private objectStorage: ObjectStorageService;
+  private objectStorage: IStorageService;
   private ocrService: OCRService;
   private accessToken: string | null = null;
 
   constructor() {
-    this.objectStorage = new ObjectStorageService();
+    this.objectStorage = getStorage();
     this.ocrService = new OCRService();
   }
 
@@ -290,30 +291,23 @@ export class EmailService {
         try {
           console.log(`Downloading attachment: ${attachment.name}`);
           const attachmentBuffer = await this.downloadAttachment(userEmail, email.id, attachment.id);
-          
-          // Upload to object storage
-          const uploadUrl = await this.objectStorage.getObjectEntityUploadURL();
-          
-          // Upload the file
-          const uploadResponse = await axios.put(uploadUrl, attachmentBuffer, {
-            headers: {
-              'Content-Type': attachment.contentType,
-            },
+
+          // Upload directly to storage (new simplified pattern)
+          const fileUrl = await this.objectStorage.uploadFile(
+            attachmentBuffer,
+            attachment.name,
+            attachment.contentType
+          );
+
+          processedReceipts.push({
+            fileName: attachment.name,
+            fileUrl,
+            source: 'attachment',
+            emailSubject: email.subject,
+            emailDate: email.receivedDateTime,
           });
 
-          if (uploadResponse.status === 200) {
-            const fileUrl = this.objectStorage.normalizeObjectEntityPath(uploadUrl);
-            
-            processedReceipts.push({
-              fileName: attachment.name,
-              fileUrl,
-              source: 'attachment',
-              emailSubject: email.subject,
-              emailDate: email.receivedDateTime,
-            });
-
-            console.log(`Successfully processed attachment: ${attachment.name}`);
-          }
+          console.log(`Successfully processed attachment: ${attachment.name}`);
         } catch (error) {
           console.error(`Error processing attachment ${attachment.name}:`, error);
         }
@@ -346,28 +340,24 @@ Original Email Body:
 ${email.body}`;
 
         try {
-          const uploadUrl = await this.objectStorage.getObjectEntityUploadURL();
           const textBuffer = Buffer.from(textContent, 'utf-8');
-          
-          const uploadResponse = await axios.put(uploadUrl, textBuffer, {
-            headers: {
-              'Content-Type': 'text/plain',
-            },
+
+          // Upload directly to storage (new simplified pattern)
+          const fileUrl = await this.objectStorage.uploadFile(
+            textBuffer,
+            `${email.subject.replace(/[^a-zA-Z0-9]/g, '_')}_email_receipt.txt`,
+            'text/plain'
+          );
+
+          processedReceipts.push({
+            fileName: `${email.subject.replace(/[^a-zA-Z0-9]/g, '_')}_email_receipt.txt`,
+            fileUrl,
+            source: 'email_body',
+            emailSubject: email.subject,
+            emailDate: email.receivedDateTime,
           });
 
-          if (uploadResponse.status === 200) {
-            const fileUrl = this.objectStorage.normalizeObjectEntityPath(uploadUrl);
-            
-            processedReceipts.push({
-              fileName: `${email.subject.replace(/[^a-zA-Z0-9]/g, '_')}_email_receipt.txt`,
-              fileUrl,
-              source: 'email_body',
-              emailSubject: email.subject,
-              emailDate: email.receivedDateTime,
-            });
-
-            console.log(`Successfully processed email body receipt: ${email.subject}`);
-          }
+          console.log(`Successfully processed email body receipt: ${email.subject}`);
         } catch (error) {
           console.error(`Error processing email body receipt:`, error);
         }

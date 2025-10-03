@@ -22,11 +22,13 @@ interface ExtractedReceiptData {
 }
 
 export class OCRService {
-  private objectStorage: ObjectStorageService;
+  private objectStorage: any;
   private tesseractWorker: any = null;
 
   constructor() {
-    this.objectStorage = new ObjectStorageService();
+    // Use storage factory to get the appropriate storage service
+    const { getStorage } = require("./storageFactory");
+    this.objectStorage = getStorage();
   }
 
   /**
@@ -529,19 +531,13 @@ export class OCRService {
     extractedData: ExtractedReceiptData;
   }> {
     console.log(`Starting OCR processing for: ${fileUrl}`);
-    
+
     try {
       // Get the file from object storage
       const objectFile = await this.objectStorage.getObjectEntityFile(fileUrl);
-      
-      // Download file buffer
-      const chunks: Buffer[] = [];
-      const stream = objectFile.createReadStream();
-      
-      for await (const chunk of stream) {
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
+
+      // Download file buffer using the unified download() method
+      const [buffer] = await objectFile.download();
       
       // Determine file type from original filename if available, otherwise from URL
       const fileName = originalFileName || fileUrl;

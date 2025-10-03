@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Response } from "express";
 import { randomUUID } from "crypto";
@@ -273,6 +273,40 @@ export class R2StorageService {
 
     const url = await getSignedUrl(this.s3Client, command, { expiresIn });
     return url;
+  }
+
+  /**
+   * Move/rename a file from one path to another
+   * @param sourcePath Source path in format /objects/uploads/{uuid}
+   * @param destinationPath Destination path in format /objects/...
+   */
+  async moveObject(sourcePath: string, destinationPath: string): Promise<void> {
+    const sourceKey = sourcePath.replace(/^\/objects\//, "");
+    const destKey = destinationPath.replace(/^\/objects\//, "");
+
+    try {
+      // Copy to new location
+      const copyCommand = new CopyObjectCommand({
+        Bucket: this.bucketName,
+        CopySource: `${this.bucketName}/${sourceKey}`,
+        Key: destKey,
+      });
+
+      await this.s3Client.send(copyCommand);
+
+      // Delete original
+      const deleteCommand = new DeleteObjectCommand({
+        Bucket: this.bucketName,
+        Key: sourceKey,
+      });
+
+      await this.s3Client.send(deleteCommand);
+
+      console.log(`✅ Moved in R2: ${sourceKey} → ${destKey}`);
+    } catch (error) {
+      console.error(`Error moving object in R2 from ${sourcePath} to ${destinationPath}:`, error);
+      throw error;
+    }
   }
 }
 

@@ -11,6 +11,7 @@ export interface IStorageService {
   getObjectEntityFile(objectPath: string): Promise<any>;
   downloadObject(fileInfo: any, res: Response): Promise<void>;
   deleteObject(objectPath: string): Promise<boolean>;
+  moveObject(sourcePath: string, destinationPath: string): Promise<void>;
 }
 
 /**
@@ -62,4 +63,52 @@ export class StorageFactory {
  */
 export const getStorage = (): IStorageService => {
   return StorageFactory.getStorageService();
+};
+
+/**
+ * Helper: Normalize object path from various formats to standard /objects/... format
+ * Handles URLs, paths with/without /objects/ prefix
+ */
+export const normalizeObjectEntityPath = (rawPath: string): string => {
+  // Already in correct format
+  if (rawPath.startsWith("/objects/")) {
+    return rawPath;
+  }
+
+  // Handle full URLs (from old Replit storage or presigned URLs)
+  if (rawPath.startsWith("http://") || rawPath.startsWith("https://")) {
+    try {
+      const url = new URL(rawPath);
+      const pathname = url.pathname;
+
+      // Extract /objects/... portion if present
+      if (pathname.includes("/objects/")) {
+        return pathname.substring(pathname.indexOf("/objects/"));
+      }
+
+      // Otherwise use the full pathname
+      return pathname.startsWith("/objects/") ? pathname : `/objects${pathname}`;
+    } catch {
+      // Invalid URL, return as-is
+      return rawPath;
+    }
+  }
+
+  // Add /objects/ prefix if missing
+  return rawPath.startsWith("/") ? `/objects${rawPath}` : `/objects/${rawPath}`;
+};
+
+/**
+ * Helper: Set ACL policy (NO-OP for R2/Local storage)
+ * Access control is handled at bucket/route level, not per-file
+ */
+export const trySetObjectEntityAclPolicy = async (
+  rawPath: string,
+  aclPolicy: { owner?: string; visibility?: string }
+): Promise<string> => {
+  // Normalize the path and return it
+  // ACL is not needed for R2 (bucket-level permissions) or Local (route-level auth)
+  const normalizedPath = normalizeObjectEntityPath(rawPath);
+  console.log(`ACL policy ignored for ${normalizedPath} (handled at bucket/route level)`);
+  return normalizedPath;
 };

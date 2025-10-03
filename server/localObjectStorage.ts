@@ -39,7 +39,11 @@ export class LocalObjectStorageService {
     return `/objects/uploads/${fileId}`;
   }
 
-  async getObjectEntityFile(objectPath: string): Promise<{ path: string; contentType: string }> {
+  async getObjectEntityFile(objectPath: string): Promise<{
+    path: string;
+    contentType: string;
+    download: () => Promise<[Buffer]>;
+  }> {
     // Remove /objects/ prefix
     const cleanPath = objectPath.replace(/^\/objects\//, "");
     let filePath = path.join(LOCAL_STORAGE_DIR, cleanPath);
@@ -89,7 +93,15 @@ export class LocalObjectStorageService {
       contentType = mimeTypes[ext] || contentType;
     }
 
-    return { path: filePath, contentType };
+    // Return with download() method for compatibility
+    return {
+      path: filePath,
+      contentType,
+      download: async (): Promise<[Buffer]> => {
+        const buffer = await fs.readFile(filePath);
+        return [buffer];
+      },
+    };
   }
 
   async downloadObject(fileInfo: { path: string; contentType: string }, res: Response) {
@@ -117,6 +129,37 @@ export class LocalObjectStorageService {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  async moveObject(sourcePath: string, destinationPath: string): Promise<void> {
+    const sourceClean = sourcePath.replace(/^\/objects\//, "");
+    const destClean = destinationPath.replace(/^\/objects\//, "");
+
+    const sourceFilePath = path.join(LOCAL_STORAGE_DIR, sourceClean);
+    const destFilePath = path.join(LOCAL_STORAGE_DIR, destClean);
+
+    try {
+      // Ensure destination directory exists
+      const destDir = path.dirname(destFilePath);
+      await fs.mkdir(destDir, { recursive: true });
+
+      // Move the file
+      await fs.rename(sourceFilePath, destFilePath);
+
+      // Try to move metadata file if it exists
+      try {
+        const sourceMetaPath = `${sourceFilePath}.meta.json`;
+        const destMetaPath = `${destFilePath}.meta.json`;
+        await fs.rename(sourceMetaPath, destMetaPath);
+      } catch {
+        // Metadata file doesn't exist, ignore
+      }
+
+      console.log(`✅ Moved locally: ${sourceClean} → ${destClean}`);
+    } catch (error) {
+      console.error(`Error moving object locally from ${sourcePath} to ${destinationPath}:`, error);
+      throw error;
     }
   }
 }
