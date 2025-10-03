@@ -11,3 +11,4 @@ vite.config.ts.*
 
 # Data migration files
 *.json
+.Railway-Migration-Guide.md

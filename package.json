@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@aws-sdk/s3-request-presigner": "^3.901.0",
     "@azure/msal-node": "^3.7.0",
     "@clerk/clerk-react": "^5.49.1",
     "@clerk/clerk-sdk-node": "^4.13.23",

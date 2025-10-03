@@ -42,12 +42,149 @@ import multer from "multer";
 // Configure multer for file uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
+const CSV_LINE_REGEX = /(\".*?\"|[^",]+)(?=\s*,|\s*$)/g;
+
+const CSV_HEADER_MAP: Record<string, string> = {
+  date: "Date",
+  "transaction date": "Date",
+  "posting date": "Date",
+  "processed date": "Date",
+  description: "Description",
+  merchant: "Description",
+  "merchant name": "Description",
+  memo: "Description",
+  "card member": "Card Member",
+  cardmember: "Card Member",
+  "card member name": "Card Member",
+  "employee name": "Card Member",
+  "employee": "Card Member",
+  "account #": "Account #",
+  "account number": "Account #",
+  account: "Account #",
+  "account no.": "Account #",
+  amount: "Amount",
+  "amount (usd)": "Amount",
+  "transaction amount": "Amount",
+  "charge amount": "Amount",
+  "extended details": "Extended Details",
+  "appears on your statement as": "Appears On Your Statement As",
+  address: "Address",
+  "merchant address": "Address",
+  "city/state": "City/State",
+  "city / state": "City/State",
+  city: "City/State",
+  "city state": "City/State",
+  "zip code": "Zip Code",
+  "postal code": "Zip Code",
+  zipcode: "Zip Code",
+  country: "Country",
+  reference: "Reference",
+  "reference number": "Reference",
+  "transaction reference": "Reference",
+  "transaction id": "Reference",
+  "auth code": "Reference",
+  category: "Category",
+  type: "Category",
+  "expense category": "Category",
+  "charge category": "Category",
+  "category code": "Category",
+};
+
+const sanitizeCsvValue = (value: string) => value.replace(/^"|"$/g, "").trim();
+
+const canonicalizeHeader = (header: string) => {
+  const normalized = sanitizeCsvValue(header).replace(/^\uFEFF/, "");
+  const mapped = CSV_HEADER_MAP[normalized.toLowerCase()];
+  return mapped ?? normalized;
+};
+
+const parseCsvLine = (line: string) =>
+  (line.match(CSV_LINE_REGEX) || []).map((value) => sanitizeCsvValue(value));
+
+const buildRowData = (headers: string[], values: string[]) => {
+  const row: Record<string, string> = {};
+  headers.forEach((header, index) => {
+    row[header] = values[index] ?? "";
+  });
+  return row;
+};
+
+const coalesce = (...values: (string | undefined)[]) => {
+  for (const value of values) {
+    if (value && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "";
+};
+
+const normalizeRowForSchema = (row: Record<string, string>, lineIndex: number) => {
+  const normalized: Record<string, string> = { ...row };
+
+  normalized.Date = coalesce(
+    row.Date,
+    row["Transaction Date"],
+    row["Posting Date"],
+    row["Processed Date"],
+  );
+
+  normalized.Description = coalesce(
+    row.Description,
+    row.Merchant,
+    row["Merchant Name"],
+    row.Memo,
+  );
+
+  normalized["Card Member"] = coalesce(
+    row["Card Member"],
+    row["Card Member Name"],
+    row["Employee"],
+    row["Employee Name"],
+    "Unknown",
+  );
+
+  normalized["Account #"] = coalesce(
+    row["Account #"],
+    row["Account Number"],
+    row.Account,
+    row["Account No."],
+  );
+
+  normalized.Amount = coalesce(
+    row.Amount,
+    row["Amount (USD)"],
+    row["Transaction Amount"],
+    row["Charge Amount"],
+  );
+
+  normalized.Reference = coalesce(
+    row.Reference,
+    row["Reference Number"],
+    row["Transaction Reference"],
+    row["Transaction ID"],
+    row["Auth Code"],
+    `AUTO-REF-${lineIndex}`,
+  );
+
+  normalized.Category = coalesce(
+    row.Category,
+    row.Type,
+    row["Expense Category"],
+    row["Charge Category"],
+    row["Category Code"],
+    "Uncategorized",
+  );
+
+  return normalized;
+};
+
 // Function to check for duplicate statements
 async function checkForDuplicateStatements(csvContent: string, existingStatements: any[]): Promise<any[]> {
-  const lines = csvContent.split('\n');
+  const lines = csvContent.split(/\r?\n/);
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
+  const headerValues = parseCsvLine(lines[0]);
+  const headers = headerValues.map(canonicalizeHeader);
   const charges = [];
 
   // Parse first few rows to get date range
@@ -56,16 +193,13 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
     if (!line) continue;
 
     try {
-      const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
-      const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
+      const cleanValues = parseCsvLine(line);
+      const rowData = buildRowData(headers, cleanValues);
+      const normalizedRow = normalizeRowForSchema(rowData, i);
 
-      const rowData: any = {};
-      headers.forEach((header: string, index: number) => {
-        rowData[header] = cleanValues[index] || '';
-      });
-
-      if (rowData.Date) {
-        const dateParts = rowData.Date.split('/');
+      const dateString = normalizedRow.Date;
+      if (dateString) {
+        const dateParts = dateString.split('/');
         if (dateParts.length === 3) {
           const month = parseInt(dateParts[0]);
           const day = parseInt(dateParts[1]);
@@ -75,8 +209,8 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
             const chargeDate = new Date(year, month - 1, day);
             charges.push({
               date: chargeDate,
-              description: rowData.Description || '',
-              amount: rowData.Amount || ''
+              description: normalizedRow.Description || '',
+              amount: normalizedRow.Amount || ''
             });
           }
         }
@@ -114,20 +248,13 @@ async function checkForDuplicateStatements(csvContent: string, existingStatement
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Import local storage service for development
-  const { LocalObjectStorageService, isLocalDevelopment } = await import("./localObjectStorage");
+  // Import storage factory that auto-selects between Local/R2 storage
+  const { getStorage, StorageFactory } = await import("./storageFactory");
 
-  // Use local storage for development, Replit storage for production
-  const isLocal = isLocalDevelopment();
-  const objectStorageService = isLocal
-    ? new LocalObjectStorageService() as any
-    : new ObjectStorageService();
+  // Get the appropriate storage service based on environment
+  const objectStorageService = getStorage() as any;
 
-  if (isLocal) {
-    console.log("🏠 Using local file storage for development");
-  } else {
-    console.log("☁️  Using Replit object storage");
-  }
+  console.log(`📦 Storage provider: ${StorageFactory.getProviderName()}`)
 
   const emailService = new EmailService();
 
@@ -888,9 +1015,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No CSV file uploaded" });
       }
 
-      const csvContent = req.file.buffer.toString('utf-8');
-      const lines = csvContent.split('\n');
-      const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
+      const csvContent = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, '');
+      const lines = csvContent.split(/\r?\n/);
+      const headerValues = parseCsvLine(lines[0]);
+      const headers = headerValues.map(canonicalizeHeader);
 
       const { periodName } = req.body;
       if (!periodName) {
@@ -912,16 +1040,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!line) continue;
 
         try {
-          const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
-          const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
+          const cleanValues = parseCsvLine(line);
+          const rowData = buildRowData(headers, cleanValues);
+          const normalizedRow = normalizeRowForSchema(rowData, i);
 
-          const rowData: any = {};
-          headers.forEach((header: string, index: number) => {
-            rowData[header] = cleanValues[index] || '';
-          });
-
-          if (rowData.Date) {
-            const dateParts = rowData.Date.split('/');
+          const dateString = normalizedRow.Date;
+          if (dateString) {
+            const dateParts = dateString.split('/');
             if (dateParts.length === 3) {
               const month = parseInt(dateParts[0]);
               const day = parseInt(dateParts[1]);
@@ -989,16 +1114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         try {
           // Parse CSV line (handle quoted values)
-          const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
-          const cleanValues = values.map((v: string) => v.replace(/^"|"$/g, '').trim());
-
-          const rowData: any = {};
-          headers.forEach((header: string, index: number) => {
-            rowData[header] = cleanValues[index] || '';
-          });
+          const cleanValues = parseCsvLine(line);
+          const rowData = buildRowData(headers, cleanValues);
+          const normalizedRow = normalizeRowForSchema(rowData, i);
 
           // Validate with schema
-          const validatedRow = amexCsvRowSchema.parse(rowData);
+          const validatedRow = amexCsvRowSchema.parse(normalizedRow);
 
           // Skip payments and credits (negative amounts or "AUTOPAY")
           if (validatedRow.Description.includes('AUTOPAY') || validatedRow.Description.includes('PAYMENT')) {

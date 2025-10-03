@@ -394,7 +394,7 @@ export default function StatementsPage() {
         </div>
 
         {/* Statements List */}
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-3xl mx-auto">
           <h2 className="text-xl font-semibold text-gray-900">Statement Periods</h2>
 
           {statements.length === 0 ? (
@@ -412,7 +412,7 @@ export default function StatementsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               {statements.map((statement) => {
                 const stats = getStatementStats(statement.id);
                 return (
