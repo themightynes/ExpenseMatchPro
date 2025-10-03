@@ -25,8 +25,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Copy built application from builder
+# Vite builds client to dist/public, server to dist/index.js
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/client/dist ./client/dist
 
 # DATABASE_URL will be available at runtime from Railway environment variables
 EXPOSE 5000
