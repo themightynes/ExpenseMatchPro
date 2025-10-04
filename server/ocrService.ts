@@ -1,5 +1,6 @@
 import { createWorker } from 'tesseract.js';
-import { ObjectStorageService } from './objectStorage';
+import { getStorage } from './storageFactory';
+import type { IStorageService } from './storageFactory';
 
 interface ExtractedReceiptData {
   merchant?: string;
@@ -22,12 +23,11 @@ interface ExtractedReceiptData {
 }
 
 export class OCRService {
-  private objectStorage: any;
+  private objectStorage: IStorageService;
   private tesseractWorker: any = null;
 
   constructor() {
     // Use storage factory to get the appropriate storage service
-    const { getStorage } = require("./storageFactory");
     this.objectStorage = getStorage();
   }
 

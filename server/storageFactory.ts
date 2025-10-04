@@ -75,7 +75,7 @@ export const normalizeObjectEntityPath = (rawPath: string): string => {
     return rawPath;
   }
 
-  // Handle full URLs (from old Replit storage or presigned URLs)
+  // Handle full URLs (from legacy storage systems or presigned URLs)
   if (rawPath.startsWith("http://") || rawPath.startsWith("https://")) {
     try {
       const url = new URL(rawPath);

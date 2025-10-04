@@ -11,7 +11,7 @@ import {
   amexCsvRowSchema,
   EXPENSE_CATEGORIES 
 } from "@shared/schema";
-import { ObjectStorageService, ObjectNotFoundError, objectStorageClient, parseObjectPath } from "./objectStorage";
+import { ObjectNotFoundError } from "./objectStorage";
 import { ocrService } from "./ocrService";
 import { EmailService } from "./emailService";
 import archiver from 'archiver';
@@ -286,7 +286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Apply Clerk middleware globally to all API routes (adds req.auth)
   app.use(clerkMiddleware);
 
-  // Direct file upload to object storage using configured Replit authentication
+  // Direct file upload to object storage (works with R2/Local)
   app.post("/api/objects/upload", requireAuth, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
@@ -295,39 +295,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Uploading file directly:", req.file.originalname);
 
-      // Generate a unique object path
-      const objectId = randomUUID();
-      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
-
-      if (!privateObjectDir) {
-        return res.status(500).json({ 
-          error: "Object storage not configured. Please set PRIVATE_OBJECT_DIR environment variable." 
-        });
-      }
-
-      const objectPath = `${privateObjectDir}/uploads/${objectId}`;
-
-      // Use the existing parseObjectPath utility and configured storage client
-      const { bucketName, objectName } = parseObjectPath(objectPath);
-
-      // Use the pre-configured objectStorageClient with Replit authentication
-      const bucket = objectStorageClient.bucket(bucketName);
-      const file = bucket.file(objectName);
-
-      // Upload the file buffer
-      await file.save(req.file.buffer, {
-        metadata: {
-          contentType: req.file.mimetype,
-        },
-      });
+      // Upload using the unified storage interface
+      const objectPath = await objectStorageService.uploadFile(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype || 'application/octet-stream'
+      );
 
       console.log(`File uploaded successfully to: ${objectPath}`);
 
       // Return the object path for processing
-      res.json({ 
-        success: true, 
-        objectPath: `/objects/uploads/${objectId}`,
-        fileName: req.file.originalname 
+      res.json({
+        success: true,
+        objectPath,
+        fileName: req.file.originalname
       });
 
     } catch (error) {
@@ -757,46 +738,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (contentType.includes('image') || contentType.includes('pdf')) {
               // Get the file content as buffer
               const fileBuffer = Buffer.from(await response.arrayBuffer());
-              
-              // Upload to our object storage
-              const objectStorageService = new ObjectStorageService(objectStorageClient);
-              const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-              
-              const uploadResponse = await fetch(uploadURL, {
-                method: 'PUT',
-                body: fileBuffer,
-                headers: {
-                  'Content-Type': contentType,
-                },
-              });
 
-              if (uploadResponse.ok) {
-                // Extract the object path from the upload URL
-                const urlParts = uploadURL.split('?')[0];
-                const pathMatch = urlParts.match(/\/([^\/]+\/[^\/]+)$/);
-                if (pathMatch) {
-                  actualFileUrl = `/objects/${pathMatch[1]}`;
-                  console.log('Successfully uploaded content from URL to:', actualFileUrl);
-                  
-                  // Start OCR processing for the uploaded file
-                  const fileName = url.includes('googleusercontent.com') ? 'gmail-attachment' : 'web-content';
-                  const fileExtension = contentType.includes('pdf') ? '.pdf' : 
-                                      contentType.includes('jpeg') ? '.jpg' : 
-                                      contentType.includes('png') ? '.png' : '';
-                  
-                  try {
-                    const ocrResult = await ocrService.processReceipt(actualFileUrl, fileName + fileExtension);
-                    ocrText = ocrResult.ocrText || 'File uploaded successfully - add details manually';
-                    extractedData = ocrResult.extractedData || {};
-                    
-                    if (extractedData.merchant) extractedData.merchant = extractedData.merchant;
-                    if (extractedData.amount) extractedData.amount = extractedData.amount;
-                    if (extractedData.date) extractedData.date = extractedData.date;
-                  } catch (ocrError) {
-                    console.error('OCR processing failed:', ocrError);
-                    ocrText = 'File uploaded successfully - OCR failed, add details manually';
-                  }
-                }
+              // Determine filename with extension
+              const fileName = url.includes('googleusercontent.com') ? 'gmail-attachment' : 'web-content';
+              const fileExtension = contentType.includes('pdf') ? '.pdf' :
+                                   contentType.includes('jpeg') ? '.jpg' :
+                                   contentType.includes('png') ? '.png' : '';
+
+              // Upload to object storage (unified interface)
+              actualFileUrl = await objectStorageService.uploadFile(
+                fileBuffer,
+                fileName + fileExtension,
+                contentType
+              );
+
+              console.log('Successfully uploaded content from URL to:', actualFileUrl);
+
+              // Start OCR processing for the uploaded file
+              try {
+                const ocrResult = await ocrService.processReceipt(actualFileUrl, fileName + fileExtension);
+                ocrText = ocrResult.ocrText || 'File uploaded successfully - add details manually';
+                extractedData = ocrResult.extractedData || {};
+
+                if (extractedData.merchant) extractedData.merchant = extractedData.merchant;
+                if (extractedData.amount) extractedData.amount = extractedData.amount;
+                if (extractedData.date) extractedData.date = extractedData.date;
+              } catch (ocrError) {
+                console.error('OCR processing failed:', ocrError);
+                ocrText = 'File uploaded successfully - OCR failed, add details manually';
               }
             }
           }
@@ -945,7 +914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rows = charges.map(charge => {
         const receipt = charge.receipt;
         const receiptPath = receipt ? storage.getOrganizedPath(receipt) : '';
-        const receiptUrl = receipt ? `${process.env.BASE_URL || 'https://your-domain.replit.dev'}${receipt.fileUrl}` : '';
+        const receiptUrl = receipt ? `${process.env.BASE_URL || req.protocol + '://' + req.get('host')}${receipt.fileUrl}` : '';
         
         return [
           charge.date.toISOString().split('T')[0], // Expense_Date
@@ -2687,8 +2656,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Charge not found" });
       }
 
+      // Upload file to object storage (new simplified pattern)
+      const objectPath = await objectStorageService.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype || 'application/octet-stream'
+      );
+
       // Create receipt with charge information pre-filled
-      const receiptData = {
+      const receipt = await storage.createReceipt({
         fileName: file.originalname,
         originalFileName: file.originalname,
         merchant: charge.description,
@@ -2701,35 +2677,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         statementId: charge.statementId,
         isMatched: true,
         matchedChargeId: chargeId,
-      };
-
-      // Upload file to object storage using signed URL pattern
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-
-      // Extract the object path from the upload URL for our file reference
-      const urlParts = uploadURL.split('?')[0]; // Remove query parameters
-      const pathMatch = urlParts.match(/\/([^\/]+\/[^\/]+)$/);
-      if (!pathMatch) {
-        throw new Error('Could not extract path from upload URL');
-      }
-      const objectPath = `/objects/${pathMatch[1]}`;
-
-      // Upload file directly to the signed URL
-      const uploadResponse = await fetch(uploadURL, {
-        method: 'PUT',
-        body: file.buffer,
-        headers: {
-          'Content-Type': file.mimetype || 'application/octet-stream',
-        },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.status}`);
-      }
-
-      // Create receipt record
-      const receipt = await storage.createReceipt({
-        ...receiptData,
         fileUrl: objectPath
       });
 

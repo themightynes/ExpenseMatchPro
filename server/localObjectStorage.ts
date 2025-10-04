@@ -164,7 +164,7 @@ export class LocalObjectStorageService {
   }
 }
 
-// Check if we're running on localhost
+// Check if we're in local development mode
 export const isLocalDevelopment = () => {
-  return !process.env.REPL_ID && !process.env.REPLIT_DB_URL;
+  return !process.env.RAILWAY_ENVIRONMENT && !process.env.FLY_APP_NAME;
 };
