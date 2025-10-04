@@ -139,7 +139,9 @@ export default function Dashboard() {
                   <span className="text-gray-400 mx-2">|</span>
                   <span className="text-green-600">{financialStats?.matchedCount || 0} Matched</span>
                   <span className="text-gray-400 mx-2">|</span>
-                  <span className="text-red-600">{financialStats?.missingReceiptCount || 0} Unmatched</span>
+                  <span className="text-red-600">{financialStats?.missingReceiptCount || 0} Missing Receipts</span>
+                  <span className="text-gray-400 mx-2">|</span>
+                  <span className="text-amber-600">{financialStats?.unmatchedReceiptCount || 0} Unmatched Receipts</span>
                   <span className="text-gray-400 mx-2">|</span>
                   <span className="text-orange-600">{financialStats?.noReceiptRequiredCount || 0} No Receipt Needed</span>
                   <span className="text-gray-400 mx-2">|</span>
