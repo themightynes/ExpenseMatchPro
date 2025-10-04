@@ -83,48 +83,78 @@ export default function ReceiptsPage() {
   }, [location, receipts]);
 
   // Build folder structure based on receipt organization
-  const buildFolderStructure = (receipts: Receipt[], statements: AmexStatement[]): FolderStructure => {
+  const buildFolderStructure = (
+    receipts: Receipt[],
+    statements: AmexStatement[],
+    includeAllFolders: boolean
+  ): FolderStructure => {
     const structure: FolderStructure = {};
-    
-    // Create statement folders
-    statements.forEach(statement => {
+    const statementMap = new Map(statements.map((statement) => [statement.id, statement]));
+
+    const ensureStatementFolder = (statement: AmexStatement) => {
       const folderName = statement.periodName;
-      structure[folderName] = {
-        receipts: [],
-        folders: {
-          "Matched": { receipts: [] },
-          "Unmatched": { receipts: [] }
-        }
-      };
-    });
-
-    // Add special folders
-    structure["Inbox_New"] = { receipts: [] };
-    structure["Unmatched"] = { receipts: [] };
-    structure["Non-Reimbursable"] = { receipts: [] };
-
-    // Organize receipts into folders
-    receipts.forEach(receipt => {
-      if (receipt.statementId && receipt.isMatched) {
-        const statement = statements.find(s => s.id === receipt.statementId);
-        if (statement && structure[statement.periodName]?.folders) {
-          structure[statement.periodName].folders!["Matched"].receipts.push(receipt);
-        }
-      } else if (receipt.statementId && !receipt.isMatched) {
-        const statement = statements.find(s => s.id === receipt.statementId);
-        if (statement && structure[statement.periodName]?.folders) {
-          structure[statement.periodName].folders!["Unmatched"].receipts.push(receipt);
-        }
-      } else {
-        // Unassigned receipts go to Inbox_New
-        structure["Inbox_New"].receipts.push(receipt);
+      if (!structure[folderName]) {
+        structure[folderName] = {
+          receipts: [],
+          folders: {
+            Matched: { receipts: [] },
+            Unmatched: { receipts: [] },
+          },
+        };
       }
+      return structure[folderName];
+    };
+
+    const ensureTopLevelFolder = (folderName: string) => {
+      if (!structure[folderName]) {
+        structure[folderName] = { receipts: [] };
+      }
+      return structure[folderName];
+    };
+
+    if (includeAllFolders) {
+      statements.forEach(ensureStatementFolder);
+      ["Inbox_New", "Unmatched", "Non-Reimbursable"].forEach(ensureTopLevelFolder);
+    }
+
+    receipts.forEach((receipt) => {
+      if (receipt.statementId) {
+        const statement = statementMap.get(receipt.statementId);
+        if (statement) {
+          const statementFolder = ensureStatementFolder(statement);
+          const bucket = receipt.isMatched ? "Matched" : "Unmatched";
+          statementFolder.folders?.[bucket].receipts.push(receipt);
+          return;
+        }
+      }
+
+      ensureTopLevelFolder("Inbox_New").receipts.push(receipt);
     });
+
+    if (!includeAllFolders) {
+      Object.entries(structure).forEach(([folderName, folderData]) => {
+        const hasContent =
+          folderData.receipts.length > 0 ||
+          (folderData.folders &&
+            Object.values(folderData.folders).some((subFolder) => subFolder.receipts.length > 0));
+        if (!hasContent) {
+          delete structure[folderName];
+        }
+      });
+    }
 
     return structure;
   };
 
-  const folderStructure = buildFolderStructure(receipts, statements);
+  const hasVisibleContent = (folderData: { receipts: Receipt[]; folders?: FolderStructure }): boolean => {
+    if (folderData.receipts.length > 0) {
+      return true;
+    }
+    if (!folderData.folders) {
+      return false;
+    }
+    return Object.values(folderData.folders).some((subFolder) => hasVisibleContent(subFolder));
+  };
 
   const toggleFolder = (folderPath: string) => {
     const newExpanded = new Set(expandedFolders);
@@ -155,12 +185,20 @@ export default function ReceiptsPage() {
     receipt.merchant?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const isSearching = searchTerm.trim().length > 0;
+  const receiptsForStructure = isSearching ? filteredReceipts : receipts;
+  const folderStructure = buildFolderStructure(receiptsForStructure, statements, !isSearching);
+
   const renderFolder = (
-    folderName: string, 
-    folderData: { receipts: Receipt[]; folders?: FolderStructure }, 
+    folderName: string,
+    folderData: { receipts: Receipt[]; folders?: FolderStructure },
     level: number = 0,
     parentPath: string = ""
-  ) => {
+  ): JSX.Element | null => {
+    if (isSearching && !hasVisibleContent(folderData)) {
+      return null;
+    }
+
     const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
     const isExpanded = expandedFolders.has(folderPath);
     const hasSubfolders = folderData.folders && Object.keys(folderData.folders).length > 0;
@@ -171,6 +209,10 @@ export default function ReceiptsPage() {
     const displayReceipts = searchTerm 
       ? folderData.receipts.filter(r => filteredReceipts.includes(r))
       : folderData.receipts;
+
+    const subFolders = folderData.folders
+      ? Object.entries(folderData.folders).filter(([, subFolder]) => !isSearching || hasVisibleContent(subFolder))
+      : [];
 
     return (
       <Card key={folderPath} className={`${level > 0 ? 'ml-3' : ''} mb-3`}>
@@ -280,7 +322,7 @@ export default function ReceiptsPage() {
             ))}
 
             {/* Subfolders */}
-            {folderData.folders && Object.entries(folderData.folders).map(([subFolderName, subFolderData]) =>
+            {subFolders.map(([subFolderName, subFolderData]) =>
               renderFolder(subFolderName, subFolderData, level + 1, folderPath)
             )}
           </div>
@@ -364,9 +406,11 @@ export default function ReceiptsPage() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {Object.entries(folderStructure).map(([folderName, folderData]) =>
-              renderFolder(folderName, folderData)
-            )}
+            {Object.entries(folderStructure)
+              .filter(([, folderData]) => !isSearching || hasVisibleContent(folderData))
+              .map(([folderName, folderData]) =>
+                renderFolder(folderName, folderData)
+              )}
           </div>
         )}
       </div>

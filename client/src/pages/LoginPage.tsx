@@ -20,7 +20,8 @@ export default function LoginPage() {
 
   const handleGoogleLogin = () => {
     // Force login in the main window, not a popup
-    window.top.location.href = '/auth/google';
+    const targetWindow = window.top ?? window;
+    targetWindow.location.href = '/auth/google';
   };
 
   return (

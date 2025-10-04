@@ -79,8 +79,8 @@ export class R2StorageService {
     let key = objectPath.replace(/^\/objects\//, "");
 
     // Try to find the file - first try exact match
-    let finalKey: string;
-    let contentType: string;
+    let finalKey: string = key;
+    let contentType = "application/octet-stream";
     let metadata: Record<string, string> | undefined;
 
     try {

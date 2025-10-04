@@ -34,6 +34,23 @@ export class OCRService {
   /**
    * Initialize Tesseract worker for image OCR
    */
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, description: string): Promise<T> {
+    let timeoutId: NodeJS.Timeout | undefined;
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`${description} timed out after ${timeoutMs / 1000}s`));
+        }, timeoutMs).unref?.();
+      });
+
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
   private async initTesseract() {
     if (!this.tesseractWorker) {
       console.log('Initializing Tesseract worker...');
@@ -63,7 +80,7 @@ export class OCRService {
           max: 1 // Only parse first page for performance
         };
         
-        const data = await pdfParse(buffer, options);
+        const data = await this.withTimeout(pdfParse(buffer, options), 60000, 'PDF text extraction');
         console.log(`PDF parsed successfully. Pages: ${data.numpages}, Text length: ${data.text.length}`);
         
         if (data.text && data.text.length > 50) {
@@ -85,16 +102,24 @@ export class OCRService {
         console.log('Attempting PDF conversion with pdf-to-png-converter...');
         const { pdfToPng } = await import('pdf-to-png-converter');
         
-        const pngPages = await pdfToPng(buffer, {
-          disableFontFace: false,
-          useSystemFonts: false,
-          pagesToProcess: [1],
-          viewportScale: 2.0
-        });
+        const pngPages = await this.withTimeout(
+          pdfToPng(buffer, {
+            disableFontFace: false,
+            useSystemFonts: false,
+            pagesToProcess: [1],
+            viewportScale: 2.0
+          }),
+          60000,
+          'PDF to PNG conversion'
+        );
 
         if (pngPages && pngPages.length > 0 && pngPages[0].content) {
           console.log(`PDF conversion successful with pdf-to-png-converter. Buffer size: ${pngPages[0].content.length} bytes`);
-          return await this.extractImageText(pngPages[0].content);
+          return await this.withTimeout(
+            this.extractImageText(pngPages[0].content),
+            90000,
+            'Image text extraction after pdf-to-png'
+          );
         }
       } catch (pngConverterError) {
         console.log('pdf-to-png-converter failed:', pngConverterError instanceof Error ? pngConverterError.message : 'Unknown error');
@@ -123,11 +148,19 @@ export class OCRService {
               preserveAspectRatio: true
             });
             
-            const result = await convert(1, { responseType: "buffer" });
+            const result = await this.withTimeout(
+              convert(1, { responseType: "buffer" }),
+              60000,
+              'PDF conversion via pdf2pic'
+            );
             
             if (result?.buffer && result.buffer.length > 10000) {
               console.log(`PDF conversion successful with ${settings.format}. Buffer size: ${result.buffer.length} bytes`);
-              return await this.extractImageText(result.buffer);
+              return await this.withTimeout(
+                this.extractImageText(result.buffer),
+                90000,
+                'Image text extraction after pdf2pic'
+              );
             } else {
               console.log(`Conversion with ${settings.format} produced small buffer: ${result?.buffer?.length || 0} bytes`);
             }
@@ -165,14 +198,12 @@ export class OCRService {
       }
       
       const worker = await this.initTesseract();
-      
-      // Add timeout to prevent hanging
-      const extractionPromise = worker.recognize(buffer);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Text extraction timeout')), 120000) // 2 minute timeout
+
+      const result = await this.withTimeout(
+        worker.recognize(buffer),
+        120000,
+        'Image text extraction'
       );
-      
-      const result = await Promise.race([extractionPromise, timeoutPromise]);
       const { data: { text } } = result as any;
       
       return text || '';

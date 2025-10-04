@@ -1,6 +1,6 @@
 // One-time script to fix receipts with "PDF processing" merchant names
 import { storage } from './storage.js';
-import type { UpdateReceiptData } from '../shared/schema.js';
+import type { Receipt } from '@shared/schema';
 
 export async function fixReceiptsWithBadMerchants() {
   try {
@@ -26,7 +26,7 @@ export async function fixReceiptsWithBadMerchants() {
         console.log(`Fixing receipt ${receipt.id} with bad merchant: "${receipt.merchant}"`);
         
         // Clear the bad merchant name and reset processing status
-        const updateData: UpdateReceiptData = {
+        const updateData: Partial<Receipt> = {
           merchant: null,
           processingStatus: 'pending'
         };

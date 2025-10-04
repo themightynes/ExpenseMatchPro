@@ -127,7 +127,7 @@ export class ConfidenceModel {
       // Get skip analytics (negative examples)
       const skips = await db.select()
         .from(skipAnalytics)
-        .where(gte(skipAnalytics.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))) // Last 30 days
+        .where(gte(skipAnalytics.skippedAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))) // Last 30 days
         .limit(100);
 
       for (const skip of skips) {
@@ -135,7 +135,7 @@ export class ConfidenceModel {
           data.push({
             features: {
               amountDiff: parseFloat(skip.amountDiff),
-              dateDiff: skip.dateDiff,
+              dateDiff: parseFloat(skip.dateDiff),
               merchantSimilarity: parseFloat(skip.merchantSimilarity),
               categoryMatch: false // Assume no category match for skips
             },
@@ -215,7 +215,7 @@ export class ConfidenceModel {
       // Calculate recent acceptance rate
       const recentSkips = await db.select({ count: sql<number>`count(*)` })
         .from(skipAnalytics)
-        .where(gte(skipAnalytics.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
+        .where(gte(skipAnalytics.skippedAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
       
       const recentMatches = await db.select({ count: sql<number>`count(*)` })
         .from(receipts)

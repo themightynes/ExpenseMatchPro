@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { queryClient } from "@/lib/queryClient";
 import MobileHeader from "@/components/MobileHeader";
 import FinancialCard from "@/components/FinancialCard";
@@ -7,6 +7,7 @@ import QuickAction from "@/components/QuickAction";
 import StatsCard from "@/components/StatsCard";
 import FileUploadZone from "@/components/FileUploadZone";
 import ReceiptCard from "@/components/ReceiptCard";
+import ReceiptViewer from "@/components/ReceiptViewer";
 import CsvUploadModal from "@/components/CsvUploadModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,11 +18,13 @@ import type { Receipt, AmexStatement } from "@shared/schema";
 
 export default function Dashboard() {
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [showProcessingDetails, setShowProcessingDetails] = useState(false);
+  const [processingViewerOpen, setProcessingViewerOpen] = useState(false);
+  const [currentProcessingReceipt, setCurrentProcessingReceipt] = useState<Receipt | null>(null);
   
   const { data: stats, isLoading: statsLoading } = useQuery<{
     processedCount: number;
     pendingCount: number;
-    readyCount: number;
     processingCount: number;
   }>({
     queryKey: ["/api/dashboard/stats"],
@@ -53,7 +56,29 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard/financial-stats"],
   });
 
+  const processingReceipts = receipts
+    .filter((receipt) => receipt.processingStatus === "processing")
+    .sort((a, b) => {
+      const aDate = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const bDate = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return bDate - aDate;
+    });
   const recentReceipts = receipts.slice(0, 3);
+
+  useEffect(() => {
+    if (processingReceipts.length === 0 && showProcessingDetails) {
+      setShowProcessingDetails(false);
+    }
+  }, [processingReceipts.length, showProcessingDetails]);
+
+  useEffect(() => {
+    if (processingReceipts.length === 0 && processingViewerOpen) {
+      setProcessingViewerOpen(false);
+      setCurrentProcessingReceipt(null);
+    }
+  }, [processingReceipts.length, processingViewerOpen]);
+
+  const hasProcessing = processingReceipts.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -73,6 +98,36 @@ export default function Dashboard() {
 
       {/* MOBILE: Improved container with overflow protection */}
       <div className="px-4 py-6 space-y-6 max-w-full overflow-x-hidden">
+        {/* Quick Actions - Moved to top */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link href="/ml-insights">
+            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
+              <Brain className="h-5 w-5" />
+              <span className="text-sm">ML Insights</span>
+            </Button>
+          </Link>
+          <Link href="/statements">
+            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
+              <CreditCard className="h-5 w-5" />
+              <span className="text-sm">Statements</span>
+            </Button>
+          </Link>
+          <Link href="/receipts">
+            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
+              <ReceiptIcon className="h-5 w-5" />
+              <span className="text-sm">All Receipts</span>
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            className="w-full h-16 flex flex-col items-center justify-center gap-1"
+            onClick={() => setShowCsvModal(true)}
+          >
+            <Upload className="h-5 w-5" />
+            <span className="text-sm">Import CSV</span>
+          </Button>
+        </div>
+
         {/* Quick Balance Overview */}
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-3">Financial Overview</h2>
@@ -119,25 +174,29 @@ export default function Dashboard() {
             </div>
           </div>
           
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Ready for Oracle</p>
-                <p className="text-2xl font-bold text-green-600">{statsLoading ? "..." : stats?.readyCount || "0"}</p>
-                <p className="text-xs text-gray-500">with complete data</p>
-              </div>
-              <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-                <Badge className="bg-green-100 text-green-800 text-xs">{stats?.readyCount || "0"}</Badge>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+          <div
+            role={hasProcessing ? "button" : undefined}
+            tabIndex={hasProcessing ? 0 : -1}
+            onClick={hasProcessing ? () => setShowProcessingDetails((prev) => !prev) : undefined}
+            onKeyDown={hasProcessing ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setShowProcessingDetails((prev) => !prev);
+              }
+            } : undefined}
+            aria-expanded={hasProcessing ? showProcessingDetails : undefined}
+            aria-controls={hasProcessing ? "processing-details-panel" : undefined}
+            className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 ${hasProcessing ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300" : "cursor-default"}`}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Processing</p>
                 <p className="text-2xl font-bold text-yellow-600">{statsLoading ? "..." : stats?.processingCount || "0"}</p>
-                <p className="text-xs text-gray-500">being processed</p>
+                <p className="text-xs text-gray-500">
+                  {processingReceipts.length > 0
+                    ? `${processingReceipts[0].originalFileName}`
+                    : "being processed"}
+                </p>
               </div>
               <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center">
                 <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
@@ -159,35 +218,63 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Link href="/ml-insights">
-            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
-              <Brain className="h-5 w-5" />
-              <span className="text-sm">ML Insights</span>
-            </Button>
-          </Link>
-          <Link href="/statements">
-            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
-              <CreditCard className="h-5 w-5" />
-              <span className="text-sm">Statements</span>
-            </Button>
-          </Link>
-          <Link href="/receipts">
-            <Button variant="outline" className="w-full h-16 flex flex-col items-center justify-center gap-1">
-              <ReceiptIcon className="h-5 w-5" />
-              <span className="text-sm">All Receipts</span>
-            </Button>
-          </Link>
-          <Button 
-            variant="outline" 
-            className="w-full h-16 flex flex-col items-center justify-center gap-1"
-            onClick={() => setShowCsvModal(true)}
-          >
-            <Upload className="h-5 w-5" />
-            <span className="text-sm">Import CSV</span>
-          </Button>
-        </div>
+        {hasProcessing && showProcessingDetails && (
+          <Card id="processing-details-panel" className="border-yellow-200 bg-yellow-50/70">
+            <CardHeader>
+              <CardTitle className="text-base">Items Being Processed</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {processingReceipts.slice(0, 5).map((receipt) => (
+                <button
+                  type="button"
+                  key={receipt.id}
+                  onClick={() => {
+                    setCurrentProcessingReceipt(receipt);
+                    setProcessingViewerOpen(true);
+                  }}
+                  className="flex w-full items-start justify-between rounded-md border border-yellow-100 bg-white/70 p-3 text-left transition hover:border-yellow-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400"
+                >
+                  <div className="max-w-[70%]">
+                    <p className="text-sm font-medium text-gray-900 truncate" title={receipt.originalFileName}>
+                      {receipt.originalFileName}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {receipt.merchant || "Unknown merchant"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="outline" className="border-yellow-300 text-yellow-700 text-xs">
+                      {receipt.processingStatus}
+                    </Badge>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {receipt.updatedAt ? new Date(receipt.updatedAt).toLocaleString() : "Awaiting update"}
+                    </p>
+                  </div>
+                </button>
+              ))}
+              {processingReceipts.length > 5 && (
+                <p className="text-xs text-gray-600 text-center">
+                  Showing 5 of {processingReceipts.length} items in progress
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {currentProcessingReceipt && (
+          <ReceiptViewer
+            receipt={currentProcessingReceipt}
+            receipts={receipts}
+            isOpen={processingViewerOpen}
+            onClose={() => {
+              setProcessingViewerOpen(false);
+              setCurrentProcessingReceipt(null);
+            }}
+            onNavigate={(newReceipt) => {
+              setCurrentProcessingReceipt(newReceipt);
+            }}
+          />
+        )}
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -227,27 +314,6 @@ export default function Dashboard() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* ML Insights Quick Access */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5" />
-                  ML Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600 mb-4">
-                  View machine learning insights and pattern analysis from your matching history.
-                </p>
-                <Link href="/ml-insights">
-                  <Button className="w-full" variant="outline">
-                    <Brain className="mr-2 h-4 w-4" />
-                    View ML Insights
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
             {/* AMEX Statement Periods */}
             <Card>
               <CardHeader>
@@ -262,32 +328,25 @@ export default function Dashboard() {
                   ) : (
                     statements.map((statement: any) => (
                       <Link key={statement.id} href={`/statements/${statement.id}`}>
-                        <div
-                          className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                            statement.isActive
-                              ? "bg-primary/5 border border-primary/20"
-                              : "bg-gray-50 hover:bg-gray-100"
-                          }`}
-                        >
+                        <div className="flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors bg-gray-50 hover:bg-gray-100">
                         <div>
-                          <p className={`font-medium ${statement.isActive ? "text-primary" : "text-gray-900"}`}>
+                          <p className="font-medium text-gray-900">
                             {statement.periodName}
                           </p>
-                          <p className={`text-sm ${statement.isActive ? "text-primary/70" : "text-gray-500"}`}>
+                          <p className="text-sm text-gray-500">
                             {new Date(statement.startDate).toLocaleDateString()} -{" "}
                             {new Date(statement.endDate).toLocaleDateString()}
-                            {statement.isActive && " (Current)"}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className={`text-sm font-medium ${statement.isActive ? "text-primary" : "text-gray-900"}`}>
+                          <p className="text-sm font-medium text-gray-900">
                             ${((statement.totalAmount || 0) - (statement.personalExpensesAmount || 0)).toLocaleString()}
                           </p>
-                          <p className={`text-xs ${statement.isActive ? "text-primary/70" : "text-gray-500"}`}>
+                          <p className="text-xs text-gray-500">
                             business expenses
                           </p>
-                          <p className={`text-xs ${statement.isActive ? "text-primary/70" : "text-gray-500"}`}>
-                            {statement.matchedCount || 0}/{statement.totalCharges || 0} matched
+                          <p className="text-xs text-gray-500">
+                            {statement.matchedCount || 0}/{statement.chargeCount || 0} matched
                           </p>
                         </div>
                       </div>

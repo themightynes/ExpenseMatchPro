@@ -65,8 +65,25 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `OCR failed with status ${response.status}`);
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `OCR failed with status ${response.status}`);
+        }
+        const message = await response.text().catch(() => 'Unknown error');
+        const normalized = message.trim().startsWith('<')
+          ? 'Server returned HTML. Restart the backend to pick up the new endpoint.'
+          : message;
+        throw new Error(normalized || `OCR failed with status ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const message = await response.text().catch(() => 'Unexpected response format');
+        const normalized = message.trim().startsWith('<')
+          ? 'Server returned HTML. Restart the backend to pick up the new endpoint.'
+          : message;
+        throw new Error(normalized || 'Unexpected response format');
       }
 
       return await response.json();
@@ -83,6 +100,56 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
         title: "OCR failed to start",
         description: error.message || "Could not start OCR processing",
         variant: "destructive",
+      });
+    },
+  });
+
+  const cancelProcessingMutation = useMutation({
+    mutationFn: async (receiptId: string) => {
+      const response = await fetch(`/api/receipts/${receiptId}/cancel-processing`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `Failed with status ${response.status}`);
+        }
+        const text = await response.text().catch(() => 'Unknown error');
+        const normalized = text.trim().startsWith('<')
+          ? 'Server returned HTML. Restart the backend to pick up the new endpoint.'
+          : text;
+        throw new Error(normalized || `Failed with status ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await response.text().catch(() => 'Unexpected response format');
+        const normalized = text.trim().startsWith('<')
+          ? 'Server returned HTML. Restart the backend to pick up the new endpoint.'
+          : text;
+        throw new Error(normalized || 'Unexpected response format');
+      }
+
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      toast({
+        title: 'Processing cancelled',
+        description: 'Receipt marked for manual entry.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to cancel processing',
+        description: error.message || 'Could not cancel processing',
+        variant: 'destructive',
       });
     },
   });
@@ -381,10 +448,26 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   };
 
   const handleEdit = () => {
+    // Format date for date input (YYYY-MM-DD) without timezone conversion
+    let formattedDate = "";
+    if (receipt.date) {
+      const dateStr = receipt.date.toString();
+      // If already in YYYY-MM-DD format, use as is
+      if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        formattedDate = dateStr.split('T')[0];
+      } else {
+        // Otherwise convert carefully to avoid timezone issues
+        const date = new Date(dateStr);
+        formattedDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+          .toISOString()
+          .split('T')[0];
+      }
+    }
+
     setEditedData({
       merchant: receipt.merchant || "",
       amount: receipt.amount || "",
-      date: receipt.date ? new Date(receipt.date).toISOString().split('T')[0] : "",
+      date: formattedDate,
       category: receipt.category || "",
       fromAddress: receipt.fromAddress || "",
       toAddress: receipt.toAddress || "",
@@ -397,6 +480,26 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   };
 
   const needsManualEntry = !receipt.merchant && !receipt.amount && !receipt.date;
+	const parsedDataEntries =
+		typeof receipt.extractedData === 'object' && receipt.extractedData !== null
+			? Object.entries(receipt.extractedData as Record<string, unknown>)
+					.filter(([, value]) => value !== null && value !== undefined && value !== '')
+					.map(([key, value]) => {
+						const displayValue = Array.isArray(value)
+							? value.map(item => String(item)).join(', ')
+							: typeof value === 'object' && value !== null
+								? JSON.stringify(value)
+								: String(value);
+						return (
+							<div key={key} className="flex gap-2">
+								<span className="font-medium text-gray-600 capitalize">
+									{key.replace(/([A-Z])/g, ' $1')}:
+								</span>
+								<span className="text-gray-900">{displayValue}</span>
+							</div>
+						);
+					})
+			: [];
 
   if (!isOpen) return null;
 
@@ -838,9 +941,51 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                   {/* Text Extraction Control - separate section */}
                   <div className="pt-2">
                     {receipt.processingStatus === 'processing' ? (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        {isPDF ? 'Extracting PDF Text...' : 'Processing Image...'}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          {isPDF ? 'Extracting PDF Text...' : 'Processing Image...'}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => triggerOcrMutation.mutate(receipt.id)}
+                            disabled={triggerOcrMutation.isPending}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                          >
+                            {triggerOcrMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Retrying...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCw className="w-4 h-4 mr-1" />
+                                Retry Extraction
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => cancelProcessingMutation.mutate(receipt.id)}
+                            disabled={cancelProcessingMutation.isPending}
+                            className="text-gray-600 hover:text-gray-700 hover:bg-gray-100 border-gray-200"
+                          >
+                            {cancelProcessingMutation.isPending ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Cancelling...
+                              </>
+                            ) : (
+                              <>
+                                <X className="w-4 h-4 mr-1" />
+                                Cancel & Enter Manually
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <Button
@@ -880,23 +1025,14 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       {receipt.ocrText}
                     </pre>
                   </div>
-                  {receipt.extractedData && (
-                    <div className="mt-3 pt-3 border-t">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Parsed Data</h4>
-                      <div className="text-xs space-y-1">
-                        {typeof receipt.extractedData === 'object' && receipt.extractedData !== null && (
-                          Object.entries(receipt.extractedData as Record<string, any>).map(([key, value]) => (
-                            value && (
-                              <div key={key} className="flex gap-2">
-                                <span className="font-medium text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1')}:</span>
-                                <span className="text-gray-900">{Array.isArray(value) ? value.join(', ') : String(value)}</span>
-                              </div>
-                            )
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
+		          {parsedDataEntries.length > 0 && (
+		            <div className="mt-3 pt-3 border-t">
+		              <h4 className="text-sm font-medium text-gray-700 mb-2">Parsed Data</h4>
+		              <div className="text-xs space-y-1">
+		                {parsedDataEntries}
+		              </div>
+		            </div>
+		          )}
                 </CardContent>
               </Card>
             )}

@@ -3,13 +3,20 @@ import { createServer, type Server } from "http";
 import { randomUUID } from "crypto";
 import { storage } from "./storage";
 import { setupClerkAuth, requireAuth, clerkMiddleware } from "./clerkAuth";
-import { 
-  insertReceiptSchema, 
-  insertAmexStatementSchema, 
+import { db } from "./db";
+import { eq, and, gte, sql } from "drizzle-orm";
+import {
+  insertReceiptSchema,
+  insertAmexStatementSchema,
   insertAmexChargeSchema,
   insertExpenseTemplateSchema,
   amexCsvRowSchema,
-  EXPENSE_CATEGORIES 
+  EXPENSE_CATEGORIES,
+  receipts as receiptsTable,
+  amexCharges as amexChargesTable,
+  skipAnalytics as skipAnalyticsTable,
+  type Receipt,
+  type AmexCharge
 } from "@shared/schema";
 import { ObjectNotFoundError } from "./objectStorage";
 import { ocrService } from "./ocrService";
@@ -354,11 +361,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/receipts", requireAuth, async (req, res) => {
     try {
+      await storage.releaseStuckProcessingReceipts();
       const receipts = await storage.getAllReceipts();
       res.json(receipts);
     } catch (error) {
       console.error("Error getting receipts:", error);
       res.status(500).json({ error: "Failed to get receipts" });
+    }
+  });
+
+  app.post("/api/receipts/:id/cancel-processing", requireAuth, async (req, res) => {
+    try {
+      const receiptId = req.params.id;
+      const receipt = await storage.getReceipt(receiptId);
+      if (!receipt) {
+        return res.status(404).json({ error: "Receipt not found" });
+      }
+
+      const updated = await storage.updateReceipt(receiptId, {
+        processingStatus: "completed",
+        ocrText: receipt.ocrText && receipt.ocrText !== "Processing..." ? receipt.ocrText : "OCR cancelled - manual entry required",
+        extractedData: receipt.extractedData || null,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error cancelling receipt processing:", error);
+      res.status(500).json({ error: "Failed to cancel receipt processing" });
     }
   });
 
@@ -846,11 +875,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         statements.map(async (statement) => {
           const receipts = await storage.getReceiptsByStatement(statement.id);
           const charges = await storage.getChargesByStatement(statement.id);
+
+          // Get charge IDs for this statement
+          const chargeIds = charges.map(c => c.id);
+
+          // Find matched receipts - those with matchedChargeId in this statement
+          const matchedReceipts = receipts.filter(r =>
+            r.isMatched &&
+            r.matchedChargeId &&
+            chargeIds.includes(r.matchedChargeId)
+          );
+
+          // Find matched charges
+          const matchedChargeIds = matchedReceipts.map(r => r.matchedChargeId);
+          const matchedCharges = charges.filter(c => matchedChargeIds.includes(c.id));
+
+          // Calculate business charges and those that need receipts
+          const businessCharges = charges.filter(c => !c.isPersonalExpense);
+          const personalCharges = charges.filter(c => c.isPersonalExpense);
+          const chargesThatNeedReceipts = businessCharges.filter(c => !c.noReceiptRequired);
+          const matchedBusinessCharges = matchedCharges.filter(c => !c.isPersonalExpense);
+
+          // Calculate amounts
+          const totalAmount = charges.reduce((sum, charge) => {
+            return sum + Math.abs(parseFloat(charge.amount || '0'));
+          }, 0);
+
+          const personalExpensesAmount = personalCharges.reduce((sum, charge) => {
+            return sum + Math.abs(parseFloat(charge.amount || '0'));
+          }, 0);
+
           return {
             ...statement,
             receiptCount: receipts.length,
-            matchedCount: receipts.filter(r => r.isMatched).length,
-            chargeCount: charges.length,
+            matchedCount: matchedBusinessCharges.length,
+            chargeCount: chargesThatNeedReceipts.length,
+            totalAmount,
+            personalExpensesAmount,
           };
         })
       );
@@ -1771,8 +1832,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Enhanced matching: ${receiptIds.length} receipt(s) to ${chargeIds.length} charge(s)`);
       
-      const updatedReceipts = [];
-      const updatedCharges = [];
+      const updatedReceipts: Receipt[] = [];
+      const updatedCharges: AmexCharge[] = [];
 
       // Handle one-to-many: Single receipt to multiple charges (split transaction)
       if (receiptIds.length === 1 && chargeIds.length > 1) {
@@ -1957,7 +2018,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const skipPatterns = await storage.getSkipAnalytics();
       
       // Analyze patterns
-      const insights = {
+      const insights: {
+        totalSkips: number;
+        commonReasons: Record<string, number>;
+        averageConfidenceSkipped: number;
+        frequentSkipMerchants: Record<string, number>;
+        dateRange: { earliest: Date | null; latest: Date | null };
+      } = {
         totalSkips: skipPatterns.length,
         commonReasons: {},
         averageConfidenceSkipped: 0,
@@ -2173,7 +2240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const patterns = await patternAnalyzer.analyzePatterns(days);
       const problematicMerchants = await patternAnalyzer.getProblematicMerchants();
       const recommendations = await patternAnalyzer.generateRecommendations();
-      
+
       res.json({
         patterns,
         problematicMerchants,
@@ -2183,6 +2250,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error analyzing patterns:", error);
       res.status(500).json({ error: "Failed to analyze patterns" });
+    }
+  });
+
+  // Model performance metrics API
+  app.get("/api/analytics/performance", requireAuth, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 30;
+      const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+      // Calculate performance metrics
+      const [totalSkips, totalMatches, allSkipsRaw] = await Promise.all([
+        db.select({ count: sql<number>`count(*)` })
+          .from(skipAnalyticsTable)
+          .where(gte(skipAnalyticsTable.skippedAt, startDate)),
+        db.select({ count: sql<number>`count(*)` })
+          .from(receiptsTable)
+          .where(and(
+            eq(receiptsTable.isMatched, true),
+            gte(receiptsTable.updatedAt, startDate)
+          )),
+        db.select()
+          .from(skipAnalyticsTable)
+          .where(gte(skipAnalyticsTable.skippedAt, startDate))
+      ]);
+
+      const allSkips = allSkipsRaw as Array<typeof skipAnalyticsTable.$inferSelect>;
+
+      const skipCount = totalSkips[0]?.count || 0;
+      const matchCount = totalMatches[0]?.count || 0;
+      const total = skipCount + matchCount;
+
+      // Confidence accuracy: % of matches vs total (higher is better)
+      const confidenceAccuracy = total > 0
+        ? Math.round(((matchCount / total) * 100))
+        : 0;
+
+      // Merchant normalization coverage: % of skips with good merchant similarity (>0.7)
+      // This indicates how well the merchant normalization is working
+      const highSimilaritySkips = allSkips.filter(s =>
+        s.merchantSimilarity && parseFloat(String(s.merchantSimilarity)) > 0.7
+      ).length;
+      const merchantNormalizationCoverage = allSkips.length > 0
+        ? Math.round((highSimilaritySkips / allSkips.length) * 100)
+        : 0;
+
+      // Pattern detection rate: % of skips that match identified patterns
+      const patterns = await patternAnalyzer.analyzePatterns(days);
+      const totalPatternOccurrences = patterns.reduce((sum, p) => sum + p.frequency, 0);
+      const patternDetectionRate = skipCount > 0
+        ? Math.min(100, Math.round((totalPatternOccurrences / skipCount) * 100))
+        : 0;
+
+      res.json({
+        confidenceAccuracy,
+        merchantNormalizationCoverage,
+        patternDetectionRate,
+        dataPoints: {
+          totalSkips: skipCount,
+          totalMatches: matchCount,
+          highSimilaritySkips,
+          patternsDetected: patterns.length
+        },
+        analyzedPeriod: `${days} days`
+      });
+    } catch (error) {
+      console.error("Error calculating performance metrics:", error);
+      res.status(500).json({ error: "Failed to calculate performance metrics" });
     }
   });
 
@@ -2199,9 +2333,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Combine and sort by relevance/date
       const combined = [
-        ...receipts.map(r => ({ type: 'receipt', data: r, date: r.date || r.createdAt })),
-        ...charges.map(c => ({ type: 'charge', data: c, date: c.date }))
-      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        ...receipts.map((r) => {
+          const dateValue = r.date
+            ? new Date(r.date).getTime()
+            : r.createdAt
+              ? new Date(r.createdAt).getTime()
+              : 0;
+          return {
+            type: "receipt" as const,
+            data: r,
+            timestamp: dateValue,
+            date: r.date ?? r.createdAt ?? null,
+          };
+        }),
+        ...charges.map((c) => ({
+          type: "charge" as const,
+          data: c,
+          timestamp: new Date(c.date).getTime(),
+          date: c.date,
+        })),
+      ].sort((a, b) => b.timestamp - a.timestamp);
       
       res.json({
         results: combined,
@@ -2245,10 +2396,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pairs = [];
       for (const receipt of unmatchedReceipts) {
         const bestMatches = unmatchedCharges
-          .map(charge => {
-            const amountDiff = Math.abs(parseFloat(receipt.amount || '0') - parseFloat(charge.amount));
-            const dateDiff = receipt.date && charge.date ? 
-              Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
+          .map((charge) => {
+            const receiptAmount = receipt.amount ? parseFloat(receipt.amount) : 0;
+            const chargeAmount = parseFloat(charge.amount);
+            const amountDiff = Math.abs(receiptAmount - chargeAmount);
+            const receiptDate = receipt.date ? new Date(receipt.date) : null;
+            const chargeDate = charge.date ? new Date(charge.date) : null;
+            const dateDiff = receiptDate && chargeDate
+              ? Math.abs(receiptDate.getTime() - chargeDate.getTime()) / (1000 * 60 * 60 * 24)
+              : 999;
 
             // Use merchant normalizer for better similarity
             const merchantSimilarity = receipt.merchant && charge.description
@@ -2557,6 +2713,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating statement:", error);
       res.status(500).json({ error: "Failed to update statement" });
+    }
+  });
+
+  // Archive/unarchive statement
+  app.patch("/api/statements/:id/archive", requireAuth, async (req, res) => {
+    try {
+      const statementId = req.params.id;
+      const { isArchived } = req.body;
+
+      if (typeof isArchived !== 'boolean') {
+        return res.status(400).json({ error: "isArchived must be a boolean" });
+      }
+
+      const updatedStatement = await storage.updateAmexStatement(statementId, { isArchived });
+
+      if (updatedStatement) {
+        res.json(updatedStatement);
+      } else {
+        res.status(404).json({ error: "Statement not found" });
+      }
+    } catch (error) {
+      console.error("Error archiving statement:", error);
+      res.status(500).json({ error: "Failed to archive statement" });
     }
   });
 
@@ -3013,7 +3192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let fixed = 0;
       let errors = 0;
-      const fixes = [];
+      const fixes: string[] = [];
 
       // Find receipts that are matched but their corresponding charges aren't
       for (const receipt of allReceipts) {
@@ -3086,7 +3265,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Math.abs(parseFloat(c.amount) - parseFloat(targetAmount)) < 0.01
       );
 
-      const analysis = {
+      const analysis: {
+        searchAmount: string;
+        receipts: Array<{
+          id: string;
+          fileName: string;
+          merchant: string | null;
+          amount: string | null;
+          date: Date | null;
+          isMatched: boolean | null;
+          matchedChargeId: string | null;
+          statementId: string | null;
+        }>;
+        charges: Array<{
+          id: string;
+          description: string;
+          amount: string;
+          date: Date;
+          isMatched: boolean | null;
+          receiptId: string | null;
+          statementId: string | null;
+        }>;
+        potentialMatches: Array<{
+          receiptId: string;
+          receiptFileName: string;
+          chargeId: string;
+          chargeDescription: string;
+          bothMatched: boolean | null;
+          receiptMatchedToThis: boolean;
+          chargeMatchedToThis: boolean;
+          bidirectionalMatch: boolean;
+        }>;
+      } = {
         searchAmount: targetAmount,
         receipts: matchingReceipts.map(r => ({
           id: r.id,

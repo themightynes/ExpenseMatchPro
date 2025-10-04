@@ -17,7 +17,7 @@ import {
   type InsertExpenseTemplate
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, isNull, isNotNull, desc, between, count, lte, gte } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, desc, between, count, lte, gte } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -37,6 +37,7 @@ export interface IStorage {
   getReceiptsByStatement(statementId: string): Promise<Receipt[]>;
   getUnmatchedReceiptsInPeriod(startDate: Date, endDate: Date): Promise<Receipt[]>;
   autoAssignReceiptToStatement(receiptId: string): Promise<Receipt | undefined>;
+  releaseStuckProcessingReceipts(timeoutMinutes?: number): Promise<number>;
 
   // AMEX Statement methods
   createAmexStatement(statement: InsertAmexStatement): Promise<AmexStatement>;
@@ -69,7 +70,6 @@ export interface IStorage {
   getProcessingStats(): Promise<{
     processedCount: number;
     pendingCount: number;
-    readyCount: number;
     processingCount: number;
   }>;
 
@@ -277,11 +277,32 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Don't manually set updatedAt as it should be handled by database default
+    processedUpdates.updatedAt = new Date();
+
     const [updated] = await db.update(receipts)
       .set(processedUpdates)
       .where(eq(receipts.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async releaseStuckProcessingReceipts(timeoutMinutes = 5): Promise<number> {
+    const threshold = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+
+    const staleReceipts = await db.update(receipts)
+      .set({
+        processingStatus: "completed",
+        ocrText: "OCR timed out - manual entry required",
+        extractedData: null,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(receipts.processingStatus, "processing"),
+        or(isNull(receipts.updatedAt), lte(receipts.updatedAt, threshold))
+      ))
+      .returning({ id: receipts.id });
+
+    return staleReceipts.length;
   }
 
   async deleteReceipt(id: string): Promise<boolean> {
@@ -567,7 +588,6 @@ export class DatabaseStorage implements IStorage {
   async getProcessingStats(): Promise<{
     processedCount: number;
     pendingCount: number;
-    readyCount: number;
     processingCount: number;
   }> {
     const [processedResult] = await db.select({ count: count() })
@@ -582,19 +602,9 @@ export class DatabaseStorage implements IStorage {
       .from(receipts)
       .where(eq(receipts.processingStatus, "processing"));
 
-    // Count receipts ready for matching (have amount and not matched)
-    const allReceipts = await db.select().from(receipts);
-    const readyCount = allReceipts.filter(r => 
-      r.processingStatus === 'completed' && 
-      r.amount && 
-      parseFloat(r.amount) > 0 &&
-      !r.isMatched
-    ).length;
-
     return {
       processedCount: processedResult.count,
       pendingCount: pendingResult.count,
-      readyCount: readyCount,
       processingCount: processingResult.count,
     };
   }
@@ -959,12 +969,8 @@ export class DatabaseStorage implements IStorage {
   async createSkipAnalytics(skipData: any): Promise<any> {
     try {
       console.log("Creating skip analytics:", skipData);
-      // For now, return a mock response since we haven't migrated the table yet
-      return {
-        id: "skip-" + Date.now(),
-        ...skipData,
-        skippedAt: new Date()
-      };
+      const [result] = await db.insert(skipAnalytics).values(skipData).returning();
+      return result;
     } catch (error) {
       console.error("Error creating skip analytics:", error);
       throw error;
@@ -973,9 +979,9 @@ export class DatabaseStorage implements IStorage {
 
   async getSkipAnalytics(): Promise<any[]> {
     try {
-      // For now, return empty array since table doesn't exist yet
       console.log("Getting skip analytics...");
-      return [];
+      const results = await db.select().from(skipAnalytics);
+      return results;
     } catch (error) {
       console.error("Error getting skip analytics:", error);
       return [];
@@ -1017,13 +1023,13 @@ export class DatabaseStorage implements IStorage {
       if (filters.startDate) {
         const startDate = new Date(filters.startDate);
         filteredReceipts = filteredReceipts.filter(receipt => 
-          receipt.date && new Date(receipt.date) >= startDate
+          receipt.date ? new Date(receipt.date) >= startDate : false
         );
       }
       if (filters.endDate) {
         const endDate = new Date(filters.endDate);
         filteredReceipts = filteredReceipts.filter(receipt => 
-          receipt.date && new Date(receipt.date) <= endDate
+          receipt.date ? new Date(receipt.date) <= endDate : false
         );
       }
       
@@ -1044,9 +1050,11 @@ export class DatabaseStorage implements IStorage {
         );
       }
       
-      return filteredReceipts.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      return filteredReceipts.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
     } catch (error) {
       console.error("Error searching receipts:", error);
       return [];
@@ -1087,13 +1095,13 @@ export class DatabaseStorage implements IStorage {
       if (filters.startDate) {
         const startDate = new Date(filters.startDate);
         filteredCharges = filteredCharges.filter(charge => 
-          charge.date && new Date(charge.date) >= startDate
+          charge.date ? new Date(charge.date) >= startDate : false
         );
       }
       if (filters.endDate) {
         const endDate = new Date(filters.endDate);
         filteredCharges = filteredCharges.filter(charge => 
-          charge.date && new Date(charge.date) <= endDate
+          charge.date ? new Date(charge.date) <= endDate : false
         );
       }
       

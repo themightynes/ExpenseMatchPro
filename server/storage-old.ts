@@ -56,7 +56,6 @@ export interface IStorage {
   getProcessingStats(): Promise<{
     processedCount: number;
     pendingCount: number;
-    readyCount: number;
     processingCount: number;
   }>;
   
@@ -395,7 +394,6 @@ export class MemStorage implements IStorage {
   async getProcessingStats(): Promise<{
     processedCount: number;
     pendingCount: number;
-    readyCount: number;
     processingCount: number;
   }> {
     const receipts = Array.from(this.receipts.values());
@@ -403,7 +401,6 @@ export class MemStorage implements IStorage {
     return {
       processedCount: receipts.filter(r => r.processingStatus === 'completed').length,
       pendingCount: receipts.filter(r => r.processingStatus === 'pending' || !r.isMatched).length,
-      readyCount: receipts.filter(r => r.processingStatus === 'completed' && r.isMatched).length,
       processingCount: receipts.filter(r => r.processingStatus === 'processing').length,
     };
   }

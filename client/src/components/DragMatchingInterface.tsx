@@ -95,12 +95,19 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
   const filteredReceipts = useMemo(() => {
     if (!candidates) return [];
     return allReceipts.filter(receipt => {
-      const amount = parseFloat(receipt.amount);
+      const amountStr = receipt.amount ?? "";
+      const amount = amountStr ? parseFloat(amountStr) : NaN;
       const date = receipt.date ? new Date(receipt.date) : null;
       
       // Amount filters
-      if (filters.receipts.minAmount && amount < parseFloat(filters.receipts.minAmount)) return false;
-      if (filters.receipts.maxAmount && amount > parseFloat(filters.receipts.maxAmount)) return false;
+      if (filters.receipts.minAmount) {
+        if (!amountStr) return false;
+        if (amount < parseFloat(filters.receipts.minAmount)) return false;
+      }
+      if (filters.receipts.maxAmount) {
+        if (!amountStr) return false;
+        if (amount > parseFloat(filters.receipts.maxAmount)) return false;
+      }
       
       // Date filters
       if (filters.receipts.startDate && date && date < new Date(filters.receipts.startDate)) return false;
@@ -116,7 +123,7 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
   const filteredCharges = useMemo(() => {
     if (!candidates) return [];
     return allCharges.filter(charge => {
-      const amount = parseFloat(charge.amount);
+      const amount = parseFloat(charge.amount ?? "0");
       const date = new Date(charge.date);
       
       // Amount filters
@@ -178,7 +185,9 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
   };
 
   const calculateMatchQuality = (receipt: Receipt, charge: AmexCharge) => {
-    const amountDiff = Math.abs(parseFloat(receipt.amount) - parseFloat(charge.amount));
+    const receiptAmount = receipt.amount ? parseFloat(receipt.amount) : NaN;
+    const chargeAmount = parseFloat(charge.amount ?? "0");
+    const amountDiff = Number.isNaN(receiptAmount) ? Infinity : Math.abs(receiptAmount - chargeAmount);
     const dateDiff = receipt.date && charge.date ? 
       Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
     
@@ -531,9 +540,13 @@ export default function DragMatchingInterface({ statementId, onBack }: DragMatch
                         <div className="font-medium capitalize">{matchQuality} match</div>
                         {matchQuality !== "excellent" && (
                           <div className="mt-1 space-y-1">
-                            {Math.abs(parseFloat(bestMatch.amount) - parseFloat(charge.amount)) > 0.01 && (
-                              <p>Amount diff: ${Math.abs(parseFloat(bestMatch.amount) - parseFloat(charge.amount)).toFixed(2)}</p>
-                            )}
+                            {(() => {
+                              const receiptAmount = bestMatch.amount ? parseFloat(bestMatch.amount) : null;
+                              const chargeAmount = parseFloat(charge.amount ?? "0");
+                              if (receiptAmount === null) return null;
+                              const diff = Math.abs(receiptAmount - chargeAmount);
+                              return diff > 0.01 ? <p>Amount diff: ${diff.toFixed(2)}</p> : null;
+                            })()}
                             {bestMatch.date && Math.abs(new Date(bestMatch.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) > 1 && (
                               <p>Date diff: {Math.round(Math.abs(new Date(bestMatch.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24))} days</p>
                             )}

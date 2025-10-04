@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import CsvUploadModal from "@/components/CsvUploadModal";
 
 import type { AmexStatement, AmexCharge, Receipt } from "@shared/schema";
-import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List, Trash2, Edit2, Check, X } from "lucide-react";
+import { Calendar, CreditCard, FileText, Upload, Eye, TrendingUp, DollarSign, List, Trash2, Edit2, Check, X, Archive, ArchiveRestore } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -16,6 +16,7 @@ import MobileHeader from "@/components/MobileHeader";
 
 export default function StatementsPage() {
   const [showCsvModal, setShowCsvModal] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const [editingStatement, setEditingStatement] = useState<string | null>(null);
   const [editedName, setEditedName] = useState("");
@@ -185,6 +186,30 @@ export default function StatementsPage() {
     setEditedEndDate("");
     setDateValidation(null);
   };
+
+  const archiveStatementMutation = useMutation({
+    mutationFn: async ({ id, isArchived }: { id: string; isArchived: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/statements/${id}/archive`, { isArchived });
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/statements"] });
+      toast({
+        title: variables.isArchived ? "Statement Archived" : "Statement Unarchived",
+        description: variables.isArchived
+          ? "Statement has been archived and hidden from the main view."
+          : "Statement has been restored to the main view.",
+      });
+    },
+    onError: (error: any) => {
+      console.error("Error archiving statement:", error);
+      toast({
+        title: "Error",
+        description: "Failed to archive statement. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const getStatementStats = (statementId: string) => {
     // Get charges for this specific statement
@@ -395,7 +420,16 @@ export default function StatementsPage() {
 
         {/* Statements List */}
         <div className="space-y-6 max-w-3xl mx-auto">
-          <h2 className="text-xl font-semibold text-gray-900">Statement Periods</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-gray-900">Statement Periods</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              {showArchived ? "Hide Archived" : "Show Archived"}
+            </Button>
+          </div>
 
           {statements.length === 0 ? (
             <Card>
@@ -413,7 +447,9 @@ export default function StatementsPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 gap-6">
-              {statements.map((statement) => {
+              {statements
+                .filter(statement => showArchived ? statement.isArchived : !statement.isArchived)
+                .map((statement) => {
                 const stats = getStatementStats(statement.id);
                 return (
                   <Card key={statement.id} className="hover:shadow-lg transition-shadow">
@@ -623,7 +659,22 @@ export default function StatementsPage() {
                               Match Receipts
                             </Button>
                           </Link>
-                          <Button 
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => archiveStatementMutation.mutate({
+                              id: statement.id,
+                              isArchived: !statement.isArchived
+                            })}
+                            disabled={archiveStatementMutation.isPending}
+                          >
+                            {statement.isArchived ? (
+                              <ArchiveRestore className="h-4 w-4" />
+                            ) : (
+                              <Archive className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
                             variant="destructive"
                             size="sm"
                             onClick={() => deleteStatementMutation.mutate(statement.id)}

@@ -40,6 +40,7 @@ import { AmexStatement, AmexCharge, Receipt as ReceiptType } from "@shared/schem
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import ManualChargeModal from "@/components/ManualChargeModal";
+import ReceiptViewer from "@/components/ReceiptViewer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function StatementDetailPage() {
@@ -57,6 +58,8 @@ export default function StatementDetailPage() {
   const [chargeNotes, setChargeNotes] = useState<{ [key: string]: string }>({});
   const [uploadingCharges, setUploadingCharges] = useState<{ [key: string]: boolean }>({});
   const [showManualChargeModal, setShowManualChargeModal] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptType | null>(null);
+  const [receiptViewerOpen, setReceiptViewerOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [convertingReceipts, setConvertingReceipts] = useState<{ [key: string]: boolean }>({});
   const [isDownloading, setIsDownloading] = useState(false);
@@ -731,12 +734,21 @@ export default function StatementDetailPage() {
                         </Badge>
                       )}
                       {charge.receiptId ? (
-                        <Link href={`/receipts?selected=${charge.receiptId}`}>
-                          <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
-                            <FileText className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline">View</span>
-                          </Button>
-                        </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => {
+                            const receipt = receipts.find(r => r.id === charge.receiptId);
+                            if (receipt) {
+                              setSelectedReceipt(receipt);
+                              setReceiptViewerOpen(true);
+                            }
+                          }}
+                        >
+                          <FileText className="h-3 w-3 sm:mr-1" />
+                          <span className="hidden sm:inline">View</span>
+                        </Button>
                       ) : (
                         <div className="flex items-center">
                           <input
@@ -911,12 +923,18 @@ export default function StatementDetailPage() {
                       </div>
                     </div>
                     <div className="flex gap-2 ml-4">
-                      <Link href={`/receipts?selected=${receipt.id}`}>
-                        <Button variant="outline" size="sm" className="h-7 px-3 text-xs">
-                          <Eye className="h-3 w-3 mr-1" />
-                          View
-                        </Button>
-                      </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-3 text-xs"
+                        onClick={() => {
+                          setSelectedReceipt(receipt);
+                          setReceiptViewerOpen(true);
+                        }}
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        View
+                      </Button>
                       <Link href={`/matching?statement=${statementId}&receipt=${receipt.id}`}>
                         <Button size="sm" className="h-7 px-3 text-xs bg-orange-600 hover:bg-orange-700">
                           Match
@@ -1038,6 +1056,22 @@ export default function StatementDetailPage() {
         statements={allStatements}
         defaultStatementId={statementId}
       />
+
+      {/* Receipt Viewer */}
+      {selectedReceipt && (
+        <ReceiptViewer
+          receipt={selectedReceipt}
+          receipts={receipts}
+          isOpen={receiptViewerOpen}
+          onClose={() => {
+            setReceiptViewerOpen(false);
+            setSelectedReceipt(null);
+          }}
+          onNavigate={(newReceipt) => {
+            setSelectedReceipt(newReceipt);
+          }}
+        />
+      )}
     </div>
   );
 }

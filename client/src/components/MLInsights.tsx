@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export function MLInsights() {
   const [patterns, setPatterns] = useState<any>(null);
+  const [performance, setPerformance] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const { toast } = useToast();
@@ -17,10 +18,19 @@ export function MLInsights() {
   const fetchPatterns = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/analytics/patterns');
-      if (response.ok) {
-        const data = await response.json();
+      const [patternsRes, performanceRes] = await Promise.all([
+        fetch('/api/analytics/patterns'),
+        fetch('/api/analytics/performance')
+      ]);
+
+      if (patternsRes.ok) {
+        const data = await patternsRes.json();
         setPatterns(data);
+      }
+
+      if (performanceRes.ok) {
+        const perfData = await performanceRes.json();
+        setPerformance(perfData);
       }
     } catch (error) {
       console.error('Error fetching patterns:', error);
@@ -208,33 +218,45 @@ export function MLInsights() {
         <CardHeader>
           <CardTitle>Model Performance</CardTitle>
           <CardDescription>
-            Based on data from {patterns?.analyzedPeriod || '30 days'}
+            Based on data from {performance?.analyzedPeriod || patterns?.analyzedPeriod || '30 days'}
+            {performance?.dataPoints && (
+              <span className="block mt-1 text-xs">
+                {performance.dataPoints.totalMatches} matches, {performance.dataPoints.totalSkips} skips, {performance.dataPoints.patternsDetected} patterns detected
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-medium">Confidence Accuracy</span>
-                <span className="text-sm text-muted-foreground">85%</span>
+          {performance ? (
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm font-medium">Confidence Accuracy</span>
+                  <span className="text-sm text-muted-foreground">{performance.confidenceAccuracy}%</span>
+                </div>
+                <Progress value={performance.confidenceAccuracy} className="h-2" />
               </div>
-              <Progress value={85} className="h-2" />
-            </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-medium">Merchant Normalization Coverage</span>
-                <span className="text-sm text-muted-foreground">92%</span>
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm font-medium">Merchant Normalization Coverage</span>
+                  <span className="text-sm text-muted-foreground">{performance.merchantNormalizationCoverage}%</span>
+                </div>
+                <Progress value={performance.merchantNormalizationCoverage} className="h-2" />
               </div>
-              <Progress value={92} className="h-2" />
-            </div>
-            <div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm font-medium">Pattern Detection Rate</span>
-                <span className="text-sm text-muted-foreground">78%</span>
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm font-medium">Pattern Detection Rate</span>
+                  <span className="text-sm text-muted-foreground">{performance.patternDetectionRate}%</span>
+                </div>
+                <Progress value={performance.patternDetectionRate} className="h-2" />
               </div>
-              <Progress value={78} className="h-2" />
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No performance data available yet.</p>
+              <p className="text-sm mt-2">Start matching receipts to generate metrics.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
