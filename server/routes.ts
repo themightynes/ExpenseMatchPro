@@ -21,6 +21,7 @@ import {
 import { ObjectNotFoundError } from "./objectStorage";
 import { ocrService } from "./ocrService";
 import { EmailService } from "./emailService";
+import { emailWebhookService } from "./emailWebhookService";
 import archiver from 'archiver';
 
 // Helper function to create statement folder structure
@@ -269,6 +270,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
   console.log(`📦 Storage provider: ${StorageFactory.getProviderName()}`)
 
   const emailService = new EmailService();
+
+  // Email webhook endpoint - BEFORE Clerk middleware (webhook has its own auth)
+  app.post("/api/webhooks/email", async (req, res) => {
+    try {
+      const { logger } = await import('./logger');
+      
+      logger.info('Received email webhook', {
+        operation: 'emailWebhook',
+        hasBody: !!req.body,
+        contentType: req.headers['content-type'],
+      });
+
+      // Parse and validate payload
+      const payload = emailWebhookService.parsePayload(req.body);
+
+      // Validate sender
+      const sender = payload.envelope.from;
+      if (!emailWebhookService.validateSender(sender)) {
+        logger.warn('Unauthorized sender rejected', {
+          operation: 'emailWebhook',
+          sender,
+        });
+        return res.status(403).json({
+          error: 'Unauthorized sender',
+          message: `Email from ${sender} is not authorized`,
+        });
+      }
+
+      // Process webhook asynchronously (respond quickly to CloudMailin)
+      emailWebhookService.processWebhookPayload(payload)
+        .then((result) => {
+          logger.info('Email webhook processing completed', {
+            operation: 'emailWebhook',
+            receiptsCreated: result.receiptsCreated,
+            errorsCount: result.errors.length,
+          });
+        })
+        .catch((error) => {
+          logger.error('Email webhook processing failed', {
+            operation: 'emailWebhook',
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+
+      // Respond immediately to CloudMailin
+      res.status(200).json({
+        success: true,
+        message: 'Email received and processing started',
+      });
+    } catch (error) {
+      const { logger } = await import('./logger');
+      
+      logger.error('Email webhook error', {
+        operation: 'emailWebhook',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      const statusCode = error instanceof Error && error.message.includes('Invalid payload')
+        ? 400
+        : error instanceof Error && error.message.includes('Unauthorized')
+        ? 403
+        : 500;
+
+      res.status(statusCode).json({
+        error: error instanceof Error ? error.message : 'Failed to process email webhook',
+        ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
+          details: {
+            stack: error.stack,
+          }
+        } : {}),
+      });
+    }
+  });
 
   // Setup Clerk authentication (webhook endpoint is registered here)
   setupClerkAuth(app);
@@ -2970,89 +3045,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Email Integration Routes
 
-  // Initialize email service with credentials
-  app.post("/api/email/setup", async (req, res) => {
-    try {
-      const { clientId, clientSecret, tenantId } = req.body;
-
-      if (!clientId || !clientSecret || !tenantId) {
-        return res.status(400).json({ 
-          error: "Missing required fields: clientId, clientSecret, tenantId" 
-        });
-      }
-
-      await emailService.initializeAuth(clientId, clientSecret, tenantId);
-      res.json({ message: "Email service initialized successfully" });
-    } catch (error) {
-      console.error("Error setting up email service:", error);
-      res.status(500).json({ error: "Failed to setup email service" });
-    }
-  });
-
-  // Import receipts from Outlook emails
-  app.post("/api/email/import", async (req, res) => {
-    try {
-      const { userEmail, daysBack = 30 } = req.body;
-
-      if (!userEmail) {
-        return res.status(400).json({ error: "userEmail is required" });
-      }
-
-      const result = await emailService.importEmailReceipts(userEmail, storage, daysBack);
-
-      res.json({
-        message: `Import completed: ${result.imported} receipts imported`,
-        imported: result.imported,
-        errors: result.errors
-      });
-    } catch (error) {
-      console.error("Error importing email receipts:", error);
-      res.status(500).json({ 
-        error: error instanceof Error ? error.message : "Failed to import email receipts" 
-      });
-    }
-  });
-
-  // Search and preview receipt emails without importing
-  app.post("/api/email/search", async (req, res) => {
-    try {
-      const { userEmail, daysBack = 30 } = req.body;
-
-      if (!userEmail) {
-        return res.status(400).json({ error: "userEmail is required" });
-      }
-
-      const emails = await emailService.searchReceiptEmails(userEmail, daysBack);
-
-      const preview = emails.map(email => ({
-        id: email.id,
-        subject: email.subject,
-        sender: email.sender,
-        receivedDateTime: email.receivedDateTime,
-        attachmentCount: email.attachments.length,
-        attachments: email.attachments.map(att => ({
-          name: att.name,
-          contentType: att.contentType,
-          size: att.size
-        })),
-        hasReceiptContent: email.body.toLowerCase().includes('receipt') || 
-                          email.body.toLowerCase().includes('invoice') ||
-                          email.body.includes('$')
-      }));
-
-      res.json({
-        emails: preview,
-        totalFound: preview.length,
-        searchPeriod: `${daysBack} days`
-      });
-    } catch (error) {
-      console.error("Error searching email receipts:", error);
-      res.status(500).json({ 
-        error: error instanceof Error ? error.message : "Failed to search email receipts" 
-      });
-    }
-  });
-
   // Process email content manually (copy-paste method)
   app.post("/api/email/process-content", async (req, res) => {
     try {
@@ -3069,16 +3061,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No receipt information found in email content" });
       }
 
+      // Format email content as text file
+      const emailDate = receivedDate ? new Date(receivedDate).toISOString() : new Date().toISOString();
+      const textContent = `Email Receipt
+Subject: ${subject}
+From: ${sender || 'Unknown'}
+Date: ${emailDate}
+
+Extracted Information:
+Merchant: ${extractedData.merchant || 'Unknown'}
+Amount: ${extractedData.amount || 'Unknown'}
+Date: ${extractedData.date || 'Unknown'}
+
+Original Email Body:
+${body}`;
+
+      // Generate safe filename: email-{timestamp}-{sanitized-subject}.txt
+      const timestamp = Date.now();
+      const sanitizedSubject = (subject || 'email-receipt')
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(0, 100); // Limit length to prevent filesystem issues
+      const fileName = `email-${timestamp}-${sanitizedSubject}.txt`;
+
+      // Upload to object storage
+      const textBuffer = Buffer.from(textContent, 'utf-8');
+      const fileUrl = await objectStorageService.uploadFile(
+        textBuffer,
+        fileName,
+        'text/plain'
+      );
+
       // Create receipt with extracted data
       const receiptData = {
-        fileName: `Email Receipt - ${subject}`,
+        fileName: fileName,
         originalFileName: `Email Receipt - ${subject}`,
-        fileUrl: `/email-receipts/${Date.now()}-${subject.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        fileUrl: fileUrl, // ✅ Now uses actual object storage URL
         merchant: extractedData.merchant || '',
         amount: extractedData.amount || '',
         date: extractedData.date ? new Date(extractedData.date) : (receivedDate ? new Date(receivedDate) : new Date()),
         category: '',
-        ocrText: `Email from: ${sender}\nSubject: ${subject}\n\n${body}`,
+        ocrText: `Email from: ${sender || 'Unknown'}\nSubject: ${subject}\n\n${body}`,
         extractedData: extractedData,
         processingStatus: 'completed' as const,
       };
@@ -3091,9 +3113,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Email content processed successfully"
       });
     } catch (error) {
-      console.error("Error processing email content:", error);
+      // Import logger at the top of the function scope to avoid circular dependency issues
+      const { logger, createError } = await import('./logger');
+      
+      logger.error('Failed to process email content', {
+        operation: 'processEmailContent',
+        emailSubject: req.body?.subject || 'unknown',
+        sender: req.body?.sender || 'unknown',
+        hasBody: !!req.body?.body,
+        bodyLength: req.body?.body?.length || 0,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      // Preserve error context for debugging
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to process email content';
+      
       res.status(500).json({ 
-        error: error instanceof Error ? error.message : "Failed to process email content" 
+        error: errorMessage,
+        // Include error details in development
+        ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
+          details: {
+            stack: error.stack,
+            cause: (error as any).cause?.message,
+          }
+        } : {})
       });
     }
   });
