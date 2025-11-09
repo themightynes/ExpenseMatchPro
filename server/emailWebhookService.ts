@@ -533,7 +533,7 @@ export class EmailWebhookService {
         
         for (const attachment of processedAttachments) {
           try {
-            const receipt = await this.createReceiptRecord(attachment, subject, sender, date);
+            const receipt = await this.createReceiptRecord(attachment, subject, sender, emailDate);
             receipts.push(receipt);
           } catch (error) {
             const errorMsg = `Failed to create receipt for attachment ${attachment.fileName}: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -552,10 +552,10 @@ export class EmailWebhookService {
 
         // Prefer HTML over plain text
         if (hasHtml) {
-          const htmlReceipt = await this.processHtmlEmail(payload.html!, subject, sender, date);
+          const htmlReceipt = await this.processHtmlEmail(payload.html!, subject, sender, emailDate);
           if (htmlReceipt) {
             try {
-              const receipt = await this.createReceiptRecord(htmlReceipt, subject, sender, date);
+              const receipt = await this.createReceiptRecord(htmlReceipt, subject, sender, emailDate);
               receipts.push(receipt);
               bodyProcessed = true;
             } catch (error) {
@@ -570,10 +570,10 @@ export class EmailWebhookService {
 
         // Fallback to plain text if HTML processing failed or not available
         if (!bodyProcessed && hasPlain) {
-          const textReceipt = await this.processTextEmail(payload.plain!, subject, sender, date);
+          const textReceipt = await this.processTextEmail(payload.plain!, subject, sender, emailDate);
           if (textReceipt) {
             try {
-              const receipt = await this.createReceiptRecord(textReceipt, subject, sender, date);
+              const receipt = await this.createReceiptRecord(textReceipt, subject, sender, emailDate);
               receipts.push(receipt);
             } catch (error) {
               const errorMsg = `Failed to create receipt for plain text email: ${error instanceof Error ? error.message : 'Unknown error'}`;

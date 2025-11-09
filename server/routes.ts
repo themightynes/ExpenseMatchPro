@@ -328,12 +328,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Parsed payload keys:', Object.keys(payload || {}));
       console.log('Parsed payload:', JSON.stringify(payload, null, 2));
       
+      // Convert multer files to CloudMailin attachment format
+      const files = (req as any).files || [];
+      if (files.length > 0 && files[0].fieldname === 'attachments[]') {
+        // CloudMailin sends attachments as multipart files
+        payload.attachments = files.map((file: any) => ({
+          file_name: file.originalname,
+          content_type: file.mimetype || 'application/octet-stream',
+          size: file.size,
+          content: file.buffer.toString('base64'), // Convert buffer to base64
+        }));
+        console.log(`Converted ${files.length} multer files to attachments array`);
+      }
+      
       logger.info('Received email webhook', {
         operation: 'emailWebhook',
         hasBody: !!payload,
         contentType: req.headers['content-type'],
         payloadKeys: Object.keys(payload || {}),
-        hasFiles: !!(req as any).files && (req as any).files.length > 0,
+        hasFiles: files.length > 0,
+        attachmentCount: payload.attachments?.length || 0,
       });
 
       // Parse and validate payload (includes sender validation)
