@@ -57,6 +57,53 @@ export class EmailWebhookService {
   private objectStorage = getStorage();
 
   /**
+   * Extract email address from "Name <email@domain.com>" format
+   */
+  extractEmail(from: string): string {
+    // Handle "Name <email@domain.com>" format
+    const match = from.match(/<(.+?)>/);
+    if (match) {
+      return match[1].toLowerCase().trim();
+    }
+    // Handle simple email format
+    return from.toLowerCase().trim();
+  }
+
+  /**
+   * Extract sender email from payload - tries multiple possible locations
+   */
+  extractSenderEmail(payload: any): string {
+    // Try multiple possible locations for sender email
+    const senderEmail = 
+      payload.envelope?.from || 
+      payload.envelope?.sender || 
+      payload.from || 
+      payload.headers?.From ||
+      payload.headers?.from;
+
+    if (!senderEmail) {
+      logger.error('Failed to extract sender email from payload', {
+        operation: 'extractSenderEmail',
+        payloadKeys: Object.keys(payload),
+        envelopeKeys: payload.envelope ? Object.keys(payload.envelope) : [],
+        headersKeys: payload.headers ? Object.keys(payload.headers) : [],
+      });
+      throw new Error('Invalid payload: missing sender email');
+    }
+
+    // Extract clean email address
+    const cleanEmail = this.extractEmail(senderEmail);
+    
+    logger.debug('Extracted sender email', {
+      operation: 'extractSenderEmail',
+      original: senderEmail,
+      extracted: cleanEmail,
+    });
+
+    return cleanEmail;
+  }
+
+  /**
    * Validate sender against whitelist
    */
   validateSender(senderEmail: string): boolean {
@@ -69,28 +116,56 @@ export class EmailWebhookService {
         senderEmail: normalizedSender,
         allowedSenders: ALLOWED_SENDERS,
       });
+    } else {
+      logger.info('Sender authorized', {
+        operation: 'validateSender',
+        senderEmail: normalizedSender,
+      });
     }
     
     return isAllowed;
   }
 
   /**
-   * Parse and validate CloudMailin payload
+   * Parse and validate CloudMailin payload - flexible structure handling
    */
-  parsePayload(body: any): CloudMailinPayload {
+  parsePayload(body: any): any {
     if (!body || typeof body !== 'object') {
+      logger.error('Invalid payload: empty or not an object', {
+        operation: 'parsePayload',
+        bodyType: typeof body,
+        bodyValue: body,
+      });
       throw new Error('Invalid payload: must be an object');
     }
 
-    if (!body.envelope || !body.envelope.from) {
-      throw new Error('Invalid payload: missing envelope.from');
+    // Log full payload structure for debugging
+    logger.debug('Parsing CloudMailin payload', {
+      operation: 'parsePayload',
+      payloadKeys: Object.keys(body),
+      hasEnvelope: !!body.envelope,
+      hasHeaders: !!body.headers,
+      envelopeKeys: body.envelope ? Object.keys(body.envelope) : [],
+      headersKeys: body.headers ? Object.keys(body.headers) : [],
+    });
+
+    // Extract sender email (will throw if not found)
+    const senderEmail = this.extractSenderEmail(body);
+
+    // Validate sender
+    if (!this.validateSender(senderEmail)) {
+      throw new Error(`Unauthorized sender: ${senderEmail}`);
     }
 
+    // Headers are optional but preferred
     if (!body.headers) {
-      throw new Error('Invalid payload: missing headers');
+      logger.warn('Payload missing headers, using defaults', {
+        operation: 'parsePayload',
+      });
+      body.headers = {};
     }
 
-    return body as CloudMailinPayload;
+    return body;
   }
 
   /**
@@ -414,7 +489,7 @@ export class EmailWebhookService {
    * Process CloudMailin webhook payload
    * Main entry point for email processing
    */
-  async processWebhookPayload(payload: CloudMailinPayload): Promise<{
+  async processWebhookPayload(payload: any): Promise<{
     receiptsCreated: number;
     receipts: any[];
     errors: string[];
@@ -423,9 +498,22 @@ export class EmailWebhookService {
     const errors: string[] = [];
 
     try {
-      const sender = payload.envelope.from;
-      const subject = payload.headers.Subject || 'No Subject';
-      const date = payload.headers.Date || new Date().toISOString();
+      // Extract sender email (already validated in parsePayload)
+      const sender = this.extractSenderEmail(payload);
+      
+      // Extract email metadata - try multiple locations
+      const subject = 
+        payload.headers?.Subject || 
+        payload.headers?.subject || 
+        payload.subject || 
+        'No Subject';
+      
+      const emailDate = 
+        payload.headers?.Date || 
+        payload.headers?.date || 
+        payload.date || 
+        new Date().toISOString();
+      
       const attachments = payload.attachments || [];
       const hasHtml = !!payload.html;
       const hasPlain = !!payload.plain;

@@ -273,72 +273,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Email webhook endpoint - BEFORE Clerk middleware (webhook has its own auth)
   app.post("/api/webhooks/email", async (req, res) => {
+    const { logger } = await import('./logger');
+    
     try {
-      const { logger } = await import('./logger');
+      console.log('=== EMAIL WEBHOOK RECEIVED ===');
+      console.log('Content-Type:', req.headers['content-type']);
+      console.log('Payload keys:', Object.keys(req.body || {}));
+      console.log('Full payload:', JSON.stringify(req.body, null, 2));
       
       logger.info('Received email webhook', {
         operation: 'emailWebhook',
         hasBody: !!req.body,
         contentType: req.headers['content-type'],
+        payloadKeys: Object.keys(req.body || {}),
       });
 
-      // Parse and validate payload
+      // Parse and validate payload (includes sender validation)
       const payload = emailWebhookService.parsePayload(req.body);
 
-      // Validate sender
-      const sender = payload.envelope.from;
-      if (!emailWebhookService.validateSender(sender)) {
-        logger.warn('Unauthorized sender rejected', {
-          operation: 'emailWebhook',
-          sender,
-        });
-        return res.status(403).json({
-          error: 'Unauthorized sender',
-          message: `Email from ${sender} is not authorized`,
-        });
-      }
+      // Extract sender for logging (already validated in parsePayload)
+      const sender = emailWebhookService.extractSenderEmail(payload);
+      
+      logger.info('Email webhook payload validated', {
+        operation: 'emailWebhook',
+        sender,
+        hasAttachments: !!(payload.attachments && payload.attachments.length > 0),
+        hasHtml: !!payload.html,
+        hasPlain: !!payload.plain,
+      });
 
       // Process webhook asynchronously (respond quickly to CloudMailin)
       emailWebhookService.processWebhookPayload(payload)
         .then((result) => {
+          console.log('=== EMAIL PROCESSED SUCCESSFULLY ===');
+          console.log(`Receipts created: ${result.receiptsCreated}`);
+          console.log(`Errors: ${result.errors.length}`);
+          
           logger.info('Email webhook processing completed', {
             operation: 'emailWebhook',
             receiptsCreated: result.receiptsCreated,
             errorsCount: result.errors.length,
+            errors: result.errors.length > 0 ? result.errors : undefined,
           });
         })
         .catch((error) => {
+          console.error('=== EMAIL PROCESSING FAILED ===');
+          console.error('Error:', error instanceof Error ? error.message : String(error));
+          console.error('Stack:', error instanceof Error ? error.stack : undefined);
+          
           logger.error('Email webhook processing failed', {
             operation: 'emailWebhook',
             error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
           });
         });
 
-      // Respond immediately to CloudMailin
+      // Respond immediately to CloudMailin (always 200 to prevent retries)
       res.status(200).json({
         success: true,
         message: 'Email received and processing started',
       });
     } catch (error) {
-      const { logger } = await import('./logger');
+      console.error('=== EMAIL WEBHOOK ERROR ===');
+      console.error('Error message:', error instanceof Error ? error.message : String(error));
+      console.error('Error stack:', error instanceof Error ? error.stack : undefined);
+      console.error('Payload that caused error:', JSON.stringify(req.body, null, 2));
       
       logger.error('Email webhook error', {
         operation: 'emailWebhook',
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
+        payloadKeys: Object.keys(req.body || {}),
+        payloadStructure: req.body ? {
+          hasEnvelope: !!req.body.envelope,
+          hasHeaders: !!req.body.headers,
+          hasFrom: !!req.body.from,
+          envelopeKeys: req.body.envelope ? Object.keys(req.body.envelope) : [],
+          headersKeys: req.body.headers ? Object.keys(req.body.headers) : [],
+        } : null,
       });
 
-      const statusCode = error instanceof Error && error.message.includes('Invalid payload')
-        ? 400
-        : error instanceof Error && error.message.includes('Unauthorized')
-        ? 403
-        : 500;
-
-      res.status(statusCode).json({
+      // Return 200 OK even on errors to prevent CloudMailin retries
+      // CloudMailin will retry on 4xx/5xx, but we want to handle errors ourselves
+      res.status(200).json({ 
+        success: false, 
         error: error instanceof Error ? error.message : 'Failed to process email webhook',
         ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
           details: {
             stack: error.stack,
+            payload: req.body,
           }
         } : {}),
       });
