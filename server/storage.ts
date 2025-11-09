@@ -17,7 +17,7 @@ import {
   type InsertExpenseTemplate
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, isNull, isNotNull, desc, between, count, lte, gte } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, desc, asc, between, count, lte, gte } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -237,7 +237,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllReceipts(): Promise<Receipt[]> {
-    return await db.select().from(receipts).orderBy(desc(receipts.createdAt));
+    // Order by createdAt DESC (newest first), then by id for consistent ordering
+    // This ensures deterministic ordering even when receipts have the same createdAt timestamp
+    return await db.select().from(receipts)
+      .orderBy(desc(receipts.createdAt), receipts.id);
   }
 
   async updateReceipt(id: string, updates: Partial<Receipt>): Promise<Receipt | undefined> {

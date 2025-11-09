@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import ReceiptViewer from "@/components/ReceiptViewer";
@@ -13,6 +13,22 @@ interface ReceiptCardProps {
 export default function ReceiptCard({ receipt, receipts = [] }: ReceiptCardProps) {
   const [showViewer, setShowViewer] = useState(false);
   const [currentReceipt, setCurrentReceipt] = useState(receipt);
+  
+  // Sync currentReceipt with receipt prop and latest data from receipts array
+  // This ensures the card always shows the most up-to-date receipt data
+  useEffect(() => {
+    // First, try to find the receipt in the receipts array (most up-to-date)
+    const updatedReceipt = receipts.find(r => r.id === receipt.id);
+    if (updatedReceipt) {
+      setCurrentReceipt(updatedReceipt);
+    } else {
+      // If not in array, use prop (but this might mean it was deleted)
+      setCurrentReceipt(receipt);
+    }
+  }, [receipt, receipts]);
+  
+  // Get the latest receipt data for display (from array if available, otherwise prop)
+  const displayReceipt = receipts.find(r => r.id === receipt.id) || receipt;
   const getStatusBadge = (status: string, isMatched: boolean) => {
     if (status === "completed" && isMatched) {
       return (
@@ -24,7 +40,8 @@ export default function ReceiptCard({ receipt, receipts = [] }: ReceiptCardProps
     }
     
     // Check if manual entry is needed (no merchant, amount, or date)
-    const needsManualEntry = !receipt.merchant && !receipt.amount && !receipt.date;
+    // Use displayReceipt to show latest data
+    const needsManualEntry = !displayReceipt.merchant && !displayReceipt.amount && !displayReceipt.date;
     
     if (status === "completed" && !isMatched) {
       return (
@@ -83,25 +100,25 @@ export default function ReceiptCard({ receipt, receipts = [] }: ReceiptCardProps
   return (
     <div className="flex items-center p-4 bg-gray-50 rounded-lg">
       <div className="flex-shrink-0 w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-        <i className={getFileIcon(receipt.fileName)}></i>
+        <i className={getFileIcon(displayReceipt.fileName)}></i>
       </div>
       <div className="ml-4 flex-1">
         <p className="font-medium text-gray-900 leading-tight break-words">
-          {receipt.organizedPath ? receipt.organizedPath.split('/').pop() : (receipt.originalFileName || receipt.fileName)}
+          {displayReceipt.organizedPath ? displayReceipt.organizedPath.split('/').pop() : (displayReceipt.originalFileName || displayReceipt.fileName)}
         </p>
         <div className="flex items-center mt-1">
-          {getStatusBadge(receipt.processingStatus, receipt.isMatched || false)}
+          {getStatusBadge(displayReceipt.processingStatus, displayReceipt.isMatched || false)}
           <span className="text-sm text-gray-500 ml-2">
-            {formatTimestamp(receipt.createdAt)}
+            {formatTimestamp(displayReceipt.createdAt)}
           </span>
-          {receipt.amount && (
+          {displayReceipt.amount && (
             <span className="text-sm font-medium text-gray-700 ml-2">
-              ${receipt.amount}
+              ${displayReceipt.amount}
             </span>
           )}
         </div>
-        {receipt.merchant && (
-          <p className="text-sm text-gray-600 mt-1">{receipt.merchant}</p>
+        {displayReceipt.merchant && (
+          <p className="text-sm text-gray-600 mt-1">{displayReceipt.merchant}</p>
         )}
       </div>
       <Button 

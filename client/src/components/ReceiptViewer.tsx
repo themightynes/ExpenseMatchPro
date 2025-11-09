@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,9 +170,11 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
         throw new Error(errorData.error || `Delete failed with status ${response.status}`);
       }
 
-      return await response.json();
+      await response.json();
+      // Return receiptId so we can check if it's the one being viewed
+      return receiptId;
     },
-    onSuccess: () => {
+    onSuccess: (deletedReceiptId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/financial-stats'] });
@@ -180,7 +182,15 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
         title: "Receipt deleted",
         description: "Receipt has been permanently deleted",
       });
-      onClose(); // Close the viewer
+      
+      // Only close if we deleted the receipt we're currently viewing
+      // If viewing a different receipt, stay open
+      if (displayReceipt.id === deletedReceiptId) {
+        onClose();
+      } else {
+        // Receipt list will refresh, viewer will update automatically
+        console.log('Deleted different receipt, keeping viewer open');
+      }
     },
     onError: (error: Error) => {
       console.error('Delete error:', error);
@@ -203,16 +213,47 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPanPosition, setLastPanPosition] = useState({ x: 0, y: 0 });
 
-  // Find current receipt index and get the latest receipt data from the receipts array
+  // Find current receipt and get the latest receipt data from the receipts array
   // This ensures we always show the most up-to-date receipt data, especially after OCR completes
-  const currentReceipt = receipts.find(r => r.id === receipt.id) || receipt;
+  const currentReceipt = receipts.find(r => r.id === receipt.id);
   const currentIndex = receipts.findIndex(r => r.id === receipt.id);
-  const hasPrevious = currentIndex > 0;
-  const hasNext = currentIndex < receipts.length - 1;
+  
+  // If receipt not found in array, it may have been deleted - close viewer
+  useEffect(() => {
+    if (isOpen && currentIndex === -1) {
+      console.warn('Receipt not found in array, closing viewer', { receiptId: receipt.id });
+      toast({
+        title: "Receipt not found",
+        description: "This receipt may have been deleted.",
+        variant: "destructive",
+      });
+      onClose();
+    }
+  }, [isOpen, currentIndex, receipt.id, onClose]);
+  
+  // Use ID-based navigation instead of index-based to avoid issues when array changes
+  // Sort receipts by createdAt DESC (newest first) for consistent navigation
+  const sortedReceipts = useMemo(() => {
+    return [...receipts].sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (dateB !== dateA) return dateB - dateA; // Newest first
+      return a.id.localeCompare(b.id); // Secondary sort by ID for consistency
+    });
+  }, [receipts]);
+  
+  const currentSortedIndex = sortedReceipts.findIndex(r => r.id === receipt.id);
+  const hasPrevious = currentSortedIndex > 0;
+  const hasNext = currentSortedIndex < sortedReceipts.length - 1;
 
   // Poll for receipt updates when it's processing (e.g., OCR running from webhook)
+  // Only poll if receipt exists in the array
   useEffect(() => {
-    if (!isOpen || currentReceipt.processingStatus !== 'processing') {
+    if (!isOpen || currentIndex === -1 || !currentReceipt) {
+      return;
+    }
+    
+    if (currentReceipt.processingStatus !== 'processing') {
       return;
     }
 
@@ -224,10 +265,15 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     return () => {
       clearInterval(intervalId);
     };
-  }, [isOpen, currentReceipt.processingStatus, currentReceipt.id]);
+  }, [isOpen, currentIndex, currentReceipt?.processingStatus, currentReceipt?.id]);
 
   // Update parent component when receipt processing completes (e.g., OCR finishes)
   useEffect(() => {
+    // Don't update if receipt not found in array
+    if (!currentReceipt || currentIndex === -1) {
+      return;
+    }
+    
     // Only update parent if processing status changed from 'processing' to 'completed'
     // or if ocrText changed from 'Processing...' to actual content
     // IMPORTANT: Only update if the IDs match to prevent linking wrong receipts
@@ -255,10 +301,19 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
         onNavigate(updatedReceipt);
       }
     }
-  }, [currentReceipt.processingStatus, currentReceipt.ocrText, currentReceipt.id, receipt.processingStatus, receipt.ocrText, receipt.id, onNavigate, receipts]);
+  }, [currentReceipt?.processingStatus, currentReceipt?.ocrText, currentReceipt?.id, currentIndex, receipt.processingStatus, receipt.ocrText, receipt.id, onNavigate, receipts]);
 
   // Use currentReceipt (latest data) instead of receipt prop for display
-  const displayReceipt = currentReceipt;
+  // If receipt not found, use prop as fallback (but operations will be disabled)
+  const displayReceipt = currentReceipt || receipt;
+  
+  // Check if receipt exists before allowing operations
+  const receiptExists = currentIndex !== -1 && currentReceipt !== undefined;
+  
+  // Don't render if receipt doesn't exist (will be closed by useEffect)
+  if (!receiptExists && isOpen) {
+    return null;
+  }
 
   // Image handling
   const imageUrl = displayReceipt.fileUrl?.startsWith('http') ? displayReceipt.fileUrl : 
@@ -438,17 +493,24 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     }
   }, [zoom]);
 
+  // ID-based navigation using sorted receipts array
   const navigatePrevious = useCallback(() => {
-    if (hasPrevious) {
-      onNavigate(receipts[currentIndex - 1]);
+    if (hasPrevious && currentSortedIndex > 0) {
+      const previousReceipt = sortedReceipts[currentSortedIndex - 1];
+      if (previousReceipt) {
+        onNavigate(previousReceipt);
+      }
     }
-  }, [hasPrevious, currentIndex, receipts, onNavigate]);
+  }, [hasPrevious, currentSortedIndex, sortedReceipts, onNavigate]);
 
   const navigateNext = useCallback(() => {
-    if (hasNext) {
-      onNavigate(receipts[currentIndex + 1]);
+    if (hasNext && currentSortedIndex < sortedReceipts.length - 1) {
+      const nextReceipt = sortedReceipts[currentSortedIndex + 1];
+      if (nextReceipt) {
+        onNavigate(nextReceipt);
+      }
     }
-  }, [hasNext, currentIndex, receipts, onNavigate]);
+  }, [hasNext, currentSortedIndex, sortedReceipts, onNavigate]);
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     // Image loaded successfully
@@ -573,9 +635,9 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
               {displayReceipt.organizedPath ? displayReceipt.organizedPath.split('/').pop() : displayReceipt.originalFileName}
             </h1>
             <div className="flex items-center gap-2 mt-1">
-              {currentIndex >= 0 && receipts.length > 1 && (
+              {receiptExists && sortedReceipts.length > 1 && (
                 <span className="text-sm text-gray-500">
-                  {currentIndex + 1} of {receipts.length}
+                  {currentSortedIndex + 1} of {sortedReceipts.length}
                 </span>
               )}
               {displayReceipt.isMatched && (
@@ -592,13 +654,13 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
           </div>
         </div>
 
-        {receipts.length > 1 && (
+        {receiptExists && sortedReceipts.length > 1 && (
           <div className="flex items-center gap-1 flex-shrink-0">
             <Button 
               variant="ghost" 
               size="sm" 
               onClick={navigatePrevious} 
-              disabled={!hasPrevious}
+              disabled={!hasPrevious || !receiptExists}
               className="p-2"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -607,7 +669,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
               variant="ghost" 
               size="sm" 
               onClick={navigateNext} 
-              disabled={!hasNext}
+              disabled={!hasNext || !receiptExists}
               className="p-2"
             >
               <ChevronRight className="w-4 h-4" />
@@ -1007,8 +1069,18 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => triggerOcrMutation.mutate(displayReceipt.id)}
-                            disabled={triggerOcrMutation.isPending}
+                            onClick={() => {
+                              if (!receiptExists) {
+                                toast({
+                                  title: "Receipt not found",
+                                  description: "This receipt may have been deleted.",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                              triggerOcrMutation.mutate(displayReceipt.id);
+                            }}
+                            disabled={triggerOcrMutation.isPending || !receiptExists}
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                           >
                             {triggerOcrMutation.isPending ? (
@@ -1026,8 +1098,18 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => cancelProcessingMutation.mutate(displayReceipt.id)}
-                            disabled={cancelProcessingMutation.isPending}
+                            onClick={() => {
+                              if (!receiptExists) {
+                                toast({
+                                  title: "Receipt not found",
+                                  description: "This receipt may have been deleted.",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                              cancelProcessingMutation.mutate(displayReceipt.id);
+                            }}
+                            disabled={cancelProcessingMutation.isPending || !receiptExists}
                             className="text-gray-600 hover:text-gray-700 hover:bg-gray-100 border-gray-200"
                           >
                             {cancelProcessingMutation.isPending ? (
@@ -1048,8 +1130,18 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => triggerOcrMutation.mutate(displayReceipt.id)}
-                        disabled={triggerOcrMutation.isPending}
+                        onClick={() => {
+                          if (!receiptExists) {
+                            toast({
+                              title: "Receipt not found",
+                              description: "This receipt may have been deleted.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          triggerOcrMutation.mutate(displayReceipt.id);
+                        }}
+                        disabled={triggerOcrMutation.isPending || !receiptExists}
                         className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                       >
                         {triggerOcrMutation.isPending ? (
@@ -1113,6 +1205,16 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                     variant="outline"
                     size="sm"
                     onClick={() => {
+                      if (!receiptExists) {
+                        toast({
+                          title: "Receipt not found",
+                          description: "This receipt may have been deleted.",
+                          variant: "destructive",
+                        });
+                        onClose();
+                        return;
+                      }
+                      
                       if (confirm(`Are you sure you want to delete this receipt?\n\nReceipt ID: ${displayReceipt.id}\nFile: ${displayReceipt.fileName}\n\nThis action cannot be undone.`)) {
                         console.log('Deleting receipt:', {
                           id: displayReceipt.id,
@@ -1122,7 +1224,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                         deleteReceiptMutation.mutate(displayReceipt.id);
                       }
                     }}
-                    disabled={deleteReceiptMutation.isPending}
+                    disabled={deleteReceiptMutation.isPending || !receiptExists}
                     className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />

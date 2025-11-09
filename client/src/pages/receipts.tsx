@@ -37,6 +37,26 @@ export default function ReceiptsPage() {
   const { data: statements = [] } = useQuery<AmexStatement[]>({
     queryKey: ["/api/statements"],
   });
+  
+  // Sync selectedReceipt with latest data from receipts array
+  useEffect(() => {
+    if (selectedReceipt) {
+      const updatedReceipt = receipts.find(r => r.id === selectedReceipt.id);
+      if (updatedReceipt) {
+        // Only update if data actually changed to avoid unnecessary re-renders
+        if (updatedReceipt.updatedAt !== selectedReceipt.updatedAt ||
+            updatedReceipt.processingStatus !== selectedReceipt.processingStatus ||
+            updatedReceipt.ocrText !== selectedReceipt.ocrText ||
+            updatedReceipt.merchant !== selectedReceipt.merchant ||
+            updatedReceipt.amount !== selectedReceipt.amount) {
+          setSelectedReceipt(updatedReceipt);
+        }
+      } else {
+        // Receipt was deleted, close viewer
+        setSelectedReceipt(null);
+      }
+    }
+  }, [receipts, selectedReceipt]);
 
   // Mutation for assigning receipts to statement periods
   const assignReceiptToStatement = useMutation({
@@ -78,9 +98,19 @@ export default function ReceiptsPage() {
       const receipt = receipts.find(r => r.id === selectedReceiptId);
       if (receipt) {
         setSelectedReceipt(receipt);
+      } else {
+        // Receipt not found - may have been deleted
+        // Clear URL parameter and show notification
+        const newUrl = location.split('?')[0];
+        window.history.replaceState({}, '', newUrl);
+        toast({
+          title: "Receipt not found",
+          description: "The requested receipt may have been deleted.",
+          variant: "destructive",
+        });
       }
     }
-  }, [location, receipts]);
+  }, [location, receipts, toast]);
 
   // Build folder structure based on receipt organization
   const buildFolderStructure = (
