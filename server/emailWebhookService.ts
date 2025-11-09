@@ -425,7 +425,8 @@ export class EmailWebhookService {
       const receipt = await storage.createReceipt(receiptData);
 
       // Trigger OCR processing asynchronously
-      ocrService.processReceipt(receipt.fileUrl, receipt.originalFileName)
+      // Use fileName (actual file with extension) instead of originalFileName (email subject)
+      ocrService.processReceipt(receipt.fileUrl, receipt.fileName)
         .then(async ({ ocrText, extractedData, extractionMethod, confidence }) => {
           logger.info('OCR processing completed', {
             operation: 'createReceiptRecord',

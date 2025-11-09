@@ -760,12 +760,19 @@ RULES:
         throw new Error(`All Claude models failed. Last error: ${lastError?.message || 'Unknown error'}`);
       }
 
-      // Extract JSON from response (handle cases where it's wrapped in markdown code blocks)
+      // Extract JSON from response (handle cases where it's wrapped in markdown code blocks or has trailing text)
       let jsonText = textContent.trim();
       
       // Remove markdown code blocks if present
       if (jsonText.startsWith('```')) {
         jsonText = jsonText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '');
+      }
+
+      // Try to extract JSON object if there's trailing text after the JSON
+      // Look for the first complete JSON object (starts with { and ends with })
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[0];
       }
 
       // Parse JSON response
@@ -971,9 +978,29 @@ RULES:
       // Download file buffer using the unified download() method
       const [buffer] = await objectFile.download();
       
-      // Determine file type from original filename if available, otherwise from URL
+      // Determine file type from URL first (most reliable), then fallback to original filename
+      // Extract extension from URL (e.g., /objects/uploads/abc123.pdf -> pdf)
+      let fileExtension = fileUrl.toLowerCase().split('.').pop();
+      
+      // If URL doesn't have extension, try originalFileName
+      if (!fileExtension || fileExtension === fileUrl.toLowerCase() || fileExtension.length > 5) {
+        const fileName = originalFileName || fileUrl;
+        fileExtension = fileName.toLowerCase().split('.').pop();
+      }
+      
+      // If still no valid extension, try to detect from buffer content
+      if (!fileExtension || fileExtension.length > 5) {
+        // Check PDF magic bytes
+        if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+          fileExtension = 'pdf';
+        } else if (buffer[0] === 0xFF && buffer[1] === 0xD8) {
+          fileExtension = 'jpg';
+        } else if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+          fileExtension = 'png';
+        }
+      }
+      
       const fileName = originalFileName || fileUrl;
-      const fileExtension = fileName.toLowerCase().split('.').pop();
 
       console.log(`Processing file: ${fileName} with extension: ${fileExtension}`);
 
