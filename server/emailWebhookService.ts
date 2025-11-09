@@ -131,14 +131,14 @@ export class EmailWebhookService {
       try {
         // Filter for receipt-like attachments
         const contentType = attachment.content_type.toLowerCase();
-        const fileName = attachment.file_name.toLowerCase();
+        const fileNameLower = attachment.file_name.toLowerCase();
         
         const isReceiptFile = 
           contentType.includes('pdf') ||
           contentType.includes('image') ||
-          fileName.includes('receipt') ||
-          fileName.includes('invoice') ||
-          fileName.includes('bill');
+          fileNameLower.includes('receipt') ||
+          fileNameLower.includes('invoice') ||
+          fileNameLower.includes('bill');
 
         if (!isReceiptFile) {
           logger.debug('Skipping non-receipt attachment', {
