@@ -965,44 +965,138 @@ export default function StatementDetailPage() {
                   <div className="mt-3 pt-3 border-t border-orange-200">
                     <div className="text-xs font-medium text-gray-700 mb-2">Quick Match to Unmatched Charges:</div>
                     <div className="space-y-1 max-h-32 overflow-y-auto">
-                      {charges
-                        .filter(charge => !charge.isMatched)
-                        .slice(0, 3) // Show top 3 best matches
-                        .map((charge) => {
-                          // Simple matching score calculation
-                          const amountDiff = receipt.amount && charge.amount ? 
-                            Math.abs(parseFloat(receipt.amount) - Math.abs(parseFloat(charge.amount))) : 999;
-                          const dateDiff = receipt.date && charge.date ?
-                            Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24) : 999;
-                          const merchantMatch = receipt.merchant && charge.description ?
-                            charge.description.toLowerCase().includes(receipt.merchant.toLowerCase()) : false;
+                      {(() => {
+                        // Calculate match quality for each unmatched charge and sort
+                        const unmatchedCharges = charges.filter(charge => !charge.isMatched);
+                        
+                        const chargesWithQuality = unmatchedCharges.map((charge) => {
+                          // Calculate amount difference
+                          const receiptAmount = receipt.amount ? parseFloat(receipt.amount) : null;
+                          const chargeAmount = charge.amount ? Math.abs(parseFloat(charge.amount)) : null;
+                          const amountDiff = receiptAmount !== null && chargeAmount !== null
+                            ? Math.abs(receiptAmount - chargeAmount)
+                            : 999;
+                          const isExactAmount = amountDiff < 0.01; // Within 1 cent
+
+                          // Calculate date difference
+                          const dateDiff = receipt.date && charge.date
+                            ? Math.abs(new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24)
+                            : 999;
+
+                          // Check for exact merchant match (normalized, case-insensitive)
+                          const normalizedReceiptMerchant = receipt.merchant
+                            ? receipt.merchant.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+                            : '';
+                          const normalizedChargeDesc = charge.description
+                            ? charge.description.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+                            : '';
+                          const isExactMerchant = normalizedReceiptMerchant && normalizedChargeDesc
+                            && normalizedReceiptMerchant === normalizedChargeDesc;
+
+                          // Calculate match quality score (same logic as backend)
+                          let matchQuality = 0;
                           
+                          // PRIORITY 1: Exact amount match gets highest quality (95-100)
+                          if (isExactAmount) {
+                            matchQuality = 95;
+                            if (isExactMerchant) {
+                              matchQuality += 5; // Bonus for exact merchant
+                            }
+                          } else {
+                            // PRIORITY 2: Balance amount and date (60% amount, 40% date)
+                            
+                            // Calculate amount score (0-70 based on difference)
+                            let amountScore = 0;
+                            if (receiptAmount !== null && chargeAmount !== null) {
+                              if (amountDiff < 1.0) {
+                                amountScore = 70 - (amountDiff * 10); // Linear scale: $0.01 = 69.9, $1.00 = 60
+                              } else if (amountDiff < 5.0) {
+                                amountScore = 60 - ((amountDiff - 1.0) * 8); // $1.00 = 60, $5.00 = 28
+                              } else if (amountDiff < 10.0) {
+                                amountScore = 20 - ((amountDiff - 5.0) * 2); // $5.00 = 20, $10.00 = 10
+                              } else {
+                                amountScore = Math.max(0, 10 - (amountDiff - 10.0) * 0.5); // Diminishing returns
+                              }
+                              amountScore = Math.max(0, Math.min(70, amountScore)); // Clamp to 0-70
+                            }
+
+                            // Calculate date score (0-40 based on days difference)
+                            let dateScore = 0;
+                            if (receipt.date && charge.date) {
+                              if (dateDiff === 0) {
+                                dateScore = 40;
+                              } else if (dateDiff <= 1) {
+                                dateScore = 35;
+                              } else if (dateDiff <= 3) {
+                                dateScore = 25;
+                              } else if (dateDiff <= 7) {
+                                dateScore = 15;
+                              } else if (dateDiff <= 14) {
+                                dateScore = 5;
+                              }
+                            }
+
+                            // Combined: 60% amount, 40% date
+                            matchQuality = Math.round((amountScore * 0.6) + (dateScore * 0.4));
+
+                            // Add small bonus for exact merchant match (only if not exact amount)
+                            if (isExactMerchant) {
+                              matchQuality += 10;
+                            }
+                          }
+
+                          return {
+                            charge,
+                            matchQuality,
+                            amountDiff,
+                            dateDiff,
+                            isExactMerchant,
+                            isExactAmount
+                          };
+                        });
+
+                        // Sort by match quality: exact amount first, then by quality descending
+                        chargesWithQuality.sort((a, b) => {
+                          // Primary sort: exact amount matches first
+                          if (a.isExactAmount && !b.isExactAmount) return -1;
+                          if (!a.isExactAmount && b.isExactAmount) return 1;
+                          // Secondary sort: by match quality descending (higher is better)
+                          return b.matchQuality - a.matchQuality;
+                        });
+
+                        // Take top 3 best matches
+                        const topMatches = chargesWithQuality.slice(0, 3);
+
+                        if (topMatches.length === 0) {
                           return (
-                            <div key={charge.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
-                              <div className="flex-1 text-xs">
-                                <div className="font-medium truncate">{charge.description}</div>
-                                <div className="text-gray-500 flex gap-2">
-                                  <span>{formatCurrency(charge.amount)}</span>
-                                  <span>•</span>
-                                  <span>{formatDate(charge.date)}</span>
-                                  {merchantMatch && <span className="text-green-600">• Merchant Match</span>}
-                                  {amountDiff < 1 && <span className="text-green-600">• Amount Match</span>}
-                                </div>
-                              </div>
-                              <Button
-                                onClick={() => handleQuickMatch(receipt.id, charge.id)}
-                                disabled={quickMatchMutation.isPending}
-                                size="sm"
-                                className="h-6 px-2 text-xs ml-2"
-                              >
-                                {quickMatchMutation.isPending ? "..." : "Link"}
-                              </Button>
-                            </div>
+                            <div className="text-xs text-gray-500 p-2">No unmatched charges available</div>
                           );
-                        })}
-                      {charges.filter(charge => !charge.isMatched).length === 0 && (
-                        <div className="text-xs text-gray-500 p-2">No unmatched charges available</div>
-                      )}
+                        }
+
+                        return topMatches.map(({ charge, amountDiff, dateDiff, isExactMerchant, isExactAmount }) => (
+                          <div key={charge.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                            <div className="flex-1 text-xs">
+                              <div className="font-medium truncate">{charge.description}</div>
+                              <div className="text-gray-500 flex gap-2">
+                                <span>{formatCurrency(charge.amount)}</span>
+                                <span>•</span>
+                                <span>{formatDate(charge.date)}</span>
+                                {isExactMerchant && <span className="text-green-600">• Exact Merchant</span>}
+                                {isExactAmount && <span className="text-green-600 font-semibold">• Exact Amount</span>}
+                                {!isExactAmount && amountDiff < 1 && <span className="text-green-600">• Close Amount</span>}
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => handleQuickMatch(receipt.id, charge.id)}
+                              disabled={quickMatchMutation.isPending}
+                              size="sm"
+                              className="h-6 px-2 text-xs ml-2"
+                            >
+                              {quickMatchMutation.isPending ? "..." : "Link"}
+                            </Button>
+                          </div>
+                        ));
+                      })()}
                     </div>
                   </div>
                 </CardContent>

@@ -305,14 +305,20 @@ export default function MatchingInterface({ statementId, onBack }: MatchingInter
       });
     }
 
-    // Merchant similarity
+    // Merchant - only show for exact matches (normalized, case-insensitive)
     if (receipt.merchant && charge.description) {
-      const similarity = calculateStringSimilarity(receipt.merchant.toLowerCase(), charge.description.toLowerCase());
-      scores.push({
-        type: "Merchant",
-        matches: similarity > 0.8,
-        message: similarity > 0.9 ? "Merchant matches exactly" : `Merchant similarity: ${Math.round(similarity * 100)}%`,
-      });
+      const normalizedReceiptMerchant = receipt.merchant.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      const normalizedChargeDesc = charge.description.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      const isExactMerchant = normalizedReceiptMerchant === normalizedChargeDesc;
+      
+      if (isExactMerchant) {
+        scores.push({
+          type: "Merchant",
+          matches: true,
+          message: "Merchant matches exactly",
+        });
+      }
+      // Don't show merchant score for non-exact matches (as per new prioritization)
     }
 
     return scores;

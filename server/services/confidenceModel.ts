@@ -26,10 +26,11 @@ export class ConfidenceModel {
 
   constructor() {
     // Initialize with default weights (will be updated by training)
+    // Updated to prioritize amount matching: stronger penalty for amount differences
     this.weights = {
-      amountDiff: -0.1,      // Negative weight - larger differences reduce confidence
-      dateDiff: -0.05,        // Negative weight - more days difference reduces confidence
-      merchantSimilarity: 2.0, // Positive weight - higher similarity increases confidence
+      amountDiff: -2.0,      // Strong negative weight - larger differences significantly reduce confidence
+      dateDiff: -0.5,        // Moderate negative weight - more days difference reduces confidence
+      merchantSimilarity: 0.1, // Minimal weight - merchant only matters for exact matches (handled separately)
       categoryMatch: 0.5,      // Positive weight - matching category increases confidence
       bias: 0.5
     };

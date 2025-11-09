@@ -2417,54 +2417,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const receipt of unmatchedReceipts) {
         const bestMatches = unmatchedCharges
           .map((charge) => {
-            const receiptAmount = receipt.amount ? parseFloat(receipt.amount) : 0;
-            const chargeAmount = parseFloat(charge.amount);
-            const amountDiff = Math.abs(receiptAmount - chargeAmount);
+            // Calculate amount difference
+            const receiptAmount = receipt.amount ? parseFloat(receipt.amount) : null;
+            const chargeAmount = charge.amount ? Math.abs(parseFloat(charge.amount)) : null;
+            const amountDiff = receiptAmount !== null && chargeAmount !== null
+              ? Math.abs(receiptAmount - chargeAmount)
+              : 999;
+            const isExactAmount = amountDiff < 0.01; // Within 1 cent
+
+            // Calculate date difference
             const receiptDate = receipt.date ? new Date(receipt.date) : null;
             const chargeDate = charge.date ? new Date(charge.date) : null;
             const dateDiff = receiptDate && chargeDate
               ? Math.abs(receiptDate.getTime() - chargeDate.getTime()) / (1000 * 60 * 60 * 24)
               : 999;
 
-            // Use merchant normalizer for better similarity
-            const merchantSimilarity = receipt.merchant && charge.description
-              ? merchantNormalizer.calculateSimilarity(receipt.merchant, charge.description)
-              : 0;
-            const merchantMatch = merchantSimilarity >= 0.6;
+            // Check for exact merchant match (normalized, case-insensitive)
+            const normalizedReceiptMerchant = receipt.merchant
+              ? receipt.merchant.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+              : '';
+            const normalizedChargeDesc = charge.description
+              ? charge.description.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+              : '';
+            const isExactMerchant = normalizedReceiptMerchant && normalizedChargeDesc
+              && normalizedReceiptMerchant === normalizedChargeDesc;
 
-            // Use ML confidence model for scoring
-            const features = {
-              amountDiff,
-              dateDiff,
-              merchantSimilarity,
-              categoryMatch: receipt.category === charge.category
-            };
-            
-            const mlConfidence = confidenceModel.predictConfidence(features);
-            
-            // Use ML confidence (higher is better, 0-100 scale)
-            let confidence = 100 - mlConfidence; // Invert for sorting (lower is better)
+            let confidence = 0;
+
+            // PRIORITY 1: Exact amount match gets highest confidence (95-100%)
+            if (isExactAmount) {
+              confidence = 95; // Base confidence for exact amount
+              
+              // Add small bonus for exact merchant match
+              if (isExactMerchant) {
+                confidence += 5;
+              }
+            } else {
+              // PRIORITY 2: Balance amount and date (60% amount, 40% date)
+              
+              // Calculate amount score (0-70 based on difference)
+              let amountScore = 0;
+              if (receiptAmount !== null && chargeAmount !== null) {
+                if (amountDiff < 1.0) {
+                  amountScore = 70 - (amountDiff * 10); // Linear scale: $0.01 = 69.9, $1.00 = 60
+                } else if (amountDiff < 5.0) {
+                  amountScore = 60 - ((amountDiff - 1.0) * 8); // $1.00 = 60, $5.00 = 28
+                } else if (amountDiff < 10.0) {
+                  amountScore = 20 - ((amountDiff - 5.0) * 2); // $5.00 = 20, $10.00 = 10
+                } else {
+                  amountScore = Math.max(0, 10 - (amountDiff - 10.0) * 0.5); // Diminishing returns
+                }
+                amountScore = Math.max(0, Math.min(70, amountScore)); // Clamp to 0-70
+              }
+
+              // Calculate date score (0-40 based on days difference)
+              let dateScore = 0;
+              if (receiptDate && chargeDate) {
+                if (dateDiff === 0) {
+                  dateScore = 40;
+                } else if (dateDiff <= 1) {
+                  dateScore = 35;
+                } else if (dateDiff <= 3) {
+                  dateScore = 25;
+                } else if (dateDiff <= 7) {
+                  dateScore = 15;
+                } else if (dateDiff <= 14) {
+                  dateScore = 5;
+                }
+              }
+
+              // Combined: 60% amount, 40% date
+              confidence = Math.round((amountScore * 0.6) + (dateScore * 0.4));
+
+              // Add small bonus for exact merchant match (only if not exact amount)
+              if (isExactMerchant) {
+                confidence += 10;
+              }
+            }
+
+            // For sorting: use inverted confidence (lower is better for sorting)
+            // But we want exact amounts first, so we'll sort by amountDiff first, then confidence
+            const sortScore = isExactAmount ? amountDiff : (100 - confidence);
 
             return {
               receipt,
               charge,
-              confidence,
+              confidence: Math.min(100, confidence),
               amountDiff,
               dateDiff,
-              merchantMatch,
-              merchantSimilarity,
-              mlConfidence
+              merchantMatch: isExactMerchant,
+              merchantSimilarity: isExactMerchant ? 1.0 : 0,
+              mlConfidence: confidence, // Keep for compatibility
+              sortScore // For primary sorting
             };
           })
-          .sort((a, b) => a.confidence - b.confidence); // Sort by best match first
+          .sort((a, b) => {
+            // Primary sort: exact amount matches first (by amountDiff)
+            if (a.amountDiff < 0.01 && b.amountDiff >= 0.01) return -1;
+            if (a.amountDiff >= 0.01 && b.amountDiff < 0.01) return 1;
+            // Secondary sort: by confidence (higher is better)
+            return b.confidence - a.confidence;
+          });
 
         if (bestMatches.length > 0) {
           pairs.push(bestMatches[0]); // Take the best match for this receipt
         }
       }
 
-      // Sort pairs by confidence (best matches first)
-      const sortedPairs = pairs.sort((a, b) => a.confidence - b.confidence);
+      // Sort pairs: exact amount matches first, then by confidence (highest first)
+      const sortedPairs = pairs.sort((a, b) => {
+        // Primary sort: exact amount matches first
+        const aIsExact = a.amountDiff < 0.01;
+        const bIsExact = b.amountDiff < 0.01;
+        if (aIsExact && !bIsExact) return -1;
+        if (!aIsExact && bIsExact) return 1;
+        // Secondary sort: by confidence descending (higher is better)
+        return b.confidence - a.confidence;
+      });
 
       console.log("Intelligent matching candidates:", { 
         statementId,

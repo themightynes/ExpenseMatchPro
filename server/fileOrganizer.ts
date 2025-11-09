@@ -173,110 +173,100 @@ export class FileOrganizer {
       const suggestions = [];
 
       for (const charge of charges) {
-        // Use ML model for confidence prediction
-        const amountDiff = receipt.amount && charge.amount
-          ? Math.abs(parseFloat(receipt.amount) - parseFloat(charge.amount))
+        // Calculate amount difference
+        const receiptAmount = receipt.amount ? parseFloat(receipt.amount) : null;
+        const chargeAmount = charge.amount ? Math.abs(parseFloat(charge.amount)) : null;
+        const amountDiff = receiptAmount !== null && chargeAmount !== null
+          ? Math.abs(receiptAmount - chargeAmount)
           : 999;
+        const isExactAmount = amountDiff < 0.01; // Within 1 cent
+
+        // Calculate date difference
         const dateDiff = receipt.date && charge.date
           ? Math.abs((new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / (1000 * 60 * 60 * 24))
           : 999;
-        const merchantSimilarity = merchantNormalizer.calculateSimilarity(
-          receipt.merchant || '',
-          charge.description || ''
-        );
-        const categoryMatch = receipt.category === charge.category;
 
-        const features = {
-          amountDiff,
-          dateDiff,
-          merchantSimilarity,
-          categoryMatch
-        };
+        // Check for exact merchant match (normalized, case-insensitive)
+        const normalizedReceiptMerchant = receipt.merchant
+          ? receipt.merchant.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+          : '';
+        const normalizedChargeDesc = charge.description
+          ? charge.description.toLowerCase().trim().replace(/[^a-z0-9]/g, '')
+          : '';
+        const isExactMerchant = normalizedReceiptMerchant && normalizedChargeDesc
+          && normalizedReceiptMerchant === normalizedChargeDesc;
 
-        // Get ML-predicted confidence
-        const mlConfidence = confidenceModel.predictConfidence(features);
-        
         let confidence = 0;
         const reasons = [];
 
-        // Amount matching (exact match = high confidence)
-        if (receipt.amount && charge.amount) {
-          const receiptAmount = parseFloat(receipt.amount);
-          const chargeAmount = Math.abs(parseFloat(charge.amount));
-          const amountDiff = Math.abs(receiptAmount - chargeAmount);
+        // PRIORITY 1: Exact amount match gets highest confidence (95-100%)
+        if (isExactAmount) {
+          confidence = 95; // Base confidence for exact amount
+          reasons.push("Exact amount match");
           
-          if (amountDiff < 0.01) {
-            confidence += 70;
-            reasons.push("Exact amount match");
-          } else if (amountDiff < 1.0) {
-            confidence += 50;
-            reasons.push("Close amount match");
-          } else if (amountDiff < 5.0) {
-            confidence += 25;
-            reasons.push("Similar amount");
+          // Add small bonus for exact merchant match
+          if (isExactMerchant) {
+            confidence += 5;
+            reasons.push("Exact merchant match");
           }
-        }
-
-        // Date matching (same day = high confidence)
-        if (receipt.date && charge.date) {
-          const receiptDate = new Date(receipt.date).toDateString();
-          const chargeDate = new Date(charge.date).toDateString();
+        } else {
+          // PRIORITY 2: Balance amount and date (60% amount, 40% date)
           
-          if (receiptDate === chargeDate) {
-            confidence += 35;
-            reasons.push("Same date");
-          } else {
-            // Check within 3 days
-            const daysDiff = Math.abs(
-              (new Date(receipt.date).getTime() - new Date(charge.date).getTime()) / 
-              (1000 * 60 * 60 * 24)
-            );
-            
-            if (daysDiff <= 1) {
-              confidence += 25;
+          // Calculate amount score (0-70 based on difference)
+          let amountScore = 0;
+          if (receiptAmount !== null && chargeAmount !== null) {
+            if (amountDiff < 1.0) {
+              amountScore = 70 - (amountDiff * 10); // Linear scale: $0.01 = 69.9, $1.00 = 60
+              reasons.push(`Close amount match ($${amountDiff.toFixed(2)} difference)`);
+            } else if (amountDiff < 5.0) {
+              amountScore = 60 - ((amountDiff - 1.0) * 8); // $1.00 = 60, $5.00 = 28
+              reasons.push(`Similar amount ($${amountDiff.toFixed(2)} difference)`);
+            } else if (amountDiff < 10.0) {
+              amountScore = 20 - ((amountDiff - 5.0) * 2); // $5.00 = 20, $10.00 = 10
+              reasons.push(`Moderate amount difference ($${amountDiff.toFixed(2)})`);
+            } else {
+              amountScore = Math.max(0, 10 - (amountDiff - 10.0) * 0.5); // Diminishing returns
+            }
+            amountScore = Math.max(0, Math.min(70, amountScore)); // Clamp to 0-70
+          }
+
+          // Calculate date score (0-40 based on days difference)
+          let dateScore = 0;
+          if (receipt.date && charge.date) {
+            if (dateDiff === 0) {
+              dateScore = 40;
+              reasons.push("Same date");
+            } else if (dateDiff <= 1) {
+              dateScore = 35;
               reasons.push("Within 1 day");
-            } else if (daysDiff <= 3) {
-              confidence += 15;
+            } else if (dateDiff <= 3) {
+              dateScore = 25;
               reasons.push("Within 3 days");
+            } else if (dateDiff <= 7) {
+              dateScore = 15;
+              reasons.push("Within 1 week");
+            } else if (dateDiff <= 14) {
+              dateScore = 5;
+              reasons.push("Within 2 weeks");
             }
+          }
+
+          // Combined: 60% amount, 40% date
+          confidence = Math.round((amountScore * 0.6) + (dateScore * 0.4));
+
+          // Add small bonus for exact merchant match (only if not exact amount)
+          if (isExactMerchant) {
+            confidence += 10;
+            reasons.push("Exact merchant match");
           }
         }
 
-        // Merchant matching using normalized names and ML similarity
-        if (receipt.merchant && charge.description) {
-          // Use merchant normalizer for better matching
-          const similarity = merchantSimilarity; // Already calculated above
-          
-          if (similarity >= 0.8) {
-            confidence += 25;
-            reasons.push("High similarity merchant match");
-          } else if (similarity >= 0.6) {
-            confidence += 20;
-            reasons.push("Good similarity merchant match");
-          } else if (similarity >= 0.4) {
-            confidence += 15;
-            reasons.push("Moderate similarity merchant match");
-          } else {
-            // Additional checks beyond normalizer
-            const merchantLower = receipt.merchant.toLowerCase().trim();
-            const descriptionLower = charge.description.toLowerCase().trim();
-            
-            if (descriptionLower.includes(merchantLower) || merchantLower.includes(descriptionLower)) {
-              confidence += 25;
-              reasons.push("Merchant name match");
-            }
-
-          }
-        }
-
-        // Combine rule-based and ML confidence (weighted average)
-        const combinedConfidence = Math.round((confidence * 0.4) + (mlConfidence * 0.6));
-        
-        if (combinedConfidence > 25) { // Include moderate-confidence matches for progressive matching
+        // Only include matches with reasonable confidence
+        if (confidence > 25) {
           suggestions.push({
             charge,
-            confidence: combinedConfidence,
-            reason: reasons.join(", ") + ` (ML: ${mlConfidence}%)`
+            confidence: Math.min(100, confidence), // Cap at 100%
+            reason: reasons.join(", ")
           });
         }
       }
