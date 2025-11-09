@@ -272,38 +272,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const emailService = new EmailService();
 
   // Email webhook endpoint - BEFORE Clerk middleware (webhook has its own auth)
-  app.post("/api/webhooks/email", async (req, res) => {
+  // Use multer to parse multipart/form-data (CloudMailin sends normalized format as multipart)
+  app.post("/api/webhooks/email", upload.any(), async (req, res) => {
     const { logger } = await import('./logger');
+    
+    // Declare payload outside try block for error handling
+    let payload: any = req.body;
     
     try {
       console.log('=== EMAIL WEBHOOK RECEIVED ===');
       console.log('Content-Type:', req.headers['content-type']);
-      console.log('Payload keys:', Object.keys(req.body || {}));
-      console.log('Full payload:', JSON.stringify(req.body, null, 2));
+      console.log('Raw req.body keys:', Object.keys(req.body || {}));
+      console.log('Raw req.body:', JSON.stringify(req.body, null, 2));
+      console.log('Files:', (req as any).files?.map((f: any) => ({ fieldname: f.fieldname, originalname: f.originalname, size: f.size })));
+      
+      // CloudMailin sends multipart/form-data with JSON in a field
+      // Try to parse JSON from body fields or from files
+      payload = req.body;
+      
+      // If CloudMailin sends JSON as a text field, try to parse it
+      if (typeof payload === 'object' && Object.keys(payload).length > 0) {
+        // Check if there's a JSON string field (common CloudMailin field names)
+        const jsonFields = ['payload', 'data', 'message', 'email', 'json'];
+        for (const field of jsonFields) {
+          if (payload[field] && typeof payload[field] === 'string') {
+            try {
+              const parsed = JSON.parse(payload[field]);
+              console.log(`Found JSON in field '${field}', parsing...`);
+              payload = parsed;
+              break;
+            } catch (e) {
+              // Not JSON, continue
+            }
+          }
+        }
+      }
+      
+      // Also check files for JSON content
+      if ((req as any).files && (req as any).files.length > 0) {
+        for (const file of (req as any).files) {
+          if (file.fieldname && ['payload', 'data', 'message', 'email', 'json'].includes(file.fieldname)) {
+            try {
+              const fileContent = file.buffer.toString('utf-8');
+              const parsed = JSON.parse(fileContent);
+              console.log(`Found JSON in file field '${file.fieldname}', parsing...`);
+              payload = parsed;
+              break;
+            } catch (e) {
+              // Not JSON, continue
+            }
+          }
+        }
+      }
+      
+      console.log('Parsed payload keys:', Object.keys(payload || {}));
+      console.log('Parsed payload:', JSON.stringify(payload, null, 2));
       
       logger.info('Received email webhook', {
         operation: 'emailWebhook',
-        hasBody: !!req.body,
+        hasBody: !!payload,
         contentType: req.headers['content-type'],
-        payloadKeys: Object.keys(req.body || {}),
+        payloadKeys: Object.keys(payload || {}),
+        hasFiles: !!(req as any).files && (req as any).files.length > 0,
       });
 
       // Parse and validate payload (includes sender validation)
-      const payload = emailWebhookService.parsePayload(req.body);
+      const validatedPayload = emailWebhookService.parsePayload(payload);
 
       // Extract sender for logging (already validated in parsePayload)
-      const sender = emailWebhookService.extractSenderEmail(payload);
+      const sender = emailWebhookService.extractSenderEmail(validatedPayload);
       
       logger.info('Email webhook payload validated', {
         operation: 'emailWebhook',
         sender,
-        hasAttachments: !!(payload.attachments && payload.attachments.length > 0),
-        hasHtml: !!payload.html,
-        hasPlain: !!payload.plain,
+        hasAttachments: !!(validatedPayload.attachments && validatedPayload.attachments.length > 0),
+        hasHtml: !!validatedPayload.html,
+        hasPlain: !!validatedPayload.plain,
       });
 
       // Process webhook asynchronously (respond quickly to CloudMailin)
-      emailWebhookService.processWebhookPayload(payload)
+      emailWebhookService.processWebhookPayload(validatedPayload)
         .then((result) => {
           console.log('=== EMAIL PROCESSED SUCCESSFULLY ===');
           console.log(`Receipts created: ${result.receiptsCreated}`);
@@ -337,19 +385,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('=== EMAIL WEBHOOK ERROR ===');
       console.error('Error message:', error instanceof Error ? error.message : String(error));
       console.error('Error stack:', error instanceof Error ? error.stack : undefined);
-      console.error('Payload that caused error:', JSON.stringify(req.body, null, 2));
+      // Use payload variable (already declared outside try block)
+      const errorPayload = payload || req.body;
+      console.error('Payload that caused error:', JSON.stringify(errorPayload, null, 2));
       
       logger.error('Email webhook error', {
         operation: 'emailWebhook',
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-        payloadKeys: Object.keys(req.body || {}),
-        payloadStructure: req.body ? {
-          hasEnvelope: !!req.body.envelope,
-          hasHeaders: !!req.body.headers,
-          hasFrom: !!req.body.from,
-          envelopeKeys: req.body.envelope ? Object.keys(req.body.envelope) : [],
-          headersKeys: req.body.headers ? Object.keys(req.body.headers) : [],
+        payloadKeys: Object.keys(errorPayload || {}),
+        payloadStructure: errorPayload ? {
+          hasEnvelope: !!errorPayload.envelope,
+          hasHeaders: !!errorPayload.headers,
+          hasFrom: !!errorPayload.from,
+          envelopeKeys: errorPayload.envelope ? Object.keys(errorPayload.envelope) : [],
+          headersKeys: errorPayload.headers ? Object.keys(errorPayload.headers) : [],
         } : null,
       });
 
@@ -361,7 +411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
           details: {
             stack: error.stack,
-            payload: req.body,
+            payload: errorPayload,
           }
         } : {}),
       });
