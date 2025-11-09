@@ -212,7 +212,12 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const imageUrl = receipt.fileUrl?.startsWith('http') ? receipt.fileUrl : 
                    receipt.fileUrl?.startsWith('/') ? `${window.location.origin}${receipt.fileUrl}` : 
                    receipt.fileUrl;
-  const isPDF = receipt.originalFileName?.toLowerCase().endsWith('.pdf');
+  // Check both originalFileName and fileName for PDF detection
+  // fileName has the actual uploaded filename (e.g., "email-attachment-xxx-CHAPA_91843.pdf")
+  // originalFileName might be a display name (e.g., "Email Receipt - Subject")
+  const isPDF = receipt.originalFileName?.toLowerCase().endsWith('.pdf') || 
+                receipt.fileName?.toLowerCase().endsWith('.pdf') ||
+                receipt.fileUrl?.toLowerCase().includes('.pdf');
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {

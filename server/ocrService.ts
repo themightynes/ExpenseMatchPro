@@ -616,13 +616,14 @@ export class OCRService {
         console.log('Converting PDF to image for Claude Vision...');
         try {
           // Convert PDF first page to PNG using pdf-to-png-converter
+          // Use higher resolution (3.5x) for better text clarity, especially for tabular data
           const { pdfToPng } = await import('pdf-to-png-converter');
           const pngPages = await this.withTimeout(
             pdfToPng(buffer, {
               disableFontFace: false,
               useSystemFonts: false,
               pagesToProcess: [1],
-              viewportScale: 2.0
+              viewportScale: 3.5  // Increased from 2.0 for better OCR accuracy
             }),
             30000,
             'PDF to PNG conversion for Claude Vision'
@@ -631,7 +632,7 @@ export class OCRService {
           if (pngPages && pngPages.length > 0 && pngPages[0].content) {
             imageBuffer = pngPages[0].content;
             mimeType = 'image/png';
-            console.log('PDF converted to PNG successfully for Claude Vision');
+            console.log('PDF converted to PNG successfully for Claude Vision (high resolution)');
           } else {
             throw new Error('PDF to PNG conversion returned empty result');
           }
@@ -646,37 +647,73 @@ export class OCRService {
 
       console.log(`Using Claude Vision API for extraction (MIME type: ${mimeType})`);
 
-      const prompt = `Extract structured data from this receipt image. 
+      const prompt = `You are an expert OCR system extracting data from a receipt image. Your task has TWO critical steps:
 
-First, transcribe all visible text from the receipt exactly as it appears (this is the OCR text).
+STEP 1: COMPLETE TEXT TRANSCRIPTION (OCR)
+Read EVERY character, word, number, and symbol visible on this receipt. This is the MOST IMPORTANT step.
+- Read text from top to bottom, left to right
+- Include ALL text: headers, addresses, names, dates, itemized charges, tables, totals, payment info, footers
+- For TABLES (like itemized charges): Read each row completely, including dates, descriptions, and amounts
+- Preserve line breaks and spacing to maintain structure
+- Include numbers, currency symbols, dates in their exact format
+- DO NOT skip any text, even if it seems like a label or header
+- The ocrText field must contain EVERYTHING visible on the receipt
 
-Then, extract structured data and return ONLY valid JSON in this exact format:
+STEP 2: STRUCTURED DATA EXTRACTION
+Extract ACTUAL VALUES from the transcribed text (not field names or templates).
+
+CRITICAL: Extract REAL DATA VALUES, not generic field names. For example:
+- Restaurant: If you see "Joe's Pizza" as merchant, extract "Joe's Pizza" (not "Merchant Name:")
+- Hotel: If you see "E. Chapa" as guest name, extract "E. Chapa" (not "Guest Name:")
+- Retail: If you see "Room: 525" or "Item #: 12345", extract the actual value "525" or "12345"
+- Date: If you see "27Oct25" or "10/27/2025", extract the actual date "2025-10-27"
+- Amount: If you see "$45.67" or "Total: 45.67", extract the number 45.67
+- If you see a table with charges, extract each row's actual data
+
+For TABULAR DATA (itemized charges, line items):
+- Extract each row as a separate item in the "items" array
+- Include the full description, date (if present), and amount for each charge
+- Format: ["DATE | DESCRIPTION | AMOUNT", ...] or ["DESCRIPTION | AMOUNT", ...] if no date
+- Examples: 
+  * Restaurant: ["Pizza Margherita | 18.50", "Caesar Salad | 12.00"]
+  * Hotel: ["27Oct25 | Market Frozen Food | 5.00", "27Oct25 | Room Charge | 211.00"]
+  * Retail: ["Widget A | 29.99", "Widget B | 15.50"]
+
+Return ONLY valid JSON in this exact format:
 
 {
-  "merchant": "string",
-  "amount": "number",
-  "date": "YYYY-MM-DD",
-  "category": "string",
-  "paymentMethod": "string (optional)",
-  "subtotal": "number (optional)",
-  "tipAmount": "number (optional)",
-  "fees": ["array of strings (optional)"],
-  "fromAddress": "string (optional)",
-  "toAddress": "string (optional)",
-  "tripDistance": "number (optional)",
-  "tripDuration": "string (optional)",
-  "driverName": "string (optional)",
-  "vehicleInfo": "string (optional)",
-  "ocrText": "string (all visible text from receipt)",
-  "confidence": "number (0-100)"
+  "merchant": "actual merchant name from receipt (e.g., 'Joe's Pizza', 'Residence Inn by Marriott', 'Target Store #1234')",
+  "amount": total_amount_as_number,
+  "date": "YYYY-MM-DD (transaction date, check-in date for hotels, trip date for transportation)",
+  "category": "appropriate category (e.g., 'RESTAURANT', 'LODGING', 'RETAIL', 'TAXI', 'GAS')",
+  "items": ["array of itemized charges/line items if present"],
+  "paymentMethod": "actual payment method if visible (e.g., 'American Express')",
+  "subtotal": subtotal_as_number_if_present,
+  "tipAmount": tip_as_number_if_present,
+  "fees": ["array of fee descriptions if present"],
+  "fromAddress": "pickup/from address if applicable",
+  "toAddress": "dropoff/to address if applicable",
+  "tripDistance": "distance if applicable",
+  "tripDuration": "duration if applicable",
+  "driverName": "driver name if applicable",
+  "vehicleInfo": "vehicle info if applicable",
+  "ocrText": "COMPLETE transcription of ALL visible text, preserving structure",
+  "confidence": confidence_score_0_to_100
 }
 
-RULES:
-- Omit fields if not present (no null values)
-- Dates: valid format, between 2020-01-01 and today
-- Amounts: positive numbers only
-- ocrText: Include all visible text from the receipt, preserving line breaks
-- confidence: Estimate confidence score 0-100 based on text clarity and data completeness`;
+EXTRACTION RULES:
+- Extract ACTUAL VALUES only - never return field names like "Reference Number:", "Guest Name:", "Merchant Name:", etc.
+- If a field is not present, omit it entirely (no null values)
+- Dates: Convert to YYYY-MM-DD format (e.g., "27Oct25" → "2025-10-27", "10/27/2025" → "2025-10-27")
+- Amounts: Extract as numbers (e.g., "$732.52" → 732.52, "Total: 45.67" → 45.67)
+- For ALL receipt types: Extract merchant name, amount, date, and any itemized charges/line items
+- For hotel receipts: Also extract guest name, room number, check-in/check-out dates if visible
+- For transportation receipts: Also extract from/to addresses, trip distance/duration, driver name if visible
+- For itemized charges tables: Extract EVERY row with date (if present), description, and amount
+- ocrText: Must contain the COMPLETE text transcription from step 1
+- confidence: Rate 0-100 based on text clarity, completeness of extraction, and data quality
+
+IMPORTANT: The ocrText field is critical - it must contain ALL visible text from the receipt, especially tabular data.`;
 
       // Try multiple model names in order of preference
       // Using latest Claude 4.x models with fallback to older versions if needed
@@ -703,8 +740,8 @@ RULES:
           const response = await this.withTimeout(
             this.anthropicClient.messages.create({
               model: modelName,
-              max_tokens: 1024,
-              temperature: 0.2,
+              max_tokens: 4096,  // Increased from 1024 to allow for complete OCR text extraction
+              temperature: 0.1,  // Lower temperature for more accurate OCR (was 0.2)
               messages: [{
                 role: 'user',
                 content: [
@@ -723,7 +760,7 @@ RULES:
                 ],
               }],
             }),
-            30000, // 30 second timeout for Claude API
+            45000, // Increased timeout to 45 seconds for complex receipts
             'Claude Vision API extraction'
           );
 
@@ -896,6 +933,13 @@ RULES:
     }
     if (Array.isArray(data.fees)) {
       normalized.fees = data.fees.map((fee: any) => String(fee).trim()).filter((fee: string) => fee.length > 0);
+    }
+
+    // Validate items array (for itemized charges, line items)
+    if (Array.isArray(data.items)) {
+      normalized.items = data.items
+        .map((item: any) => String(item).trim())
+        .filter((item: string) => item.length > 0);
     }
 
     return normalized;

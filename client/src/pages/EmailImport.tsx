@@ -50,7 +50,7 @@ export default function EmailImport() {
   };
 
   const generateForwardEmail = () => {
-    return `receipts+import@${window.location.hostname}`;
+    return `0f366c2f1b3bb88729cd@cloudmailin.net`;
   };
 
   const copyToClipboard = (text: string) => {
@@ -202,7 +202,7 @@ export default function EmailImport() {
               <Alert>
                 <Mail className="w-4 h-4" />
                 <AlertDescription>
-                  This feature requires email server configuration. Contact your system administrator to set up email forwarding rules.
+                  Forward receipt emails with attachments to the address above. The system will automatically process PDF and image attachments, or convert email content to PDF for processing.
                 </AlertDescription>
               </Alert>
             </CardContent>

@@ -323,9 +323,7 @@ export default function FileUploadZone({ onUploadComplete }: FileUploadZoneProps
             <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">Email Integration</span>
           </div>
           <div className="flex gap-3 text-sm">
-            <span className="text-gray-600 dark:text-gray-400">Forward to: receipts@yourcompany.com</span>
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-600 dark:text-gray-400">Outlook plugin available</span>
+            <span className="text-gray-600 dark:text-gray-400">Forward to: 0f366c2f1b3bb88729cd@cloudmailin.net</span>
           </div>
         </div>
       </CardContent>
