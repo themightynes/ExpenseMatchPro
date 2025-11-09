@@ -548,12 +548,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Start OCR processing asynchronously
       ocrService.processReceipt(receipt.fileUrl, receipt.originalFileName)
-        .then(async ({ ocrText, extractedData }) => {
-          console.log(`Manual OCR completed for receipt ${receiptId}`);
+        .then(async ({ ocrText, extractedData, extractionMethod, confidence }) => {
+          console.log(`Manual OCR completed for receipt ${receiptId} using ${extractionMethod} (confidence: ${confidence}%)`);
 
           const updates: any = {
             ocrText,
-            extractedData,
+            extractedData: {
+              ...extractedData,
+              extractionMethod,
+              confidence,
+            },
             processingStatus: 'completed'
           };
 
@@ -626,13 +630,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Start OCR processing asynchronously
       ocrService.processReceipt(objectPath, req.body.originalFileName || req.body.fileName)
-        .then(async ({ ocrText, extractedData }) => {
-          console.log(`OCR completed for receipt ${receipt.id}`);
+        .then(async ({ ocrText, extractedData, extractionMethod, confidence }) => {
+          console.log(`OCR completed for receipt ${receipt.id} using ${extractionMethod} (confidence: ${confidence}%)`);
 
           // Update receipt with OCR results
           const updates: any = {
             ocrText,
-            extractedData,
+            extractedData: {
+              ...extractedData,
+              extractionMethod,
+              confidence,
+            },
             processingStatus: 'completed'
           };
 
@@ -641,6 +649,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (extractedData.amount) updates.amount = extractedData.amount;
           if (extractedData.date) updates.date = extractedData.date;
           if (extractedData.category) updates.category = extractedData.category;
+          
+          // Store transportation-specific fields
+          if (extractedData.fromAddress) updates.fromAddress = extractedData.fromAddress;
+          if (extractedData.toAddress) updates.toAddress = extractedData.toAddress;
+          if (extractedData.tripDistance) updates.tripDistance = extractedData.tripDistance;
+          if (extractedData.tripDuration) updates.tripDuration = extractedData.tripDuration;
+          if (extractedData.driverName) updates.driverName = extractedData.driverName;
+          if (extractedData.vehicleInfo) updates.vehicleInfo = extractedData.vehicleInfo;
+          if (extractedData.paymentMethod) updates.paymentMethod = extractedData.paymentMethod;
+          if (extractedData.tipAmount) updates.tipAmount = extractedData.tipAmount;
+          if (extractedData.subtotal) updates.subtotal = extractedData.subtotal;
 
           await storage.updateReceipt(receipt.id, updates);
 
@@ -788,6 +807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const ocrResult = await ocrService.processReceipt(actualFileUrl, fileName + fileExtension);
                 ocrText = ocrResult.ocrText || 'File uploaded successfully - add details manually';
                 extractedData = ocrResult.extractedData || {};
+                console.log(`OCR completed using ${ocrResult.extractionMethod} (confidence: ${ocrResult.confidence}%)`);
 
                 if (extractedData.merchant) extractedData.merchant = extractedData.merchant;
                 if (extractedData.amount) extractedData.amount = extractedData.amount;

@@ -2,7 +2,7 @@ import { ConfidentialClientApplication } from '@azure/msal-node';
 import axios from 'axios';
 import { getStorage } from './storageFactory';
 import type { IStorageService } from './storageFactory';
-import { OCRService } from './ocrService';
+import { ocrService } from './ocrService';
 import type { InsertReceipt } from '@shared/schema';
 
 interface EmailAttachment {
@@ -33,12 +33,11 @@ interface ProcessedReceipt {
 export class EmailService {
   private msalClient: ConfidentialClientApplication | null = null;
   private objectStorage: IStorageService;
-  private ocrService: OCRService;
   private accessToken: string | null = null;
 
   constructor() {
     this.objectStorage = getStorage();
-    this.ocrService = new OCRService();
+    // Use the singleton ocrService instance instead of creating a new one
   }
 
   /**
@@ -395,11 +394,15 @@ ${email.body}`;
 
         // Start OCR processing for attachments
         if (receipt.source === 'attachment') {
-          this.ocrService.processReceipt(receipt.fileUrl, receipt.fileName)
-            .then(async ({ ocrText, extractedData }) => {
+          ocrService.processReceipt(receipt.fileUrl, receipt.fileName)
+            .then(async ({ ocrText, extractedData, extractionMethod, confidence }) => {
               const updates: any = {
                 ocrText,
-                extractedData,
+                extractedData: {
+                  ...extractedData,
+                  extractionMethod,
+                  confidence,
+                },
                 processingStatus: 'completed'
               };
 

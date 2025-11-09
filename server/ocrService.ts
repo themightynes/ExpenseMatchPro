@@ -1,6 +1,7 @@
 import { createWorker } from 'tesseract.js';
 import { getStorage } from './storageFactory';
 import type { IStorageService } from './storageFactory';
+import Anthropic from '@anthropic-ai/sdk';
 
 interface ExtractedReceiptData {
   merchant?: string;
@@ -22,13 +23,31 @@ interface ExtractedReceiptData {
   fees?: string[];
 }
 
+export interface ExtractionResult {
+  ocrText: string;
+  extractedData: ExtractedReceiptData;
+  extractionMethod: 'claude' | 'tesseract';
+  confidence: number;
+}
+
 export class OCRService {
   private objectStorage: IStorageService;
   private tesseractWorker: any = null;
+  private anthropicClient: Anthropic | null = null;
 
   constructor() {
     // Use storage factory to get the appropriate storage service
     this.objectStorage = getStorage();
+    
+    // Initialize Anthropic client if API key is available
+    if (process.env.ANTHROPIC_API_KEY) {
+      this.anthropicClient = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+      console.log('✅ Claude Vision API client initialized');
+    } else {
+      console.warn('⚠️  ANTHROPIC_API_KEY not set - Claude Vision will be unavailable, using Tesseract only');
+    }
   }
 
   /**
@@ -555,12 +574,394 @@ export class OCRService {
   }
 
   /**
+   * Determine MIME type from buffer and file extension
+   */
+  private getMimeType(buffer: Buffer, fileExtension?: string): string {
+    // Check magic bytes for image types
+    if (buffer[0] === 0xFF && buffer[1] === 0xD8) return 'image/jpeg';
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'image/png';
+    if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return 'image/gif';
+    
+    // Check for PDF
+    if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) return 'application/pdf';
+    
+    // Fallback to extension-based detection
+    const ext = (fileExtension || '').toLowerCase();
+    if (ext === 'pdf') return 'application/pdf';
+    if (['jpg', 'jpeg'].includes(ext)) return 'image/jpeg';
+    if (ext === 'png') return 'image/png';
+    if (ext === 'gif') return 'image/gif';
+    
+    return 'image/jpeg'; // Default fallback
+  }
+
+  /**
+   * Extract receipt data using Claude Vision API
+   */
+  private async extractWithClaudeVision(buffer: Buffer, fileExtension?: string): Promise<{
+    extractedData: ExtractedReceiptData;
+    ocrText: string;
+    confidence?: number;
+  }> {
+    if (!this.anthropicClient) {
+      throw new Error('Claude Vision API client not initialized. ANTHROPIC_API_KEY environment variable required.');
+    }
+
+    try {
+      let imageBuffer = buffer;
+      let mimeType = this.getMimeType(buffer, fileExtension);
+      
+      // Convert PDF to image first (Claude Vision doesn't support PDFs directly)
+      if (mimeType === 'application/pdf') {
+        console.log('Converting PDF to image for Claude Vision...');
+        try {
+          // Convert PDF first page to PNG using pdf-to-png-converter
+          const { pdfToPng } = await import('pdf-to-png-converter');
+          const pngPages = await this.withTimeout(
+            pdfToPng(buffer, {
+              disableFontFace: false,
+              useSystemFonts: false,
+              pagesToProcess: [1],
+              viewportScale: 2.0
+            }),
+            30000,
+            'PDF to PNG conversion for Claude Vision'
+          );
+          
+          if (pngPages && pngPages.length > 0 && pngPages[0].content) {
+            imageBuffer = pngPages[0].content;
+            mimeType = 'image/png';
+            console.log('PDF converted to PNG successfully for Claude Vision');
+          } else {
+            throw new Error('PDF to PNG conversion returned empty result');
+          }
+        } catch (pdfError) {
+          const errorMessage = pdfError instanceof Error ? pdfError.message : 'Unknown error';
+          console.warn(`PDF conversion failed for Claude Vision: ${errorMessage}`);
+          throw new Error(`PDF conversion failed: ${errorMessage}`);
+        }
+      }
+      
+      const base64Image = imageBuffer.toString('base64');
+
+      console.log(`Using Claude Vision API for extraction (MIME type: ${mimeType})`);
+
+      const prompt = `Extract structured data from this receipt image. 
+
+First, transcribe all visible text from the receipt exactly as it appears (this is the OCR text).
+
+Then, extract structured data and return ONLY valid JSON in this exact format:
+
+{
+  "merchant": "string",
+  "amount": "number",
+  "date": "YYYY-MM-DD",
+  "category": "string",
+  "paymentMethod": "string (optional)",
+  "subtotal": "number (optional)",
+  "tipAmount": "number (optional)",
+  "fees": ["array of strings (optional)"],
+  "fromAddress": "string (optional)",
+  "toAddress": "string (optional)",
+  "tripDistance": "number (optional)",
+  "tripDuration": "string (optional)",
+  "driverName": "string (optional)",
+  "vehicleInfo": "string (optional)",
+  "ocrText": "string (all visible text from receipt)",
+  "confidence": "number (0-100)"
+}
+
+RULES:
+- Omit fields if not present (no null values)
+- Dates: valid format, between 2020-01-01 and today
+- Amounts: positive numbers only
+- ocrText: Include all visible text from the receipt, preserving line breaks
+- confidence: Estimate confidence score 0-100 based on text clarity and data completeness`;
+
+      // Try multiple model names in order of preference
+      // Using latest Claude 4.x models with fallback to older versions if needed
+      const modelNames = [
+        'claude-sonnet-4-5-20250929',  // Claude Sonnet 4.5 - Smartest model for complex agents and coding
+        'claude-sonnet-4-5',           // Alias for Claude Sonnet 4.5
+        'claude-haiku-4-5-20251001',   // Claude Haiku 4.5 - Fastest model with near-frontier intelligence
+        'claude-haiku-4-5',            // Alias for Claude Haiku 4.5
+        'claude-opus-4-1-20250805',    // Claude Opus 4.1 - Exceptional for specialized reasoning
+        'claude-opus-4-1',             // Alias for Claude Opus 4.1
+        // Fallback to Claude 3.x models if 4.x are not available
+        'claude-3-5-sonnet-20241022',  // Claude 3.5 Sonnet
+        'claude-3-opus-20240229',      // Claude 3 Opus
+        'claude-3-sonnet-20240229',    // Claude 3 Sonnet
+        'claude-3-haiku-20240307',     // Claude 3 Haiku
+      ];
+      
+      let lastError: Error | null = null;
+      let textContent = '';
+      
+      for (const modelName of modelNames) {
+        try {
+          console.log(`Trying Claude model: ${modelName}`);
+          const response = await this.withTimeout(
+            this.anthropicClient.messages.create({
+              model: modelName,
+              max_tokens: 1024,
+              temperature: 0.2,
+              messages: [{
+                role: 'user',
+                content: [
+                  {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+                      data: base64Image,
+                    },
+                  },
+                  {
+                    type: 'text',
+                    text: prompt,
+                  },
+                ],
+              }],
+            }),
+            30000, // 30 second timeout for Claude API
+            'Claude Vision API extraction'
+          );
+
+          // Type guard to ensure we have a Message response, not a Stream
+          if ('content' in response && Array.isArray(response.content)) {
+            const textBlock = response.content.find((c: any) => c.type === 'text');
+            textContent = textBlock && 'text' in textBlock ? textBlock.text : '';
+          } else {
+            throw new Error('Unexpected response type from Claude API');
+          }
+          
+          if (!textContent) {
+            throw new Error('Claude Vision API returned empty response');
+          }
+          
+          // Success! Break out of the loop
+          console.log(`✅ Successfully used Claude model: ${modelName}`);
+          break;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.warn(`Model ${modelName} failed: ${errorMessage}`);
+          lastError = error instanceof Error ? error : new Error(String(error));
+          
+          // If this is a 404 (model not found), try next model
+          // Otherwise, it might be a different error (rate limit, etc.) so we'll still try others
+          if (errorMessage.includes('404') || errorMessage.includes('not_found')) {
+            continue; // Try next model
+          }
+          // For other errors, we might want to retry or fail, but let's try other models first
+        }
+      }
+      
+      if (!textContent) {
+        throw new Error(`All Claude models failed. Last error: ${lastError?.message || 'Unknown error'}`);
+      }
+
+      // Extract JSON from response (handle cases where it's wrapped in markdown code blocks)
+      let jsonText = textContent.trim();
+      
+      // Remove markdown code blocks if present
+      if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '');
+      }
+
+      // Parse JSON response
+      let parsedResponse: any;
+      try {
+        parsedResponse = JSON.parse(jsonText);
+      } catch (parseError) {
+        console.error('Failed to parse Claude Vision JSON response:', jsonText);
+        throw new Error(`Invalid JSON response from Claude Vision: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      }
+
+      // Extract OCR text and confidence from response
+      const ocrText = parsedResponse.ocrText || textContent; // Fallback to full text if ocrText not in JSON
+      const claudeConfidence = typeof parsedResponse.confidence === 'number' 
+        ? Math.max(0, Math.min(100, parsedResponse.confidence)) 
+        : undefined;
+
+      // Remove ocrText and confidence from extractedData before validation
+      const { ocrText: _, confidence: __, ...dataToValidate } = parsedResponse;
+
+      // Validate and normalize extracted data
+      const extractedData = this.validateAndNormalizeExtractedData(dataToValidate);
+
+      console.log('Claude Vision extraction successful:', extractedData);
+      if (claudeConfidence !== undefined) {
+        console.log(`Claude-provided confidence: ${claudeConfidence}%`);
+      }
+
+      return {
+        extractedData,
+        ocrText: ocrText || `Extracted via Claude Vision API. Merchant: ${extractedData.merchant || 'N/A'}, Amount: ${extractedData.amount || 'N/A'}, Date: ${extractedData.date || 'N/A'}`,
+        confidence: claudeConfidence,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Claude Vision extraction failed:', errorMessage);
+      throw new Error(`Claude Vision extraction failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Validate and normalize extracted data from Claude Vision
+   */
+  private validateAndNormalizeExtractedData(data: any): ExtractedReceiptData {
+    const normalized: ExtractedReceiptData = {};
+
+    // Validate merchant
+    if (data.merchant && typeof data.merchant === 'string' && data.merchant.trim().length >= 2) {
+      normalized.merchant = data.merchant.trim();
+    }
+
+    // Validate and normalize amount
+    if (data.amount !== undefined && data.amount !== null) {
+      const amount = typeof data.amount === 'number' ? data.amount : parseFloat(String(data.amount));
+      if (!isNaN(amount) && amount > 0 && amount < 50000) {
+        normalized.amount = amount.toFixed(2);
+        normalized.total = amount.toFixed(2);
+      }
+    }
+
+    // Validate and normalize date
+    if (data.date) {
+      try {
+        const date = new Date(data.date);
+        const today = new Date();
+        const minDate = new Date('2020-01-01');
+        
+        if (!isNaN(date.getTime()) && date >= minDate && date <= today) {
+          normalized.date = date.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        console.warn('Invalid date from Claude Vision:', data.date);
+      }
+    }
+
+    // Validate category
+    if (data.category && typeof data.category === 'string') {
+      normalized.category = data.category.trim();
+    }
+
+    // Transportation fields
+    if (data.fromAddress && typeof data.fromAddress === 'string') {
+      normalized.fromAddress = data.fromAddress.trim();
+    }
+    if (data.toAddress && typeof data.toAddress === 'string') {
+      normalized.toAddress = data.toAddress.trim();
+    }
+    if (data.tripDistance !== undefined && data.tripDistance !== null) {
+      // Handle both number and string formats
+      if (typeof data.tripDistance === 'number') {
+        normalized.tripDistance = `${data.tripDistance} miles`;
+      } else if (typeof data.tripDistance === 'string') {
+        normalized.tripDistance = data.tripDistance.trim();
+      }
+    }
+    if (data.tripDuration && typeof data.tripDuration === 'string') {
+      normalized.tripDuration = String(data.tripDuration).trim();
+    }
+    if (data.driverName && typeof data.driverName === 'string') {
+      normalized.driverName = data.driverName.trim();
+    }
+    if (data.vehicleInfo && typeof data.vehicleInfo === 'string') {
+      normalized.vehicleInfo = data.vehicleInfo.trim();
+    }
+
+    // Payment fields
+    if (data.paymentMethod && typeof data.paymentMethod === 'string') {
+      normalized.paymentMethod = data.paymentMethod.trim();
+    }
+    if (data.subtotal !== undefined && data.subtotal !== null) {
+      const subtotal = typeof data.subtotal === 'number' ? data.subtotal : parseFloat(String(data.subtotal));
+      if (!isNaN(subtotal) && subtotal > 0) {
+        normalized.subtotal = subtotal.toFixed(2);
+      }
+    }
+    if (data.tipAmount !== undefined && data.tipAmount !== null) {
+      const tipAmount = typeof data.tipAmount === 'number' ? data.tipAmount : parseFloat(String(data.tipAmount));
+      if (!isNaN(tipAmount) && tipAmount >= 0) {
+        normalized.tipAmount = tipAmount.toFixed(2);
+      }
+    }
+    if (Array.isArray(data.fees)) {
+      normalized.fees = data.fees.map((fee: any) => String(fee).trim()).filter((fee: string) => fee.length > 0);
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Calculate confidence score (0-100) based on extracted data quality
+   */
+  private calculateConfidence(extractedData: ExtractedReceiptData, extractionMethod: 'claude' | 'tesseract'): number {
+    let score = 0;
+    const weights = {
+      merchant: 25,
+      amount: 30,
+      date: 25,
+      category: 10,
+      transportation: 10, // Bonus for transportation-specific fields
+    };
+
+    // Base confidence boost for Claude Vision
+    const methodBonus = extractionMethod === 'claude' ? 10 : 0;
+
+    // Check merchant
+    if (extractedData.merchant && extractedData.merchant.length >= 3) {
+      score += weights.merchant;
+    }
+
+    // Check amount
+    if (extractedData.amount) {
+      const amount = parseFloat(extractedData.amount);
+      if (!isNaN(amount) && amount > 0 && amount < 50000) {
+        score += weights.amount;
+      }
+    }
+
+    // Check date
+    if (extractedData.date) {
+      try {
+        const date = new Date(extractedData.date);
+        if (!isNaN(date.getTime())) {
+          score += weights.date;
+        }
+      } catch (e) {
+        // Invalid date, no points
+      }
+    }
+
+    // Check category
+    if (extractedData.category && extractedData.category.length > 0) {
+      score += weights.category;
+    }
+
+    // Bonus for transportation fields (Uber, Lyft, etc.)
+    const hasTransportationFields = 
+      extractedData.fromAddress || 
+      extractedData.toAddress || 
+      extractedData.tripDistance || 
+      extractedData.driverName;
+    
+    if (hasTransportationFields) {
+      score += weights.transportation;
+    }
+
+    // Add method bonus
+    score += methodBonus;
+
+    // Cap at 100
+    return Math.min(100, Math.round(score));
+  }
+
+  /**
    * Process a receipt file and extract information
    */
-  async processReceipt(fileUrl: string, originalFileName?: string): Promise<{
-    ocrText: string;
-    extractedData: ExtractedReceiptData;
-  }> {
+  async processReceipt(fileUrl: string, originalFileName?: string): Promise<ExtractionResult> {
     console.log(`Starting OCR processing for: ${fileUrl}`);
 
     try {
@@ -573,9 +974,42 @@ export class OCRService {
       // Determine file type from original filename if available, otherwise from URL
       const fileName = originalFileName || fileUrl;
       const fileExtension = fileName.toLowerCase().split('.').pop();
-      let ocrText: string;
 
       console.log(`Processing file: ${fileName} with extension: ${fileExtension}`);
+
+      // Try Claude Vision first if available
+      if (this.anthropicClient) {
+        try {
+          console.log('Attempting extraction with Claude Vision API...');
+          const { extractedData, ocrText, confidence: claudeConfidence } = await this.extractWithClaudeVision(buffer, fileExtension);
+          
+          // Use Claude-provided confidence if available, otherwise calculate it
+          const confidence = claudeConfidence !== undefined 
+            ? claudeConfidence 
+            : this.calculateConfidence(extractedData, 'claude');
+          
+          console.log(`Claude Vision extraction successful. Confidence: ${confidence}%`);
+
+          return {
+            ocrText,
+            extractedData,
+            extractionMethod: 'claude',
+            confidence,
+          };
+        } catch (claudeError) {
+          const errorMessage = claudeError instanceof Error ? claudeError.message : 'Unknown error';
+          console.warn(`Claude Vision extraction failed, falling back to Tesseract: ${errorMessage}`);
+          // Log the full error for debugging
+          if (claudeError instanceof Error && claudeError.stack) {
+            console.error('Claude Vision error details:', claudeError.stack);
+          }
+          // Continue to Tesseract fallback
+        }
+      }
+
+      // Fallback to Tesseract OCR
+      console.log('Using Tesseract OCR for extraction...');
+      let ocrText: string;
 
       if (fileExtension === 'pdf') {
         console.log('Processing PDF file - converting to image then extracting text...');
@@ -591,12 +1025,16 @@ export class OCRService {
 
       // Parse the extracted text
       const extractedData = this.parseReceiptData(ocrText);
+      const confidence = this.calculateConfidence(extractedData, 'tesseract');
       
+      console.log(`Tesseract extraction completed. Confidence: ${confidence}%`);
       console.log('Extracted data:', extractedData);
 
       return {
         ocrText,
-        extractedData
+        extractedData,
+        extractionMethod: 'tesseract',
+        confidence,
       };
 
     } catch (error) {
