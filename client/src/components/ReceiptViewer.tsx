@@ -230,6 +230,16 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   useEffect(() => {
     // Only update parent if processing status changed from 'processing' to 'completed'
     // or if ocrText changed from 'Processing...' to actual content
+    // IMPORTANT: Only update if the IDs match to prevent linking wrong receipts
+    if (currentReceipt.id !== receipt.id) {
+      // Receipt IDs don't match - this shouldn't happen, but don't update parent
+      console.warn('Receipt ID mismatch detected', {
+        receiptId: receipt.id,
+        currentReceiptId: currentReceipt.id,
+      });
+      return;
+    }
+    
     const statusChanged = receipt.processingStatus === 'processing' && 
                           currentReceipt.processingStatus === 'completed';
     const ocrTextChanged = receipt.ocrText === 'Processing...' && 
@@ -239,9 +249,13 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     
     if (statusChanged || ocrTextChanged) {
       // Receipt processing completed, notify parent to update the selected receipt
-      onNavigate(currentReceipt);
+      // Use the receipt from the array to ensure we have the latest data
+      const updatedReceipt = receipts.find(r => r.id === receipt.id);
+      if (updatedReceipt) {
+        onNavigate(updatedReceipt);
+      }
     }
-  }, [currentReceipt.processingStatus, currentReceipt.ocrText, receipt.processingStatus, receipt.ocrText, onNavigate, currentReceipt]);
+  }, [currentReceipt.processingStatus, currentReceipt.ocrText, currentReceipt.id, receipt.processingStatus, receipt.ocrText, receipt.id, onNavigate, receipts]);
 
   // Use currentReceipt (latest data) instead of receipt prop for display
   const displayReceipt = currentReceipt;
@@ -454,7 +468,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
 
       console.log('Saving receipt data:', editedData);
 
-      const response = await fetch(`/api/receipts/${receipt.id}`, {
+      const response = await fetch(`/api/receipts/${displayReceipt.id}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 
@@ -993,7 +1007,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => triggerOcrMutation.mutate(receipt.id)}
+                            onClick={() => triggerOcrMutation.mutate(displayReceipt.id)}
                             disabled={triggerOcrMutation.isPending}
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                           >
@@ -1012,7 +1026,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => cancelProcessingMutation.mutate(receipt.id)}
+                            onClick={() => cancelProcessingMutation.mutate(displayReceipt.id)}
                             disabled={cancelProcessingMutation.isPending}
                             className="text-gray-600 hover:text-gray-700 hover:bg-gray-100 border-gray-200"
                           >
@@ -1034,7 +1048,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => triggerOcrMutation.mutate(receipt.id)}
+                        onClick={() => triggerOcrMutation.mutate(displayReceipt.id)}
                         disabled={triggerOcrMutation.isPending}
                         className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                       >
@@ -1099,8 +1113,13 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (confirm('Are you sure you want to delete this receipt? This action cannot be undone.')) {
-                        deleteReceiptMutation.mutate(receipt.id);
+                      if (confirm(`Are you sure you want to delete this receipt?\n\nReceipt ID: ${displayReceipt.id}\nFile: ${displayReceipt.fileName}\n\nThis action cannot be undone.`)) {
+                        console.log('Deleting receipt:', {
+                          id: displayReceipt.id,
+                          fileName: displayReceipt.fileName,
+                          originalFileName: displayReceipt.originalFileName,
+                        });
+                        deleteReceiptMutation.mutate(displayReceipt.id);
                       }
                     }}
                     disabled={deleteReceiptMutation.isPending}

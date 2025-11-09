@@ -411,11 +411,15 @@ export class EmailWebhookService {
       });
 
       // Create receipt data
+      // Include the actual filename in originalFileName to make each receipt unique
+      // This prevents confusion when multiple emails have the same subject
+      const originalFileName = emailSubject 
+        ? `Email Receipt - ${emailSubject.substring(0, 50)} - ${processedReceipt.fileName}`
+        : processedReceipt.fileName;
+      
       const receiptData: InsertReceipt = {
         fileName: processedReceipt.fileName,
-        originalFileName: emailSubject 
-          ? `Email Receipt - ${emailSubject}` 
-          : processedReceipt.fileName,
+        originalFileName,
         fileUrl: processedReceipt.fileUrl,
         processingStatus: 'processing',
         ocrText: 'Processing...',
