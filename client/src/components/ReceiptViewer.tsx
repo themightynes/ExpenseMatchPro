@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type { Receipt } from '@shared/schema';
 import InlinePdfViewer from '@/components/InlinePdfViewer';
 import { features } from '@/config/features';
@@ -203,21 +203,59 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPanPosition, setLastPanPosition] = useState({ x: 0, y: 0 });
 
-  // Find current receipt index
+  // Find current receipt index and get the latest receipt data from the receipts array
+  // This ensures we always show the most up-to-date receipt data, especially after OCR completes
+  const currentReceipt = receipts.find(r => r.id === receipt.id) || receipt;
   const currentIndex = receipts.findIndex(r => r.id === receipt.id);
   const hasPrevious = currentIndex > 0;
   const hasNext = currentIndex < receipts.length - 1;
 
+  // Poll for receipt updates when it's processing (e.g., OCR running from webhook)
+  useEffect(() => {
+    if (!isOpen || currentReceipt.processingStatus !== 'processing') {
+      return;
+    }
+
+    // Poll every 2 seconds for receipts in processing status
+    const intervalId = setInterval(() => {
+      queryClient.refetchQueries({ queryKey: ['/api/receipts'] });
+    }, 2000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isOpen, currentReceipt.processingStatus, currentReceipt.id]);
+
+  // Update parent component when receipt processing completes (e.g., OCR finishes)
+  useEffect(() => {
+    // Only update parent if processing status changed from 'processing' to 'completed'
+    // or if ocrText changed from 'Processing...' to actual content
+    const statusChanged = receipt.processingStatus === 'processing' && 
+                          currentReceipt.processingStatus === 'completed';
+    const ocrTextChanged = receipt.ocrText === 'Processing...' && 
+                           currentReceipt.ocrText && 
+                           currentReceipt.ocrText !== 'Processing...' &&
+                           currentReceipt.ocrText.length > 50;
+    
+    if (statusChanged || ocrTextChanged) {
+      // Receipt processing completed, notify parent to update the selected receipt
+      onNavigate(currentReceipt);
+    }
+  }, [currentReceipt.processingStatus, currentReceipt.ocrText, receipt.processingStatus, receipt.ocrText, onNavigate, currentReceipt]);
+
+  // Use currentReceipt (latest data) instead of receipt prop for display
+  const displayReceipt = currentReceipt;
+
   // Image handling
-  const imageUrl = receipt.fileUrl?.startsWith('http') ? receipt.fileUrl : 
-                   receipt.fileUrl?.startsWith('/') ? `${window.location.origin}${receipt.fileUrl}` : 
-                   receipt.fileUrl;
+  const imageUrl = displayReceipt.fileUrl?.startsWith('http') ? displayReceipt.fileUrl : 
+                   displayReceipt.fileUrl?.startsWith('/') ? `${window.location.origin}${displayReceipt.fileUrl}` : 
+                   displayReceipt.fileUrl;
   // Check both originalFileName and fileName for PDF detection
   // fileName has the actual uploaded filename (e.g., "email-attachment-xxx-CHAPA_91843.pdf")
   // originalFileName might be a display name (e.g., "Email Receipt - Subject")
-  const isPDF = receipt.originalFileName?.toLowerCase().endsWith('.pdf') || 
-                receipt.fileName?.toLowerCase().endsWith('.pdf') ||
-                receipt.fileUrl?.toLowerCase().includes('.pdf');
+  const isPDF = displayReceipt.originalFileName?.toLowerCase().endsWith('.pdf') || 
+                displayReceipt.fileName?.toLowerCase().endsWith('.pdf') ||
+                displayReceipt.fileUrl?.toLowerCase().includes('.pdf');
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -455,8 +493,8 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
   const handleEdit = () => {
     // Format date for date input (YYYY-MM-DD) without timezone conversion
     let formattedDate = "";
-    if (receipt.date) {
-      const dateStr = receipt.date.toString();
+    if (displayReceipt.date) {
+      const dateStr = displayReceipt.date.toString();
       // If already in YYYY-MM-DD format, use as is
       if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
         formattedDate = dateStr.split('T')[0];
@@ -470,24 +508,24 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
     }
 
     setEditedData({
-      merchant: receipt.merchant || "",
-      amount: receipt.amount || "",
+      merchant: displayReceipt.merchant || "",
+      amount: displayReceipt.amount || "",
       date: formattedDate,
-      category: receipt.category || "",
-      fromAddress: receipt.fromAddress || "",
-      toAddress: receipt.toAddress || "",
-      tripDistance: receipt.tripDistance || "",
-      tripDuration: receipt.tripDuration || "",
-      driverName: receipt.driverName || "",
-      vehicleInfo: receipt.vehicleInfo || "",
+      category: displayReceipt.category || "",
+      fromAddress: displayReceipt.fromAddress || "",
+      toAddress: displayReceipt.toAddress || "",
+      tripDistance: displayReceipt.tripDistance || "",
+      tripDuration: displayReceipt.tripDuration || "",
+      driverName: displayReceipt.driverName || "",
+      vehicleInfo: displayReceipt.vehicleInfo || "",
     });
     setIsEditing(true);
   };
 
-  const needsManualEntry = !receipt.merchant && !receipt.amount && !receipt.date;
+  const needsManualEntry = !displayReceipt.merchant && !displayReceipt.amount && !displayReceipt.date;
 	const parsedDataEntries =
-		typeof receipt.extractedData === 'object' && receipt.extractedData !== null
-			? Object.entries(receipt.extractedData as Record<string, unknown>)
+		typeof displayReceipt.extractedData === 'object' && displayReceipt.extractedData !== null
+			? Object.entries(displayReceipt.extractedData as Record<string, unknown>)
 					.filter(([, value]) => value !== null && value !== undefined && value !== '')
 					.map(([key, value]) => {
 						const displayValue = Array.isArray(value)
@@ -518,7 +556,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
           </Button>
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-gray-900 truncate text-base">
-              {receipt.organizedPath ? receipt.organizedPath.split('/').pop() : receipt.originalFileName}
+              {displayReceipt.organizedPath ? displayReceipt.organizedPath.split('/').pop() : displayReceipt.originalFileName}
             </h1>
             <div className="flex items-center gap-2 mt-1">
               {currentIndex >= 0 && receipts.length > 1 && (
@@ -526,7 +564,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                   {currentIndex + 1} of {receipts.length}
                 </span>
               )}
-              {receipt.isMatched && (
+              {displayReceipt.isMatched && (
                 <Badge className="bg-green-50 text-green-700 border-green-200 text-xs">
                   Matched
                 </Badge>
@@ -573,7 +611,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
               // Inline PDF Viewer
               <InlinePdfViewer 
                 src={imageUrl} 
-                fileName={receipt.originalFileName} 
+                fileName={displayReceipt.originalFileName} 
               />
             ) : isPDF ? (
               // Fallback PDF display
@@ -585,8 +623,8 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                     <CardContent className="p-6">
                       <FileText className="h-16 w-16 mx-auto mb-4 text-blue-500" />
                       <h3 className="text-lg font-medium mb-2">PDF Receipt</h3>
-                      <p className="text-sm text-gray-600 mb-4 truncate" title={receipt.originalFileName}>
-                        {receipt.originalFileName}
+                      <p className="text-sm text-gray-600 mb-4 truncate" title={displayReceipt.originalFileName}>
+                        {displayReceipt.originalFileName}
                       </p>
                       <div className="space-y-3">
                         <Button 
@@ -602,7 +640,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                           onClick={() => {
                             const link = document.createElement('a');
                             link.href = imageUrl;
-                            link.download = receipt.originalFileName || 'receipt.pdf';
+                            link.download = displayReceipt.originalFileName || 'receipt.pdf';
                             link.target = '_blank';
                             document.body.appendChild(link);
                             link.click();
@@ -639,7 +677,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                   <img
                     ref={imgRef}
                     src={imageUrl}
-                    alt={receipt.originalFileName}
+                    alt={displayReceipt.originalFileName}
                     onLoad={onImageLoad}
                     className="w-full h-auto rounded-lg shadow-lg touch-none select-none"
                     style={{
@@ -860,7 +898,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">Receipt Details</CardTitle>
-                    {!receipt.isMatched && (
+                    {!displayReceipt.isMatched && (
                       <Button variant="outline" size="sm" onClick={handleEdit}>
                         <Edit className="w-4 h-4 mr-2" />
                         Edit
@@ -872,61 +910,61 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-500">Merchant</label>
-                      <p className="text-base font-medium">{receipt.merchant || 'Not set'}</p>
+                      <p className="text-base font-medium">{displayReceipt.merchant || 'Not set'}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Amount</label>
                       <p className="text-base font-medium text-green-600">
-                        {receipt.amount ? `$${receipt.amount}` : 'Not set'}
+                        {displayReceipt.amount ? `$${displayReceipt.amount}` : 'Not set'}
                       </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Date</label>
                       <p className="text-base">
-                        {receipt.date ? new Date(receipt.date).toLocaleDateString() : 'Not set'}
+                        {displayReceipt.date ? new Date(displayReceipt.date).toLocaleDateString() : 'Not set'}
                       </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Category</label>
-                      <p className="text-base">{receipt.category || 'Not set'}</p>
+                      <p className="text-base">{displayReceipt.category || 'Not set'}</p>
                     </div>
                   </div>
 
                   {/* Transportation-specific fields for TAXI category */}
-                  {receipt.category === 'TAXI' && (
+                  {displayReceipt.category === 'TAXI' && (
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <h4 className="text-sm font-medium text-gray-700 mb-3">Trip Details</h4>
                       <div className="grid grid-cols-1 gap-3">
-                        {receipt.fromAddress && (
+                        {displayReceipt.fromAddress && (
                           <div>
                             <label className="text-sm font-medium text-gray-500">From</label>
-                            <p className="text-sm text-gray-900">{receipt.fromAddress}</p>
+                            <p className="text-sm text-gray-900">{displayReceipt.fromAddress}</p>
                           </div>
                         )}
-                        {receipt.toAddress && (
+                        {displayReceipt.toAddress && (
                           <div>
                             <label className="text-sm font-medium text-gray-500">To</label>
-                            <p className="text-sm text-gray-900">{receipt.toAddress}</p>
+                            <p className="text-sm text-gray-900">{displayReceipt.toAddress}</p>
                           </div>
                         )}
                         <div className="grid grid-cols-2 gap-3">
-                          {receipt.tripDistance && (
+                          {displayReceipt.tripDistance && (
                             <div>
                               <label className="text-sm font-medium text-gray-500">Distance</label>
-                              <p className="text-sm text-gray-900">{receipt.tripDistance}</p>
+                              <p className="text-sm text-gray-900">{displayReceipt.tripDistance}</p>
                             </div>
                           )}
-                          {receipt.tripDuration && (
+                          {displayReceipt.tripDuration && (
                             <div>
                               <label className="text-sm font-medium text-gray-500">Duration</label>
-                              <p className="text-sm text-gray-900">{receipt.tripDuration}</p>
+                              <p className="text-sm text-gray-900">{displayReceipt.tripDuration}</p>
                             </div>
                           )}
                         </div>
-                        {receipt.driverName && (
+                        {displayReceipt.driverName && (
                           <div>
                             <label className="text-sm font-medium text-gray-500">Driver</label>
-                            <p className="text-sm text-gray-900">{receipt.driverName}</p>
+                            <p className="text-sm text-gray-900">{displayReceipt.driverName}</p>
                           </div>
                         )}
                       </div>
@@ -936,16 +974,16 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                   <div className="pt-2">
                     <label className="text-sm font-medium text-gray-500">Status</label>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant={receipt.processingStatus === 'completed' ? 'default' : 'secondary'}>
-                        {needsManualEntry ? 'Manual Entry Needed' : receipt.processingStatus}
+                      <Badge variant={displayReceipt.processingStatus === 'completed' ? 'default' : 'secondary'}>
+                        {needsManualEntry ? 'Manual Entry Needed' : displayReceipt.processingStatus}
                       </Badge>
-                      {receipt.isMatched && <Badge variant="default">Matched to AMEX</Badge>}
+                      {displayReceipt.isMatched && <Badge variant="default">Matched to AMEX</Badge>}
                     </div>
                   </div>
 
                   {/* Text Extraction Control - separate section */}
                   <div className="pt-2">
-                    {receipt.processingStatus === 'processing' ? (
+                    {displayReceipt.processingStatus === 'processing' ? (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -1008,7 +1046,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                         ) : (
                           <>
                             <Eye className="w-4 h-4 mr-1" />
-                            {receipt.ocrText && receipt.ocrText.length > 50 ? 'Re-extract Text' : 'Extract Text'}
+                            {displayReceipt.ocrText && displayReceipt.ocrText.length > 50 ? 'Re-extract Text' : 'Extract Text'}
                           </>
                         )}
                       </Button>
@@ -1019,7 +1057,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
             )}
 
             {/* OCR Text Results */}
-            {receipt.ocrText && receipt.ocrText !== 'Processing...' && receipt.ocrText !== 'Manual entry required' && receipt.ocrText.length > 50 && (
+            {displayReceipt.ocrText && displayReceipt.ocrText !== 'Processing...' && displayReceipt.ocrText !== 'Manual entry required' && displayReceipt.ocrText.length > 50 && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Extracted Text</CardTitle>
@@ -1027,7 +1065,7 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
                 <CardContent>
                   <div className="bg-gray-50 p-3 rounded-lg border">
                     <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono leading-relaxed">
-                      {receipt.ocrText}
+                      {displayReceipt.ocrText}
                     </pre>
                   </div>
 		          {parsedDataEntries.length > 0 && (
@@ -1050,11 +1088,11 @@ function ReceiptViewer({ receipt, receipts, isOpen, onClose, onNavigate }: Recei
               <CardContent className="space-y-2">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Original Name</label>
-                  <p className="text-sm break-all">{receipt.originalFileName}</p>
+                  <p className="text-sm break-all">{displayReceipt.originalFileName}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Upload Date</label>
-                  <p className="text-sm">{receipt.createdAt ? new Date(receipt.createdAt).toLocaleString() : 'Unknown'}</p>
+                  <p className="text-sm">{displayReceipt.createdAt ? new Date(displayReceipt.createdAt).toLocaleString() : 'Unknown'}</p>
                 </div>
                 <div className="pt-3">
                   <Button 

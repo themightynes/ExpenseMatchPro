@@ -822,7 +822,20 @@ IMPORTANT: The ocrText field is critical - it must contain ALL visible text from
       }
 
       // Extract OCR text and confidence from response
-      const ocrText = parsedResponse.ocrText || textContent; // Fallback to full text if ocrText not in JSON
+      // Claude should return ocrText in the JSON with the complete transcription
+      let ocrText = parsedResponse.ocrText;
+      
+      // If ocrText is missing or too short (< 50 chars), Claude might not have included it properly
+      // In this case, we'll use the full textContent as fallback (which contains Claude's full response)
+      // Note: textContent is the raw Claude response, which should be JSON, but if ocrText is missing,
+      // it's better than nothing. The prompt explicitly asks for ocrText, so this should rarely happen.
+      if (!ocrText || ocrText.trim().length < 50) {
+        // Use full response as fallback, but try to extract just the text part if it's JSON
+        // If textContent is JSON, parsedResponse.ocrText should exist, so this is a fallback for edge cases
+        ocrText = textContent;
+        console.warn(`OCR text from Claude JSON was ${parsedResponse.ocrText?.length || 0} chars, using full response (${textContent.length} chars) as fallback`);
+      }
+      
       const claudeConfidence = typeof parsedResponse.confidence === 'number' 
         ? Math.max(0, Math.min(100, parsedResponse.confidence)) 
         : undefined;
@@ -834,13 +847,20 @@ IMPORTANT: The ocrText field is critical - it must contain ALL visible text from
       const extractedData = this.validateAndNormalizeExtractedData(dataToValidate);
 
       console.log('Claude Vision extraction successful:', extractedData);
+      console.log(`OCR text length: ${ocrText?.length || 0} characters`);
       if (claudeConfidence !== undefined) {
         console.log(`Claude-provided confidence: ${claudeConfidence}%`);
       }
 
+      // Ensure we always return meaningful OCR text
+      // If ocrText is still too short, use a summary that includes extracted data
+      const finalOcrText = ocrText && ocrText.trim().length >= 50 
+        ? ocrText.trim()
+        : (ocrText || `Extracted via Claude Vision API. Merchant: ${extractedData.merchant || 'N/A'}, Amount: ${extractedData.amount || 'N/A'}, Date: ${extractedData.date || 'N/A'}`);
+
       return {
         extractedData,
-        ocrText: ocrText || `Extracted via Claude Vision API. Merchant: ${extractedData.merchant || 'N/A'}, Amount: ${extractedData.amount || 'N/A'}, Date: ${extractedData.date || 'N/A'}`,
+        ocrText: finalOcrText,
         confidence: claudeConfidence,
       };
     } catch (error) {

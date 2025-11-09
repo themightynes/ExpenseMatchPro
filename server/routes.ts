@@ -722,7 +722,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Start OCR processing asynchronously
-      ocrService.processReceipt(receipt.fileUrl, receipt.originalFileName)
+      // Use fileName (actual file with extension) instead of originalFileName (which might be email subject for webhook receipts)
+      ocrService.processReceipt(receipt.fileUrl, receipt.fileName || receipt.originalFileName)
         .then(async ({ ocrText, extractedData, extractionMethod, confidence }) => {
           console.log(`Manual OCR completed for receipt ${receiptId} using ${extractionMethod} (confidence: ${confidence}%)`);
 
