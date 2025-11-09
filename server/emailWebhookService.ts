@@ -16,12 +16,15 @@ const ALLOWED_SENDERS = [
 
 /**
  * CloudMailin webhook payload structure
+ * Based on CloudMailin Multipart Normalized format
  */
 interface CloudMailinAttachment {
   file_name: string;
   content_type: string;
   size: number;
   content: string; // base64 encoded
+  disposition?: 'inline' | 'attachment'; // From attachment_details[][disposition]
+  content_id?: string; // From attachment_details[][content_id] (for inline images)
 }
 
 interface CloudMailinPayload {
@@ -204,22 +207,40 @@ export class EmailWebhookService {
 
     for (const attachment of attachments) {
       try {
+        // Skip inline attachments (typically logos/images embedded in HTML)
+        // These are not actual receipt files
+        if (attachment.disposition === 'inline') {
+          logger.debug('Skipping inline attachment (likely embedded image)', {
+            operation: 'processAttachments',
+            fileName: attachment.file_name,
+            contentType: attachment.content_type,
+            contentId: attachment.content_id,
+          });
+          continue;
+        }
+
         // Filter for receipt-like attachments
         const contentType = attachment.content_type.toLowerCase();
         const fileNameLower = attachment.file_name.toLowerCase();
         
         const isReceiptFile = 
           contentType.includes('pdf') ||
-          contentType.includes('image') ||
+          (contentType.includes('image') && 
+           (fileNameLower.includes('receipt') ||
+            fileNameLower.includes('invoice') ||
+            fileNameLower.includes('bill') ||
+            fileNameLower.includes('folio'))) ||
           fileNameLower.includes('receipt') ||
           fileNameLower.includes('invoice') ||
-          fileNameLower.includes('bill');
+          fileNameLower.includes('bill') ||
+          fileNameLower.includes('folio');
 
         if (!isReceiptFile) {
           logger.debug('Skipping non-receipt attachment', {
             operation: 'processAttachments',
             fileName: attachment.file_name,
             contentType: attachment.content_type,
+            disposition: attachment.disposition,
           });
           continue;
         }
@@ -514,9 +535,15 @@ export class EmailWebhookService {
         payload.date || 
         new Date().toISOString();
       
+      // CloudMailin Multipart Normalized format provides:
+      // - attachments: array of attachment objects (from multipart files)
+      // - html: HTML email body
+      // - plain: plain text email body
+      // - body: alternative body field (if present)
       const attachments = payload.attachments || [];
       const hasHtml = !!payload.html;
       const hasPlain = !!payload.plain;
+      const hasBody = !!payload.body; // Some formats may use 'body' instead of 'plain'/'html'
 
       logger.info('Processing webhook payload', {
         operation: 'processWebhookPayload',
@@ -575,12 +602,48 @@ export class EmailWebhookService {
             try {
               const receipt = await this.createReceiptRecord(textReceipt, subject, sender, emailDate);
               receipts.push(receipt);
+              bodyProcessed = true;
             } catch (error) {
               const errorMsg = `Failed to create receipt for plain text email: ${error instanceof Error ? error.message : 'Unknown error'}`;
               errors.push(errorMsg);
               logger.error(errorMsg, {
                 operation: 'processWebhookPayload',
               });
+            }
+          }
+        }
+
+        // Final fallback: try 'body' field if available (some CloudMailin formats)
+        if (!bodyProcessed && hasBody && typeof payload.body === 'string') {
+          // Try to detect if body is HTML or plain text
+          const isHtml = payload.body.trim().startsWith('<') && payload.body.includes('</');
+          if (isHtml) {
+            const bodyReceipt = await this.processHtmlEmail(payload.body, subject, sender, emailDate);
+            if (bodyReceipt) {
+              try {
+                const receipt = await this.createReceiptRecord(bodyReceipt, subject, sender, emailDate);
+                receipts.push(receipt);
+              } catch (error) {
+                const errorMsg = `Failed to create receipt for body email: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                errors.push(errorMsg);
+                logger.error(errorMsg, {
+                  operation: 'processWebhookPayload',
+                });
+              }
+            }
+          } else {
+            const bodyReceipt = await this.processTextEmail(payload.body, subject, sender, emailDate);
+            if (bodyReceipt) {
+              try {
+                const receipt = await this.createReceiptRecord(bodyReceipt, subject, sender, emailDate);
+                receipts.push(receipt);
+              } catch (error) {
+                const errorMsg = `Failed to create receipt for body email: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                errors.push(errorMsg);
+                logger.error(errorMsg, {
+                  operation: 'processWebhookPayload',
+                });
+              }
             }
           }
         }

@@ -329,16 +329,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Parsed payload:', JSON.stringify(payload, null, 2));
       
       // Convert multer files to CloudMailin attachment format
+      // CloudMailin Multipart Normalized format sends attachments as separate multipart parts
       const files = (req as any).files || [];
       if (files.length > 0 && files[0].fieldname === 'attachments[]') {
+        // Get attachment details from payload (disposition and content_id arrays)
+        const attachmentDispositions = payload['attachment_details[][disposition]'] || [];
+        const attachmentContentIds = payload['attachment_details[][content_id]'] || [];
+        
         // CloudMailin sends attachments as multipart files
-        payload.attachments = files.map((file: any) => ({
-          file_name: file.originalname,
-          content_type: file.mimetype || 'application/octet-stream',
-          size: file.size,
-          content: file.buffer.toString('base64'), // Convert buffer to base64
-        }));
+        payload.attachments = files.map((file: any, index: number) => {
+          const disposition = attachmentDispositions[index] || 'attachment';
+          const contentId = attachmentContentIds[index] || null;
+          
+          return {
+            file_name: file.originalname,
+            content_type: file.mimetype || 'application/octet-stream',
+            size: file.size,
+            content: file.buffer.toString('base64'), // Convert buffer to base64
+            disposition: disposition, // 'inline' or 'attachment'
+            content_id: contentId, // For inline images (CID)
+          };
+        });
         console.log(`Converted ${files.length} multer files to attachments array`);
+        console.log(`Attachment dispositions: ${attachmentDispositions.join(', ')}`);
       }
       
       logger.info('Received email webhook', {
