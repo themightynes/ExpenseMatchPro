@@ -22,14 +22,19 @@ export class PDFGenerator {
     let browser;
     try {
       // Launch headless browser
+      // Use system Chromium if available (for Docker/production)
+      const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+      
       browser = await puppeteer.launch({
         headless: true,
+        executablePath,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-accelerated-2d-canvas',
           '--disable-gpu',
+          '--disable-software-rasterizer',
         ],
       });
 
@@ -149,19 +154,9 @@ export class PDFGenerator {
           lineGap: 5,
         });
 
-        // Add footer
-        const pageCount = doc.bufferedPageRange().count;
-        for (let i = 0; i < pageCount; i++) {
-          doc.switchToPage(i);
-          doc.fontSize(8).fillColor('#999999');
-          doc.text(
-            `Generated: ${new Date().toISOString()}`,
-            50,
-            doc.page.height - 30,
-            { align: 'left' }
-          );
-        }
-
+        // Finalize document
+        // Note: Footer addition removed due to PDFKit page switching issues
+        // The footer can be added during content generation if needed in the future
         doc.end();
       } catch (error) {
         logger.error('Failed to convert text to PDF', {

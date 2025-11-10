@@ -20,6 +20,23 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+# Install Chromium and dependencies for Puppeteer
+# Based on official Puppeteer Alpine Linux documentation:
+# https://pptr.dev/troubleshooting
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
+# Set Puppeteer to use system Chromium (Alpine installs it as chromium-browser)
+# This matches the official Puppeteer Alpine setup
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Copy package files and install all dependencies
 # Note: We need devDependencies (like vite) because the bundled server code imports them
 COPY package*.json ./
