@@ -7,11 +7,15 @@ import type { InsertReceipt } from '@shared/schema';
 
 /**
  * Whitelist of allowed email senders
- * Only emails from these addresses will be processed
+ * Only emails from these addresses or domains will be processed
+ * Supports:
+ * - Full email addresses: 'user@example.com'
+ * - Domain wildcards: '@example.com' (allows all emails from that domain)
  */
 const ALLOWED_SENDERS = [
   'ernesto.chapa@gmail.com',
   'ernesto_chapa@tjx.com',
+  '@tjx.com', // Allow all emails from tjx.com domain
 ].map(email => email.toLowerCase());
 
 /**
@@ -60,16 +64,30 @@ export class EmailWebhookService {
   private objectStorage = getStorage();
 
   /**
-   * Extract email address from "Name <email@domain.com>" format
+   * Extract email address from various formats:
+   * - "Name <email@domain.com>"
+   * - "prvs=xxx=email@domain.com" (privacy-protected emails)
+   * - "email@domain.com"
    */
   extractEmail(from: string): string {
+    let email = from;
+    
     // Handle "Name <email@domain.com>" format
-    const match = from.match(/<(.+?)>/);
+    const match = email.match(/<(.+?)>/);
     if (match) {
-      return match[1].toLowerCase().trim();
+      email = match[1];
     }
-    // Handle simple email format
-    return from.toLowerCase().trim();
+    
+    // Handle privacy-protected email format: "prvs=xxx=email@domain.com"
+    // Strip the "prvs=xxx=" prefix if present
+    if (email.includes('prvs=')) {
+      const prvsMatch = email.match(/prvs=[^=]+=(.+)/);
+      if (prvsMatch) {
+        email = prvsMatch[1];
+      }
+    }
+    
+    return email.toLowerCase().trim();
   }
 
   /**
@@ -108,25 +126,42 @@ export class EmailWebhookService {
 
   /**
    * Validate sender against whitelist
+   * Supports:
+   * - Exact email match: 'user@example.com'
+   * - Domain wildcard match: '@example.com' (matches any email from that domain)
    */
   validateSender(senderEmail: string): boolean {
     const normalizedSender = senderEmail.toLowerCase().trim();
-    const isAllowed = ALLOWED_SENDERS.includes(normalizedSender);
     
-    if (!isAllowed) {
-      logger.warn('Unauthorized email sender attempted webhook', {
-        operation: 'validateSender',
-        senderEmail: normalizedSender,
-        allowedSenders: ALLOWED_SENDERS,
-      });
-    } else {
-      logger.info('Sender authorized', {
+    // Check for exact match first
+    if (ALLOWED_SENDERS.includes(normalizedSender)) {
+      logger.info('Sender authorized (exact match)', {
         operation: 'validateSender',
         senderEmail: normalizedSender,
       });
+      return true;
     }
     
-    return isAllowed;
+    // Check for domain wildcard match (e.g., '@example.com')
+    const domain = normalizedSender.split('@')[1];
+    if (domain && ALLOWED_SENDERS.includes(`@${domain}`)) {
+      logger.info('Sender authorized (domain match)', {
+        operation: 'validateSender',
+        senderEmail: normalizedSender,
+        domain: `@${domain}`,
+      });
+      return true;
+    }
+    
+    // Not authorized
+    logger.warn('Unauthorized email sender attempted webhook', {
+      operation: 'validateSender',
+      senderEmail: normalizedSender,
+      domain: domain ? `@${domain}` : 'unknown',
+      allowedSenders: ALLOWED_SENDERS,
+    });
+    
+    return false;
   }
 
   /**
@@ -469,11 +504,8 @@ export class EmailWebhookService {
 
           await storage.updateReceipt(receipt.id, updates);
 
-          // Try auto-assignment and matching
+          // Try auto-assignment (matching is handled separately via fileOrganizer if needed)
           const updatedReceipt = await storage.autoAssignReceiptToStatement(receipt.id);
-          if (updatedReceipt?.statementId) {
-            await storage.attemptAutoMatch?.(receipt.id);
-          }
 
           logger.info('Receipt processing completed', {
             operation: 'createReceiptRecord',
