@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useUser, useClerk } from "@clerk/clerk-react";
+import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-react";
 
 interface User {
   id: string;
@@ -16,11 +16,28 @@ interface AuthStatus {
 
 export function useAuth() {
   const { isLoaded: clerkLoaded, isSignedIn, user: clerkUser } = useUser();
-  const { signOut } = useClerk();
+  const { signOut, getToken } = useClerkAuth();
 
   // Query our backend to get authorization status and synced user data
   const { data, isLoading: queryLoading, error, refetch } = useQuery<AuthStatus>({
     queryKey: ['/api/auth/status'],
+    queryFn: async () => {
+      // Get Clerk session token to authenticate the request
+      const token = await getToken();
+
+      const res = await fetch('/api/auth/status', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        throw new Error(`Auth status check failed: ${res.status}`);
+      }
+
+      return res.json();
+    },
     retry: 1,
     staleTime: 10 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
@@ -40,8 +57,8 @@ export function useAuth() {
   return {
     user: data?.user || null,
     isLoading,
-    isAuthenticated: clerkLoaded && isSignedIn && data?.authenticated || false,
-    isAuthorized: data?.user?.isAuthorized || false,
+    isAuthenticated: clerkLoaded && isSignedIn && data?.authenticated === true,
+    isAuthorized: data?.user?.isAuthorized === true,
     error,
     refetch,
     logout,
