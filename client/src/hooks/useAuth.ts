@@ -25,6 +25,8 @@ export function useAuth() {
       // Get Clerk session token to authenticate the request
       const token = await getToken();
 
+      console.log('[useAuth] Fetching auth status with token:', token ? 'Token exists' : 'NO TOKEN');
+
       const res = await fetch('/api/auth/status', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -32,11 +34,17 @@ export function useAuth() {
         credentials: 'include',
       });
 
+      console.log('[useAuth] Response status:', res.status);
+
       if (!res.ok) {
-        throw new Error(`Auth status check failed: ${res.status}`);
+        const errorText = await res.text();
+        console.error('[useAuth] Auth status check failed:', res.status, errorText);
+        throw new Error(`Auth status check failed: ${res.status}: ${errorText}`);
       }
 
-      return res.json();
+      const responseData = await res.json();
+      console.log('[useAuth] Auth response:', responseData);
+      return responseData;
     },
     retry: 1,
     staleTime: 10 * 60 * 1000,
@@ -54,7 +62,7 @@ export function useAuth() {
   // Combine Clerk loading state with our backend query loading
   const isLoading = !clerkLoaded || (isSignedIn && queryLoading);
 
-  return {
+  const authStatus = {
     user: data?.user || null,
     isLoading,
     isAuthenticated: clerkLoaded && isSignedIn && data?.authenticated === true,
@@ -63,4 +71,19 @@ export function useAuth() {
     refetch,
     logout,
   };
+
+  console.log('[useAuth] State:', {
+    clerkLoaded,
+    isSignedIn,
+    queryLoading,
+    hasData: !!data,
+    dataAuthenticated: data?.authenticated,
+    dataUser: data?.user,
+    userAuthorized: data?.user?.isAuthorized,
+    resultIsAuthenticated: authStatus.isAuthenticated,
+    resultIsAuthorized: authStatus.isAuthorized,
+    error: error?.message
+  });
+
+  return authStatus;
 }

@@ -16,12 +16,20 @@ async function getClerkToken(): Promise<string | null> {
   try {
     // Access Clerk's session via the global window object
     const clerk = (window as any).__clerk;
+    console.log('[queryClient] Clerk object:', {
+      exists: !!clerk,
+      hasSession: !!clerk?.session,
+      isLoaded: clerk?.loaded
+    });
     if (clerk?.session) {
-      return await clerk.session.getToken();
+      const token = await clerk.session.getToken();
+      console.log('[queryClient] Retrieved token:', token ? 'Token exists' : 'NO TOKEN');
+      return token;
     }
   } catch (error) {
-    console.warn('Failed to get Clerk token:', error);
+    console.warn('[queryClient] Failed to get Clerk token:', error);
   }
+  console.warn('[queryClient] Returning null - no Clerk session available');
   return null;
 }
 
