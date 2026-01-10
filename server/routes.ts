@@ -465,8 +465,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Apply Clerk middleware globally to all API routes (adds req.auth)
-  app.use(clerkMiddleware);
+  // Apply Clerk middleware ONLY to API routes (adds req.auth)
+  // DO NOT apply to static files or root HTML - those need to load without auth
+  app.use('/api', clerkMiddleware);
 
   // Direct file upload to object storage (works with R2/Local)
   app.post("/api/objects/upload", requireAuth, upload.single('file'), async (req, res) => {
